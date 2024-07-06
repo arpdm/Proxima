@@ -37,18 +37,31 @@ import simpy
 from proxima_model.components.local_microgrid import LocalMicroGrid
 from proxima_model.environments import lunar_env as env
 from proxima_model.visualizer import ts_plot as pl
+from proxima_model.tools.logger import Logger
 from pathlib import Path
+
+
+def get_log_file_directory():
+    """Preps the log file directory and returns the path for it.
+
+    Returns:
+        Path: Path for log_files directory
+    """
+    script_path = Path(__file__).resolve()
+    log_dir = script_path.parent.parent.parent / "log_files"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    return log_dir
 
 
 def main():
 
-    # Get the file path of the running script
-    script_path = Path(__file__).resolve()
-    log_dir = script_path.parent.parent.parent / "log_files"
-    log_dir.mkdir(parents=True, exist_ok=True)
+    # Setup
+    logger = Logger()
+    logger.set_file(get_log_file_directory() / "output_log.txt")
+    logger.disable()
 
+    # Simulation Environment
     microgrid_env = simpy.Environment()
-
     microgrid = LocalMicroGrid(
         microgrid_env,
         num_panels=env.VSAT_NUM,
@@ -57,6 +70,9 @@ def main():
     )
 
     microgrid_env.run(until=env.RUN_TIME_H)
+
+    # Post Processing
+    microgrid.save_data(get_log_file_directory() / "lunar_microgrid_sim_001.csv")
 
     pl.plot_ts(
         microgrid.generated_pw_kw_ts,
@@ -68,7 +84,8 @@ def main():
         "Power Grid Profile",
     )
 
-    microgrid.save_data(log_dir / "lunar_microgrid_sim_001.csv")
+    # Cleanup
+    logger.reset()
 
 
 if __name__ == "__main__":

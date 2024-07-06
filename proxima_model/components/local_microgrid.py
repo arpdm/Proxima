@@ -39,6 +39,10 @@ from proxima_model.tools.logger import save_time_series_data_to_file
 from proxima_model.environments import lunar_env as env
 
 
+PROCESS_RUNTIME_PERIOD_H = 1  # Run time period in hours
+FLOATING_POINT_PRECISION = 4
+
+
 class Battery:
     def __init__(self, env, initial_soc: float = 0):
         """
@@ -183,7 +187,7 @@ class LocalMicroGrid:
             self.generated_pw_kw_ts.append(self.total_generated_power_kwh)
 
             # Wait for the next hour
-            yield self.sim_env.timeout(1)
+            yield self.sim_env.timeout(PROCESS_RUNTIME_PERIOD_H)
 
     def save_data(self, file_path: str):
         """Saves all time-series data attributes and states within local microgrid to CSV file
@@ -199,6 +203,6 @@ class LocalMicroGrid:
                 "excess_pw_kw": self.excess_pw_kw_ts,
                 "battery_SoC": self.battery.battery_soc_ts,
             }
-        ).round(4)
+        ).round(FLOATING_POINT_PRECISION)
 
         save_time_series_data_to_file([data_drame], file_path)
