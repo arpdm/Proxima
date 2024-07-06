@@ -34,13 +34,18 @@ Functions:
 
 import simpy
 
-from proxima_model.components.lunar_power_grid import LocalMicroGrid
+from proxima_model.components.local_microgrid import LocalMicroGrid
 from proxima_model.environments import lunar_env as env
 from proxima_model.visualizer import ts_plot as pl
+from pathlib import Path
 
 
 def main():
-    print("Proxima - Lunar Power Grid Simulation")
+
+    # Get the file path of the running script
+    script_path = Path(__file__).resolve()
+    log_dir = script_path.parent.parent.parent / "log_files"
+    log_dir.mkdir(parents=True, exist_ok=True)
 
     microgrid_env = simpy.Environment()
 
@@ -52,15 +57,18 @@ def main():
     )
 
     microgrid_env.run(until=env.RUN_TIME_H)
+
     pl.plot_ts(
-        microgrid.generated_power_ts,
+        microgrid.generated_pw_kw_ts,
         "Generated Power",
-        microgrid.load_consumption_ts,
+        microgrid.consumed_pw_kw_ts,
         "Load Consumption",
         "Time (h)",
         "Power (kW)",
         "Power Grid Profile",
     )
+
+    microgrid.save_data(log_dir / "lunar_microgrid_sim_001.csv")
 
 
 if __name__ == "__main__":

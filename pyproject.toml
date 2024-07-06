@@ -9,6 +9,7 @@ python = "^3.12"
 simpy = "4.1.1"
 matplotlib="3.8.2"
 plotly="5.18.0"
+pandas="2.2.2"
 
 [tool.poetry.scripts]
 lunar-power-grid = "proxima_model.sims.lunar_power_sim:main"
