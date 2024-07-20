@@ -55,6 +55,7 @@ class Battery:
         self.env = env
         self.state_of_charge = initial_soc
         self.battery_soc_ts = []
+        self.battery_charged_amount_kwh = []
 
     def charge(self, power_kw: float, duration_h: float):
         """
@@ -64,13 +65,20 @@ class Battery:
             power_kw (float): Provided power in kW.
             duration_h (float): Charge duration in hours.
         """
-        charge_amount = min(power_kw, env.BATTERY_MAX_CHARGE_RATE_KW) * duration_h
-        max_energy_allowed = env.BATTERY_CAPACITY_KW_H - (self.state_of_charge * env.BATTERY_CAPACITY_KW_H)
-        if charge_amount > max_energy_allowed:
-            charge_amount = max(0, max_energy_allowed)
-
+        
+        # To keep the battery healthy and extend its lifetime, we dont want to keep the battery charged 100% at all times.
+        if self.state_of_charge >= env.BATTERY_MAX_STATE_OF_CHARGE_RATE:
+            print(f"Mex SoC for batteryt reached.")
+            charge_amount = 0
+        else:
+            charge_amount = min(power_kw, env.BATTERY_MAX_CHARGE_RATE_KW) * duration_h
+            max_energy_allowed = env.BATTERY_CAPACITY_KW_H - (self.state_of_charge * env.BATTERY_CAPACITY_KW_H)
+            if charge_amount > max_energy_allowed:
+                charge_amount = max(0, max_energy_allowed)               
+                
         self._calculate_state_of_charge(charge_amount)
         print(f"SoC {self.state_of_charge} at time {self.env.now} Charge amount: {charge_amount} kWh")
+        return charge_amount
 
     def discharge(self, power_kw: float):
         """
@@ -98,6 +106,7 @@ class Battery:
             power_kw (float): Charging or discharging power in kW.
         """
         self.state_of_charge += (env.BATTERY_CHARGING_EFFICIENCY * power_kw) / env.BATTERY_CAPACITY_KW_H
+        self.battery_charged_amount_kwh.append(self.state_of_charge * env.BATTERY_CAPACITY_KW_H)
         self.battery_soc_ts.append(self.state_of_charge)
 
 
@@ -171,7 +180,8 @@ class LocalMicroGrid:
             consumed_power = self.load_kwh
 
             if excess_power > 0:
-                self.battery.charge(excess_power, 1)
+                charged_amount  = self.battery.charge(excess_power, 1)
+                excess_power = excess_power - charged_amount
             else:
                 # Use battery power to makeup the deficit
                 power_from_battery = self.battery.discharge(self.load_kwh - self.total_generated_power_kwh)
@@ -202,6 +212,7 @@ class LocalMicroGrid:
                 "consumed_pw_kw": self.consumed_pw_kw_ts,
                 "excess_pw_kw": self.excess_pw_kw_ts,
                 "battery_SoC": self.battery.battery_soc_ts,
+                "battery_charged_amount_kw" : self.battery.battery_charged_amount_kwh
             }
         ).round(FLOATING_POINT_PRECISION)
 

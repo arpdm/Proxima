@@ -58,7 +58,6 @@ def main():
     # Setup
     logger = Logger()
     logger.set_file(get_log_file_directory() / "output_log.txt")
-    logger.disable()
 
     # Simulation Environment
     microgrid_env = simpy.Environment()
@@ -77,7 +76,7 @@ def main():
     pl.plot_ts(
         microgrid.generated_pw_kw_ts,
         "Generated Power",
-        microgrid.consumed_pw_kw_ts,
+        microgrid.battery.battery_charged_amount_kwh,
         "Load Consumption",
         "Time (h)",
         "Power (kW)",
