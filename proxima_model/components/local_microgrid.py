@@ -65,7 +65,7 @@ class Battery:
             power_kw (float): Provided power in kW.
             duration_h (float): Charge duration in hours.
         """
-        
+
         # To keep the battery healthy and extend its lifetime, we dont want to keep the battery charged 100% at all times.
         if self.state_of_charge >= env.BATTERY_MAX_STATE_OF_CHARGE_RATE:
             print(f"Mex SoC for batteryt reached.")
@@ -74,8 +74,8 @@ class Battery:
             charge_amount = min(power_kw, env.BATTERY_MAX_CHARGE_RATE_KW) * duration_h
             max_energy_allowed = env.BATTERY_CAPACITY_KW_H - (self.state_of_charge * env.BATTERY_CAPACITY_KW_H)
             if charge_amount > max_energy_allowed:
-                charge_amount = max(0, max_energy_allowed)               
-                
+                charge_amount = max(0, max_energy_allowed)
+
         self._calculate_state_of_charge(charge_amount)
         print(f"SoC {self.state_of_charge} at time {self.env.now} Charge amount: {charge_amount} kWh")
         return charge_amount
@@ -147,19 +147,20 @@ class LocalMicroGrid:
             load_kwh (float): Load consumption in kWh.
             initial_battery_soc (float): Initial state of charge for the battery.
         """
-        self.sim_env = sim_env
-        self.load_kwh = load_kwh
-        self.total_generated_power_kwh = 0
-        self.time_ts = []
-        self.generated_pw_kw_ts = []
-        self.consumed_pw_kw_ts = []
-        self.excess_pw_kw_ts = []
+        self._sim_env = sim_env
+        self._load_kwh = load_kwh
+        self.data_frame = pd.DataFrame()
+        self._total_generated_power_kwh = 0
+        self._time_ts = []
+        self._generated_pw_kw_ts = []
+        self._consumed_pw_kw_ts = []
+        self._excess_pw_kw_ts = []
 
-        self.battery = Battery(self.sim_env, initial_battery_soc)
-        self.solar_arrays = [VSAT(self.sim_env) for _ in range(num_panels)]
+        self._battery = Battery(self._sim_env, initial_battery_soc)
+        self._solar_arrays = [VSAT(self._sim_env) for _ in range(num_panels)]
 
         # Main power grid control process. It handles power generation, consumption rates, and battery charging.
-        self.sim_env.process(self._control())
+        self._sim_env.process(self._control())
 
     def _control(self):
         """
@@ -171,33 +172,33 @@ class LocalMicroGrid:
         while True:
             # Generate power from all solar arrays
             self.total_generated_power_kwh = 0
-            for solar_array in self.solar_arrays:
+            for solar_array in self._solar_arrays:
                 generated_power = solar_array.generate()
                 self.total_generated_power_kwh += generated_power
 
             # Control logic to manage load and battery
-            excess_power = self.total_generated_power_kwh - self.load_kwh
-            consumed_power = self.load_kwh
+            excess_power = self.total_generated_power_kwh - self._load_kwh
+            consumed_power = self._load_kwh
 
             if excess_power > 0:
-                charged_amount  = self.battery.charge(excess_power, 1)
+                charged_amount = self._battery.charge(excess_power, 1)
                 excess_power = excess_power - charged_amount
             else:
                 # Use battery power to makeup the deficit
-                power_from_battery = self.battery.discharge(self.load_kwh - self.total_generated_power_kwh)
+                power_from_battery = self._battery.discharge(self._load_kwh - self.total_generated_power_kwh)
                 consumed_power = self.total_generated_power_kwh + power_from_battery
                 print(
-                    f"Power generated: {self.total_generated_power_kwh:.2f} kW, insufficient to meet load: {self.load_kwh:.2f} kW, using {power_from_battery:.2f} kW from battery"
+                    f"Power generated: {self.total_generated_power_kwh:.2f} kW, insufficient to meet load: {self._load_kwh:.2f} kW, using {power_from_battery:.2f} kW from battery"
                 )
 
             # Logging
-            self.time_ts.append(self.sim_env.now)
-            self.consumed_pw_kw_ts.append(consumed_power)
-            self.excess_pw_kw_ts.append(excess_power)
-            self.generated_pw_kw_ts.append(self.total_generated_power_kwh)
+            self._time_ts.append(self._sim_env.now)
+            self._consumed_pw_kw_ts.append(consumed_power)
+            self._excess_pw_kw_ts.append(excess_power)
+            self._generated_pw_kw_ts.append(self.total_generated_power_kwh)
 
             # Wait for the next hour
-            yield self.sim_env.timeout(PROCESS_RUNTIME_PERIOD_H)
+            yield self._sim_env.timeout(PROCESS_RUNTIME_PERIOD_H)
 
     def save_data(self, file_path: str):
         """Saves all time-series data attributes and states within local microgrid to CSV file
@@ -205,15 +206,15 @@ class LocalMicroGrid:
         Args:
             file_path (str): location and file name for local microgrid time-series data
         """
-        data_drame = pd.DataFrame(
+        self.data_drame = pd.DataFrame(
             {
-                "time_h": self.time_ts,
-                "generated_pw_kw": self.generated_pw_kw_ts,
-                "consumed_pw_kw": self.consumed_pw_kw_ts,
-                "excess_pw_kw": self.excess_pw_kw_ts,
-                "battery_SoC": self.battery.battery_soc_ts,
-                "battery_charged_amount_kw" : self.battery.battery_charged_amount_kwh
+                "time_h": self._time_ts,
+                "generated_pw_kw": self._generated_pw_kw_ts,
+                "consumed_pw_kw": self._consumed_pw_kw_ts,
+                "excess_pw_kw": self._excess_pw_kw_ts,
+                "battery_SoC": self._battery.battery_soc_ts,
+                "battery_charged_amount_kw": self._battery.battery_charged_amount_kwh,
             }
         ).round(FLOATING_POINT_PRECISION)
 
-        save_time_series_data_to_file([data_drame], file_path)
+        save_time_series_data_to_file([self.data_drame], file_path)

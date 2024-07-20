@@ -72,17 +72,7 @@ def main():
 
     # Post Processing
     microgrid.save_data(get_log_file_directory() / "lunar_microgrid_sim_001.csv")
-
-    pl.plot_ts(
-        microgrid.generated_pw_kw_ts,
-        "Generated Power",
-        microgrid.battery.battery_charged_amount_kwh,
-        "Load Consumption",
-        "Time (h)",
-        "Power (kW)",
-        "Power Grid Profile",
-    )
-
+    pl.plot_time_series_multi_feature(microgrid.data_drame, "time_h", "Lunar Microgrid System State")
     # Cleanup
     logger.reset()
 

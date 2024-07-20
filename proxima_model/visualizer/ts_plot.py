@@ -33,6 +33,9 @@ Functions:
 """
 
 import matplotlib.pyplot as plt
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 
 
 def plot_ts(
@@ -64,3 +67,24 @@ def plot_ts(
     plt.title(title)
     plt.legend()
     plt.show()
+
+
+def plot_time_series_multi_feature(data: pd.DataFrame, time_column: str, title: str, x_axis_lbl: str = "Time (h)"):
+    """
+    Plots all features in a time-series dataset with an interactive plot.
+
+    Parameters:
+    - data (pd.DataFrame): The dataset containing the time-series data.
+    - time_column (str): The name of the column to use as the time data for the x-axis.
+    """
+
+    if time_column not in data.columns:
+        raise ValueError(f"Column '{time_column}' does not exist in the dataset.")
+    fig = go.Figure()
+
+    for column in data.columns:
+        if column != time_column:
+            fig.add_trace(go.Scatter(x=data[time_column], y=data[column], mode="lines", name=column))
+
+    fig.update_layout(title=title, xaxis_title=x_axis_lbl, yaxis_title="Values", hovermode="x", template="plotly")
+    fig.show()
