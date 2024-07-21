@@ -52,10 +52,10 @@ class Battery:
             env (simpy.Environment): Environment for simulation.
             initial_soc (float): Initial state of charge of the battery as a fraction of the total capacity.
         """
-        self.env = env
+        self._env = env
         self.state_of_charge = initial_soc
+        self.total_charge_kw = 0
         self.battery_soc_ts = []
-        self.battery_charged_amount_kwh = []
 
     def charge(self, power_kw: float, duration_h: float):
         """
@@ -68,7 +68,7 @@ class Battery:
 
         # To keep the battery healthy and extend its lifetime, we dont want to keep the battery charged 100% at all times.
         if self.state_of_charge >= env.BATTERY_MAX_STATE_OF_CHARGE_RATE:
-            print(f"Mex SoC for batteryt reached.")
+            print(f"Max SoC for battery reached.")
             charge_amount = 0
         else:
             charge_amount = min(power_kw, env.BATTERY_MAX_CHARGE_RATE_KW) * duration_h
@@ -76,8 +76,8 @@ class Battery:
             if charge_amount > max_energy_allowed:
                 charge_amount = max(0, max_energy_allowed)
 
-        self._calculate_state_of_charge(charge_amount)
-        print(f"SoC {self.state_of_charge} at time {self.env.now} Charge amount: {charge_amount} kWh")
+        self._calculatestate_of_charge(charge_amount)
+        print(f"SoC {self.state_of_charge} at time {self._env.now} Charge amount: {charge_amount} kWh")
         return charge_amount
 
     def discharge(self, power_kw: float):
@@ -90,23 +90,24 @@ class Battery:
         Returns:
             float: Actual power provided by the battery.
         """
-        if (self.state_of_charge * env.BATTERY_CAPACITY_KW_H) >= power_kw:
-            self._calculate_state_of_charge(-1 * power_kw)
+        if self.total_charge_kw >= power_kw:
+            self._calculatestate_of_charge(-1 * power_kw)
             return power_kw
         else:
             discharged_power = self.state_of_charge * env.BATTERY_CAPACITY_KW_H
-            self._calculate_state_of_charge(-1 * discharged_power)
+            self._calculatestate_of_charge(-1 * discharged_power)
             return discharged_power
 
-    def _calculate_state_of_charge(self, power_kw: float):
+    def _calculatestate_of_charge(self, power_kw: float):
         """
         Calculate the state of charge for the battery based on the input power.
 
         Args:
             power_kw (float): Charging or discharging power in kW.
         """
-        self.state_of_charge += (env.BATTERY_CHARGING_EFFICIENCY * power_kw) / env.BATTERY_CAPACITY_KW_H
-        self.battery_charged_amount_kwh.append(self.state_of_charge * env.BATTERY_CAPACITY_KW_H)
+        self.total_charge_kw += env.BATTERY_CHARGING_EFFICIENCY * power_kw
+        self.state_of_charge = self.total_charge_kw / env.BATTERY_CAPACITY_KW_H
+
         self.battery_soc_ts.append(self.state_of_charge)
 
 
@@ -137,7 +138,7 @@ class VSAT:
 
 
 class LocalMicroGrid:
-    def __init__(self, sim_env, num_panels: int, load_kwh: float, initial_battery_soc: float):
+    def __init__(self, sim_env, num_panels: int, load_kwh: float, initial_battery_soc: float, num_batteries: int):
         """
         Initialize the local microgrid.
 
@@ -147,16 +148,20 @@ class LocalMicroGrid:
             load_kwh (float): Load consumption in kWh.
             initial_battery_soc (float): Initial state of charge for the battery.
         """
+        self.data_frame = pd.DataFrame()
+        self.batteries_soc_df = pd.DataFrame()
+
         self._sim_env = sim_env
         self._load_kwh = load_kwh
-        self.data_frame = pd.DataFrame()
         self._total_generated_power_kwh = 0
         self._time_ts = []
         self._generated_pw_kw_ts = []
         self._consumed_pw_kw_ts = []
         self._excess_pw_kw_ts = []
 
-        self._battery = Battery(self._sim_env, initial_battery_soc)
+        self._batteries = [Battery(self._sim_env, initial_battery_soc) for _ in range(num_batteries)]
+        self._battery_soc_ts = {f"battery_{i+1}_soc": [] for i in range(num_batteries)}
+        self._batteries_total_charge_kw_ts = []
         self._solar_arrays = [VSAT(self._sim_env) for _ in range(num_panels)]
 
         # Main power grid control process. It handles power generation, consumption rates, and battery charging.
@@ -178,18 +183,37 @@ class LocalMicroGrid:
 
             # Control logic to manage load and battery
             excess_power = self.total_generated_power_kwh - self._load_kwh
-            consumed_power = self._load_kwh
 
             if excess_power > 0:
-                charged_amount = self._battery.charge(excess_power, 1)
-                excess_power = excess_power - charged_amount
+                consumed_power = self._load_kwh
+                # Distribute excess power across all batteries
+                for battery in self._batteries:
+                    if excess_power <= 0:
+                        excess_power = 0
+                    charged_amount = battery.charge(excess_power, 1)
+                    excess_power -= charged_amount
             else:
+                consumed_power = self.total_generated_power_kwh
+                extra_pwr_needed = self._load_kwh - self.total_generated_power_kwh
                 # Use battery power to makeup the deficit
-                power_from_battery = self._battery.discharge(self._load_kwh - self.total_generated_power_kwh)
-                consumed_power = self.total_generated_power_kwh + power_from_battery
-                print(
-                    f"Power generated: {self.total_generated_power_kwh:.2f} kW, insufficient to meet load: {self._load_kwh:.2f} kW, using {power_from_battery:.2f} kW from battery"
-                )
+                for battery in self._batteries:
+                    if excess_power >= 0:
+                        break
+                    if self._load_kwh - extra_pwr_needed <= 0:
+                        break
+                    power_from_battery = battery.discharge(extra_pwr_needed)
+                    extra_pwr_needed -= power_from_battery
+                    print(
+                        f"Power generated: {self.total_generated_power_kwh:.2f} kW, insufficient to meet load: {self._load_kwh:.2f} kW, using {power_from_battery:.2f} kW from battery"
+                    )
+
+            total_charge = 0
+
+            for i, battery in enumerate(self._batteries):
+                self._battery_soc_ts[f"battery_{i+1}_soc"].append(battery.state_of_charge)
+                total_charge += battery.total_charge_kw
+
+            self._batteries_total_charge_kw_ts.append(total_charge)
 
             # Logging
             self._time_ts.append(self._sim_env.now)
@@ -206,14 +230,17 @@ class LocalMicroGrid:
         Args:
             file_path (str): location and file name for local microgrid time-series data
         """
+
+        self.batteries_soc_df = pd.DataFrame(self._battery_soc_ts)
+        self.batteries_soc_df["time_h"] = self._time_ts
+
         self.data_drame = pd.DataFrame(
             {
                 "time_h": self._time_ts,
                 "generated_pw_kw": self._generated_pw_kw_ts,
                 "consumed_pw_kw": self._consumed_pw_kw_ts,
                 "excess_pw_kw": self._excess_pw_kw_ts,
-                "battery_SoC": self._battery.battery_soc_ts,
-                "battery_charged_amount_kw": self._battery.battery_charged_amount_kwh,
+                "total_battery_charged_amount_kw": self._batteries_total_charge_kw_ts,
             }
         ).round(FLOATING_POINT_PRECISION)
 

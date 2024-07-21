@@ -58,14 +58,16 @@ def main():
     # Setup
     logger = Logger()
     logger.set_file(get_log_file_directory() / "output_log.txt")
+    logger.enable()
 
     # Simulation Environment
     microgrid_env = simpy.Environment()
     microgrid = LocalMicroGrid(
         microgrid_env,
         num_panels=env.VSAT_NUM,
-        load_kwh=env.HABITAT_PWR_CONSUMPTION_RATE_KWH,
+        load_kwh=(env.HABITAT_PWR_CONSUMPTION_RATE_KWH * env.HABITAT_NUM),
         initial_battery_soc=env.BAT_SOC_INI,
+        num_batteries=env.BATTERY_NUM,
     )
 
     microgrid_env.run(until=env.RUN_TIME_H)
@@ -73,6 +75,8 @@ def main():
     # Post Processing
     microgrid.save_data(get_log_file_directory() / "lunar_microgrid_sim_001.csv")
     pl.plot_time_series_multi_feature(microgrid.data_drame, "time_h", "Lunar Microgrid System State")
+    pl.plot_time_series_multi_feature(microgrid.batteries_soc_df, "time_h", "Lunar Microgrid Batteries SoC")
+
     # Cleanup
     logger.reset()
 
