@@ -1,0 +1,26 @@
+#-------------------- ENERGY ------------------------
+
+# VSAT 
+P_VSAT_MAX: 5.0         # kW - Max production capacity
+VSAT_COUNT : 1          # Number of initial VSATs
+
+# Fuel Cell
+P_FUEL_MAX: 3.0         # kW - Max production capacity
+FUEL_CELL_COUNT : 1     # Number of initial fuel cells
+
+# Batteries 
+B_MAX: 30.0             # kWh - max operational capacity
+B_MIN: 5.0              # kWh - min operational threshold
+INITIAL_BATTERY: 20.0   # kWh 
+BATTERY_COUNT : 2       # Number of initial Batteries
+
+# Power
+P_NEED: 4.0             # kW - Needed Power
+
+# Simulation
+SIM_TIME: 10            # hours
+DELTA_T: 1.0            # each step = 1 hour
+
+# Environment
+LUNAR_DAY_HOURS: 336    # default: 14 Earth days of sunlight
+LUNAR_NIGHT_HOURS: 336  # default: 14 Earth days of darkness
