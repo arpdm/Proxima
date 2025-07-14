@@ -127,12 +127,14 @@ Start collecting **high-resolution logs** and embed hooks for **system identific
 
 ---
 
-## **Phase 3: Refinement of System Dynamics**
+## **Phase 3: Refinement of System Dynamics and Growth Policies**
 
 **🎯 Objective:**
 - Run system identification to fit surrogate models.
 - Translate ABM dynamics to differential equations.
 - Predict future behavior & design model-driven policies.
+- Add growth and expansion
+
 
 **🧮 Algorithms & Techniques:**
 - System Dynamics: `Stocks` and `Flows`
@@ -235,3 +237,49 @@ Control models now affect market pricing, social equity, demand incentives.
 Test how robust adaptive policies are under variable conditions.  
 Map **leverage points** and **fragile threshol**
 
+## **Phase 9: Cislunar Policy Simulation**
+
+**🎯 Objective:**  
+Explore how **external policy forces** (e.g. Earth-based governance) influence the internal dynamics of the World System Beta.  
+Assess long-term risks such as **lunar pollution** and degradation of the **lunar vacuum**.  
+Incorporate expert insight to model **cislunar growth implications** and propose resilient responses.
+
+**💡 Key Considerations:**
+- How centralized mandates affect autonomy
+- Control-based resistance or adaptation strategies
+- Energy governance under Earth-imposed restrictions
+
+**🧮 Algorithms & Techniques:**
+- Scenario Modeling
+- Markov Decision Processes (MDPs)
+
+**🧪 Use Cases:**
+- Test whether centralized policies hinder local sustainability
+- Explore thresholds for independence from Earth-based supply chains
+- Simulate resistance to external energy and resource protocols
+- Identify autonomy thresholds using control-informed adaptation
+
+---
+
+## **Phase 10: Policy Framework & Guidelines**
+
+**🎯 Objective:**  
+Codify simulation insights into a formal **policy framework** ready for export to **World System Alpha**.  
+Establish robust guidelines for decision-making, decentralized governance, and ethical constraints.  
+Ensure compatibility with **Proxima’s core goals**: resilience, decentralization, and sustainability.
+
+**🧮 Algorithms & Techniques:**
+- Policy Synthesis Engine: aggregates lessons across phases
+- Decision Tree Learning: derived from simulation logs
+- Ethics & Constraint Engines: embed safety boundaries
+- Policy Provenance Logs: ensure transparency and traceability
+
+**🧪 Use Cases:**
+- Formalize decentralized governance policies
+- Prequalify policies for planetary deployment scenarios
+- Define ethics-based constraints for AI or adaptive decision layers
+- Export modular policy bundles to World System Alpha instances
+
+---
+
+> 🚀 With Phases 9 and 10, World System Beta graduates from experimentation to becoming a **testbed for planetary governance** and an **engine for exporting resilience** across interplanetary systems.
