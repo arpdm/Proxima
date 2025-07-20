@@ -16,21 +16,22 @@ Establish the foundation of World System Beta using Agent-Based Modeling (ABM) a
 
 ## 1. 🗃️ Local Database — MongoDB
 
-- [ ] Create MongoDB collections for:
-  - [ ] `World System Component`
+- [X] Create MongoDB collections for:
+  - [X] `World System Component`
     - Store dynamic configuration for each component
-  - [ ] `World System Environment`
+  - [X] `World System Environment`
     - Environmental specs for world system instances
-  - [ ] `World System State Space`
-    - [ ] System Goals
-    - [ ] Performance Metrics
-    - [ ] System Characteristics
-    - [ ] Last Known Good State (LKG state)
-  - [ ] `Events`
+  - [X] `World System State Space`
+    - [X] System Goals
+    - [X] Performance Metrics
+    - [X] System Characteristics
+    - [X] Last Known Good State (LKG state)
+  - [C] `Events`
     - Pre-loaded timeline
     - Support for injected/random events
-  - [ ] `Available Policies`
+  - [X] `Available Policies`
     - Dynamically update policies during runtime
+  - [X] `Experiment Config`
 
 ---
 

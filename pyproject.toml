@@ -16,7 +16,7 @@ scipy = "^1.13.0"
 pandas = "2.2.2"
 SNAKES = "*"
 black="*"
-
+pymongo="4.13"
 
 # Visualization Libraries
 matplotlib = "3.8.2"
@@ -57,6 +57,7 @@ exclude = '''
 
 [tool.poetry.scripts]
 world-system-beta = "proxima_model.world_systems.world_system_beta:main"
+world-system-db-setup = "data_engine.initial_db_setup:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
