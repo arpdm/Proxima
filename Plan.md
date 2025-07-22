@@ -26,7 +26,7 @@ Establish the foundation of World System Beta using Agent-Based Modeling (ABM) a
     - [X] Performance Metrics
     - [X] System Characteristics
     - [X] Last Known Good State (LKG state)
-  - [C] `Events`
+  - [] `Events`
     - Pre-loaded timeline
     - Support for injected/random events
   - [X] `Available Policies`
@@ -37,19 +37,19 @@ Establish the foundation of World System Beta using Agent-Based Modeling (ABM) a
 
 ## 2. 🚀 Proxima Runner Engine
 
-- [ ] Construct system dynamically from MongoDB
-- [ ] Build agent-based models using Mesa 3.0
+- [X] Construct system dynamically from MongoDB
+- [X] Build agent-based models using Mesa 3.0
 - [ ] Inject events and policies into simulation
 - [ ] Support scenario templating
-- [ ] Modular world system instantiation
+- [X] Modular world system instantiation
 
 ---
 
 ## 3. 📓 Logger Module
 
-- [ ] Enable live logging to CSV
+- [X] Enable live logging to CSV
 - [ ] Upload logs and last known good state to MongoDB
-- [ ] Use `Mesa 3.0`-compatible logging loop (`agents.do("step")`, `agents.do("advance")`)
+- [X] Use `Mesa 3.0`-compatible logging loop (`agents.do("step")`, `agents.do("advance")`)
 - [ ] Support multiple grids, agents, and batched simulation cycles
 
 ---

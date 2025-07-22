@@ -6,6 +6,7 @@ from pathlib import Path
 import json
 import argparse
 
+
 class ProximaDB:
     def __init__(self, uri="mongodb://localhost:27017", db_name="proxima_db"):
         self.client = MongoClient(uri)
@@ -27,6 +28,16 @@ class ProximaDB:
     def remove_field_from_all(self, collection, field):
         return self.db[collection].update_many({}, {"$unset": {field: ""}})
 
+    def init_time_series_logs(self):
+        if "logs_simulation" not in self.db.list_collection_names():
+            self.db.create_collection(
+                "logs_simulation",
+                timeseries={"timeField": "timestamp", "metaField": "experiment_id", "granularity": "seconds"},
+            )
+            print("✅ Created 'logs_simulation' as a time series collection.")
+        else:
+            print("ℹ️ 'logs_simulation' already exists.")
+
     # Environment Methods
     def create_environment(self, env_id, name, gravity, resources=None):
         doc = {"_id": env_id, "name": name, "gravity": gravity, "resources": resources or []}
@@ -46,7 +57,9 @@ class ProximaDB:
         return self.db.component_templates.insert_one(doc)
 
     # World Systems
-    def create_world_system(self, ws_id, name, environment_id, components, live_state, active_plicies=None, linked_events = None):
+    def create_world_system(
+        self, ws_id, name, environment_id, components, live_state, active_plicies=None, linked_events=None
+    ):
         doc = {
             "_id": ws_id,
             "name": name,
@@ -54,7 +67,7 @@ class ProximaDB:
             "live_state": live_state,
             "active_components": components,
             "active_policy_ids": [],
-            "active_event_ids": []
+            "active_event_ids": [],
         }
         return self.db.world_systems.insert_one(doc)
 
@@ -105,18 +118,20 @@ class ProximaDB:
             "effect": effect,
         }
         return self.db.events.insert_one(doc)
-    
+
     # Experiments
-    def create_experiment(self, experiment_id, world_system_id, sim_time_steps, time_step_duration_hours, experiment_type):
+    def create_experiment(
+        self, experiment_id, world_system_id, sim_time_steps, time_step_duration_hours, experiment_type
+    ):
         doc = {
             "_id": experiment_id,
             "world_system_id": world_system_id,
             "simulation_time_stapes": sim_time_steps,
             "time_step_duration_hours": time_step_duration_hours,
-            "experiment_type": experiment_type
+            "experiment_type": experiment_type,
         }
         return self.db.experiments.insert_one(doc)
-    
+
     # Export Database
     def export_all_collections_to_json(self, output_dir="mongo_exports"):
         output_path = Path(output_dir)
@@ -146,6 +161,11 @@ class ProximaDB:
                 if data:
                     self.db[collection_name].insert_many(data)
         return f"Imported collections from {input_path}/"
+
+    # Simulation LofLog Files
+    def log_simulation_step(self, record: list[dict]):
+        return self.db.logs_simulation.insert_one(record)
+
 
 # CLI Interface
 if __name__ == "__main__":
