@@ -50,21 +50,21 @@ Establish the foundation of World System Beta using Agent-Based Modeling (ABM) a
 - [X] Enable live logging to CSV
 - [ ] Upload logs and last known good state to MongoDB
 - [X] Use `Mesa 3.0`-compatible logging loop (`agents.do("step")`, `agents.do("advance")`)
-- [ ] Support multiple grids, agents, and batched simulation cycles
+- [X] Support multiple grids, agents, and batched simulation cycles
 
 ---
 
 ## 4. 📊 Visualizer Engine
 
-- [ ] Choose visualization stack:
+- [X] Choose visualization stack:
   - [x] `Plotly Dash`
   - [ ] `Grafana`
-- [ ] Stream real-time data from active simulation
-- [ ] Load historical logs from MongoDB or CSV
+- [X] Stream real-time data from active simulation
+- [X] Load historical logs from MongoDB or CSV
 - [ ] Design:
-  - [ ] Live dashboard
+  - [X] Live dashboard
   - [ ] Static dashboard/report at end of run
-  - [ ] Detachable architecture for remote dashboards
+  - [X] Detachable architecture for remote dashboards
   - [ ] Resume support from Last Known Good State
 
 ---
