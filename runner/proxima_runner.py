@@ -18,6 +18,8 @@ class ProximaRunner:
         self.proxima_db = ProximaDB()
         # Deletes all documents in the logs_simulation collection
         self.proxima_db.db.db.logs_simulation.delete_many({})
+
+        # Setup World System Config
         experiment_config = self.proxima_db.find_by_id("experiments", "exp_001")
         self.sim_time = experiment_config["simulation_time_stapes"]
         self.ws_id = experiment_config["world_system_id"]
@@ -41,7 +43,12 @@ class ProximaRunner:
         # Run Simulation
         for _ in range(self.sim_time):
             ws.step()
-            self.logger.log(ws.steps, ws.model_metrics, [ws.microgrid.agent_state])
+
+            self.logger.log(
+                step=ws.steps,
+                model_metrics=ws.model_metrics,
+                agent_metrics=[ws.microgrid.agent_state, ws.get_rover_state()],
+            )
 
         self.logger.save_to_file()
 

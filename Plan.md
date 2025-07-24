@@ -40,7 +40,7 @@ Establish the foundation of World System Beta using Agent-Based Modeling (ABM) a
 - [X] Construct system dynamically from MongoDB
 - [X] Build agent-based models using Mesa 3.0
 - [ ] Inject events and policies into simulation
-- [ ] Support scenario templating
+- [X] Support scenario templating
 - [X] Modular world system instantiation
 
 ---
@@ -58,7 +58,7 @@ Establish the foundation of World System Beta using Agent-Based Modeling (ABM) a
 
 - [X] Choose visualization stack:
   - [x] `Plotly Dash`
-  - [ ] `Grafana`
+  - [-] `Grafana`
 - [X] Stream real-time data from active simulation
 - [X] Load historical logs from MongoDB or CSV
 - [ ] Design:
@@ -66,34 +66,7 @@ Establish the foundation of World System Beta using Agent-Based Modeling (ABM) a
   - [ ] Static dashboard/report at end of run
   - [X] Detachable architecture for remote dashboards
   - [ ] Resume support from Last Known Good State
-
----
-
-## 5. 🧮 Post-Processor
-
-- [ ] Analyze simulation logs
-- [ ] Compute system metrics (efficiency, resilience, policy performance)
-- [ ] Generate summaries & comparative metrics
-- [ ] Feed Complexity Engine with derived inputs
-
----
-
-## 6. 🧠 Complexity Engine
-
-- [ ] Build a separate executor for post-simulation complexity analysis
-- [ ] Implement:
-  - [ ] Chaos analysis
-  - [ ] Lyapunov exponent / bifurcation detection
-  - [ ] Sensitivity mapping
-- [ ] Connect output to:
-  - [ ] Dynamic policy tuning
-  - [ ] Structural optimization of world system
-
----
-
-> 🧩 Modular, resumable, and scalable: this checklist enables a full pipeline from **agent modeling** to **policy generation** and **real-time visualization**.
-
-
+  - [X] SHow Elapsed days based on environment day earth hours
 
 **🛠 Governance and Policy Definitions:**
 - Define initial policy setes.
@@ -126,6 +99,13 @@ Start collecting **high-resolution logs** and embed hooks for **system identific
 - Track system under policy failures (e.g., static curtailment, battery drain).
 - Generate datasets for control model fitting.
 
+## 1. 🧮 Post-Processor
+
+- [ ] Analyze simulation logs
+- [ ] Compute system metrics (efficiency, resilience, policy performance)
+- [ ] Generate summaries & comparative metrics
+- [ ] Feed Complexity Engine with derived inputs
+
 ---
 
 ## **Phase 3: Refinement of System Dynamics and Growth Policies**
@@ -155,6 +135,17 @@ Start collecting **high-resolution logs** and embed hooks for **system identific
 - Biomass → Food → Health feedback loop refinement.
 - Demand-responsive energy grid modeling.
 - Convert ABM behaviors into continuous analogs for MPC.
+
+## 1. 🧠 Complexity Engine
+
+- [ ] Build a separate executor for post-simulation complexity analysis
+- [ ] Implement:
+  - [ ] Chaos analysis
+  - [ ] Lyapunov exponent / bifurcation detection
+  - [ ] Sensitivity mapping
+- [ ] Connect output to:
+  - [ ] Dynamic policy tuning
+  - [ ] Structural optimization of world system
 
 ---
 

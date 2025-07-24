@@ -74,10 +74,11 @@ class MicrogridManager(Agent):
     def total_battery_capacity(self):
         return len(self.batteries) * self.config["b_max"]
 
-    def step(self):
+    def step(self, power_need):
         self.total_charge_level = self.total_battery_charge()
         self.allowed_charge = self.total_charge_capacity - self.total_charge_level
         self.total_state_of_charge = self.total_charge_level / self.total_charge_capacity
+        self.p_need = power_need
 
     def advance(self):
         # If batteries are full, only generate enough power for immediate need
@@ -120,7 +121,7 @@ class MicrogridManager(Agent):
                 for b in self.batteries:
                     b.charge_discharge(discharge_per_battery)
             # If net_power == 0, no charge/discharge needed
-        
+
         self.update_current_state()
 
     def update_current_state(self):
