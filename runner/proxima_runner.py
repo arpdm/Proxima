@@ -26,7 +26,7 @@ class ProximaRunner:
         self.exp_id = experiment_config["_id"]
 
         # Setup Data Logger
-        self.logger = DataLogger(experiment_id=self.exp_id, db=self.proxima_db)
+        self.logger = DataLogger(experiment_id=self.exp_id, db=self.proxima_db, ws_id=self.ws_id)
 
     def run(self):
         """
@@ -38,20 +38,27 @@ class ProximaRunner:
         """
         # Configure and build world system
         config = build_world_system_config(self.ws_id, self.exp_id, self.proxima_db)
-        # ws = WorldSystem(config)
-        print(config)
+        ws = WorldSystem(config)
+        
+        # Run Simulation
+        for _ in range(self.sim_time):
+            ws.step()
+            latest_state = {
+                "step": ws.steps,
+                "microgrid": ws.microgrid.agent_state,
+                "science_rovers": ws.get_rover_state(),
+                "ws_metrics": ws.model_metrics,
+                # add other agent/system states as needed
+            }
 
-        # # Run Simulation
-        # for _ in range(self.sim_time):
-        #     ws.step()
+            self.logger.log(
+                step=ws.steps,
+                model_metrics=ws.model_metrics,
+                agent_metrics=[ws.microgrid.agent_state, ws.get_rover_state()],
+                latest_state=latest_state,
+            )
 
-        #     self.logger.log(
-        #         step=ws.steps,
-        #         model_metrics=ws.model_metrics,
-        #         agent_metrics=[ws.microgrid.agent_state, ws.get_rover_state()],
-        #     )
-
-        # self.logger.save_to_file()
+        self.logger.save_to_file()
 
 
 def main():

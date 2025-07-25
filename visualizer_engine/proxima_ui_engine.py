@@ -23,8 +23,9 @@ class ProximaUI:
         self.db = db
         self.exp_id = experiment_id
         self.viz_config_default = [
-            {"field": "Total Power Supplied (kWh)", "label": "Power Supplied", "color": "green"},
-            {"field": "Total SoC (%)", "label": "State of Charge", "color": "blue"},
+            {"field": "total_power_supply_kW", "label": "Power Supplied (kW)", "color": "green"},
+            {"field": "total_state_of_charge_%", "label": "State of Charge (%)", "color": "blue"},
+            {"field": "science_generated", "label": "Science Generated", "color": "orange"},
         ]
         self.app = dash.Dash(__name__, external_stylesheets=[dbc.themes.QUARTZ])
         self._setup_layout()
@@ -49,68 +50,159 @@ class ProximaUI:
         """
         return self.db.db[collection_name].find_one({"_id": doc_id})
 
-    def fetch_latest_logs(self, limit=1000):
+    def fetch_latest_logs(self, limit=50):
         """
         Fetch the latest simulation logs as a DataFrame.
         """
-        return pd.DataFrame(
-            self.fetch_collection(
-                "logs_simulation", {"experiment_id": self.exp_id}, sort=("timestamp", -1), limit=limit
-            )
+        logs = self.fetch_collection(
+            "logs_simulation", {"experiment_id": self.exp_id}, sort=("timestamp", -1), limit=limit
         )
+        if not logs:
+            return pd.DataFrame()
+        
+        # Flatten nested agent states for easier analysis
+        flattened_logs = []
+        for log in logs:
+            flat_log = {
+                "step": log.get("step", 0),
+                "timestamp": log.get("timestamp"),
+                "experiment_id": log.get("experiment_id"),
+            }
+            
+            # Extract model-level metrics
+            for key, value in log.items():
+                if key not in ["agent_states", "step", "timestamp", "experiment_id"]:
+                    flat_log[key] = value
+            
+            # Extract agent state metrics (microgrid, rovers, etc.)
+            for agent_state in log.get("agent_states", []):
+                if isinstance(agent_state, dict):
+                    for key, value in agent_state.items():
+                        if isinstance(value, (int, float, str)):
+                            flat_log[key] = value
+            
+            flattened_logs.append(flat_log)
+        
+        return pd.DataFrame(flattened_logs)
 
     # ---------------------- Data Processing Methods ----------------------
 
     def extract_component_counts(self, ws):
         """
-        Extract and count all components (including children) from a world system document.
+        Extract and count all components from a world system document.
         """
         summary = {}
-        component_templates = {c["_id"]: c for c in self.db.db.component_templates.find({})}
-
-        for comp in ws.get("active_components", []):
-            tid = comp.get("template_id")
-            quantity = comp.get("quantity", 1)
-            if tid:
-                summary[tid] = summary.get(tid, 0) + quantity
-                # Expand children if they exist
-                template = component_templates.get(tid)
-                if template:
-                    for child in template.get("children", []):
-                        child_id = child.get("template_id")
-                        child_quantity = child.get("quantity", 1)
-                        if child_id:
-                            summary[child_id] = summary.get(child_id, 0) + child_quantity
+        
+        for domain_dict in ws.get("active_components", []):
+            for domain, components in domain_dict.items():
+                for comp in components:
+                    template_id = comp.get("template_id")
+                    subtype = comp.get("subtype", "N/A")
+                    quantity = comp.get("quantity", 1)
+                    
+                    # Create a descriptive key
+                    key = f"{template_id} ({subtype})" if subtype and subtype != "N/A" else template_id
+                    summary[key] = summary.get(key, 0) + quantity
+        
         return summary
+
+    def extract_latest_state(self, ws):
+        """
+        Extract the latest state snapshot from world system.
+        """
+        latest_state = ws.get("latest_state", {})
+        if not latest_state:
+            return {}
+        
+        # Flatten the state for display
+        flattened = {
+            "Step": latest_state.get("step", 0),  # Use 0 instead of "N/A"
+        }
+        
+        # Microgrid metrics
+        microgrid = latest_state.get("microgrid", {})
+        if microgrid:
+            # Safely handle numeric values - return 0 for invalid data
+            def safe_numeric(value, default=0):
+                try:
+                    return round(float(value), 2) if value is not None else default
+                except (ValueError, TypeError):
+                    return default
+            
+            # Handle State of Charge as percentage
+            soc_raw = microgrid.get('total_state_of_charge_%', 0)
+            soc_percent = safe_numeric(soc_raw * 100) if soc_raw is not None else 0
+            
+            flattened.update({
+                "Power Supply (kW)": safe_numeric(microgrid.get("total_power_supply_kW")),
+                "Power Need (kW)": safe_numeric(microgrid.get("total_power_need_kW")),
+                "Charge Level (kWh)": safe_numeric(microgrid.get("total_charge_level_kWh")),
+                "State of Charge (%)": soc_percent,
+                "Generators": len(microgrid.get("generator_status", [])),
+                "Storage Units": len(microgrid.get("storage_status", [])),
+            })
+        
+        # Science metrics
+        science_rovers = latest_state.get("science_rovers", [])
+        ws_metrics = latest_state.get("ws_metrics", {})
+        
+        flattened.update({
+            "Science Rovers": len(science_rovers),
+            "Science Generated": safe_numeric(ws_metrics.get("total_science_cumulative")),  # Keep as number
+        })
+        
+        return flattened
 
     # ---------------------- UI Component Builders ----------------------
 
-    def build_rover_states_table(self, df):
+    def build_component_status_tables(self, ws):
         """
-        Build a table showing the latest rover states.
+        Build tables for generator and storage status from latest state.
         """
-        if df.empty or "rover_states" not in df.columns:
-            return html.Div("No rover state data available.")
-
-        # Grab the most recent non-empty rover_states entry
-        for _, row in df.sort_values("step", ascending=False).iterrows():
-            rover_states = row.get("rover_states", [])
-            if rover_states:
-                break
-        else:
-            return html.Div("No rover states found.")
-
-        display_rows = [
-            {
-                "ID": rover["id"],
-                "Battery (kWh)": round(rover["battery_kWh"], 2),
-                "Science": round(rover["science_buffer"], 2),
-                "Status": rover["status"],
-            }
-            for rover in rover_states
-        ]
-
-        return self.generate_aggrid(display_rows, height=400)
+        latest_state = ws.get("latest_state", {})
+        microgrid = latest_state.get("microgrid", {})
+        
+        # Generator status table
+        generators = microgrid.get("generator_status", [])
+        gen_table_data = []
+        for i, gen in enumerate(generators):
+            gen_table_data.append({
+                "ID": f"Gen-{i+1}",
+                "Type": gen.get("subtype", "Unknown"),
+                "Power (kWh)": round(gen.get("generated_power_kWh", 0), 2),
+                "Efficiency": f"{gen.get('efficiency', 0) * 100:.0f}%",
+                "Availability": f"{gen.get('availability', 0) * 100:.0f}%",
+                "Capacity": gen.get("capacity", "N/A"),
+            })
+        
+        # Storage status table
+        storages = microgrid.get("storage_status", [])
+        storage_table_data = []
+        for i, storage in enumerate(storages):
+            storage_table_data.append({
+                "ID": f"Storage-{i+1}",
+                "Type": storage.get("subtype", "Unknown"),
+                "Charge (kWh)": round(storage.get("charge_level", 0), 2),
+                "SoC (%)": f"{storage.get('state_of_charge', 0) * 100:.1f}%",
+                "Capacity": storage.get("capacity", "N/A"),
+            })
+        
+        # Science rovers table
+        rovers = latest_state.get("science_rovers", [])
+        rover_table_data = []
+        for i, rover in enumerate(rovers):
+            rover_table_data.append({
+                "ID": f"Rover-{i+1}",
+                "Status": rover.get("status", "Unknown"),
+                "Battery (kWh)": round(rover.get("battery_kWh", 0), 2),
+                "Science Buffer": round(rover.get("science_buffer", 0), 2),
+            })
+        
+        return {
+            "generators": self.generate_aggrid(gen_table_data, height=300) if gen_table_data else html.Div("No generators"),
+            "storages": self.generate_aggrid(storage_table_data, height=300) if storage_table_data else html.Div("No storage units"),
+            "rovers": self.generate_aggrid(rover_table_data, height=300) if rover_table_data else html.Div("No rovers"),
+        }
 
     def build_graphs(self, df, viz_config):
         """
@@ -120,6 +212,21 @@ class ProximaUI:
             return [html.Div("No log data available.")]
 
         graphs = []
+        
+        # Calculate tick interval based on data size
+        if "step" in df.columns and not df.empty:
+            step_range = df["step"].max() - df["step"].min()
+            if step_range <= 50:
+                dtick = 5
+            elif step_range <= 200:
+                dtick = 10
+            elif step_range <= 500:
+                dtick = 25
+            else:
+                dtick = 50
+        else:
+            dtick = 10
+    
         for config in viz_config:
             field = config["field"]
             label = config.get("label", field)
@@ -145,24 +252,40 @@ class ProximaUI:
                 paper_bgcolor="rgb(20,20,20)",
                 plot_bgcolor="rgb(25,25,25)",
                 font=dict(color="#e0e0e0"),
-                xaxis=dict(color="#aaaaaa", tickmode="linear"),
+                xaxis=dict(
+                    color="#aaaaaa", 
+                    dtick=dtick,  # Show every dtick steps on x-axis
+                ),
                 yaxis=dict(color="#aaaaaa"),
             )
             graphs.append(dcc.Graph(figure=fig))
         return graphs
 
-    def generate_aggrid(self, data, height=250):
+    def generate_aggrid(self, data, height=250, auto_height=False):
         """
         Generate an AG Grid table for the given data.
         """
         if not data:
             return html.Div("No data available.")
+        
+        # Configure grid options for auto-height
+        grid_options = {}
+        style = {}
+        
+        if auto_height:
+            # Use dashGridOptions to set domLayout for auto-height
+            grid_options = {"domLayout": "autoHeight"}
+        else:
+            # Use fixed height
+            style = {"height": f"{height}px"}
+        
         return dag.AgGrid(
             className="ag-theme-quartz-dark",
             columnDefs=[{"field": k} for k in data[0].keys()],
             rowData=data,
             columnSize="sizeToFit",
-            style={"height": f"{height}px"},
+            style=style,
+            dashGridOptions=grid_options,  # Use this instead of domLayout directly
         )
 
     # ---------------------- Layout & Callbacks ----------------------
@@ -195,6 +318,14 @@ class ProximaUI:
                         letter-spacing: 2px;
                         font-weight: 700;
                     }
+                    .full-height-card {
+                        background: #23272b;
+                        border-radius: 12px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+                        padding: 1.5rem;
+                        height: calc(100vh - 200px);
+                        overflow-y: auto;
+                    }
                 </style>
             </head>
             <body>
@@ -212,65 +343,48 @@ class ProximaUI:
             [
                 dcc.Interval(id="interval-component", interval=2000, n_intervals=0),
                 html.H1("Proxima", className="text-primary text-center fs-3 mb-4 proxima-header"),
-                dbc.Row(
-                    [
-                        dbc.Col(
-                            [
-                                dbc.Row(
-                                    [
-                                        dbc.Col(html.Div(id="experiment-info", className="proxima-card"), width=6),
-                                        dbc.Col(html.Div(id="environment-info", className="proxima-card"), width=6),
-                                    ]
-                                ),
-                                html.Div(id="component-summary", className="proxima-card"),
-                                html.Div(
-                                    [
-                                        html.H4("Policy List", className="text-info mb-2"),
-                                        html.Div(id="policy-list"),
-                                    ],
-                                    className="proxima-card",
-                                ),
-                                html.Div(
-                                    [
-                                        html.H4("Goal Table", className="text-info mb-2"),
-                                        html.Div(id="goal-table"),
-                                    ],
-                                    className="proxima-card",
-                                ),
-                                html.Div(
-                                    [
-                                        html.H4("Live Metric Snapshot", className="text-info mb-2"),
-                                        html.Div(id="live-values-panel"),
-                                    ],
-                                    className="proxima-card",
-                                ),
-                                html.Div(
-                                    [
-                                        html.H4("Graphs", className="text-info mb-2"),
-                                        html.Div(id="graph-container"),
-                                    ],
-                                    className="proxima-card",
-                                ),
-                            ],
-                            width=9,
-                            style={"paddingRight": "1rem"},
-                        ),
-                        dbc.Col(
-                            [
-                                html.Div(
-                                    [
-                                        html.H4("Science Rover Status", className="text-center text-secondary mb-3"),
-                                        html.Div(
-                                            id="rover-status-panel", style={"overflowY": "auto", "maxHeight": "90vh"}
-                                        ),
-                                    ],
-                                    className="proxima-card",
-                                ),
-                            ],
-                            width=3,
-                        ),
-                    ]
-                ),
+                
+                # Top info row
+                dbc.Row([
+                    dbc.Col(html.Div(id="experiment-info", className="proxima-card"), width=4),
+                    dbc.Col(html.Div(id="environment-info", className="proxima-card"), width=4),
+                    dbc.Col(html.Div(id="component-summary", className="proxima-card"), width=4),
+                ], className="mb-3"),
+                
+                # Main content row with 3 columns
+                dbc.Row([
+                    # Graphs column (left)
+                    dbc.Col([
+                        html.Div([
+                            html.H4("Graphs", className="text-info mb-2"),
+                            html.Div(id="graph-container"),
+                        ], className="proxima-card"),
+                    ], width=5, style={"paddingRight": "0.5rem"}),
+                    
+                    # Status panels column (middle)
+                    dbc.Col([
+                        html.Div([
+                            html.H4("Generator Status", className="text-center text-secondary mb-3"),
+                            html.Div(id="generator-status-panel"),
+                        ], className="proxima-card"),
+                        html.Div([
+                            html.H4("Storage Status", className="text-center text-secondary mb-3"),
+                            html.Div(id="storage-status-panel"),
+                        ], className="proxima-card"),
+                        html.Div([
+                            html.H4("Rover Status", className="text-center text-secondary mb-3"),
+                            html.Div(id="rover-status-panel"),
+                        ], className="proxima-card"),
+                    ], width=4, style={"paddingLeft": "0.5rem", "paddingRight": "0.5rem"}),
+                    
+                    # Latest System State column (right) - FULL HEIGHT
+                    dbc.Col([
+                        html.Div([
+                            html.H4("Latest System State", className="text-info mb-3"),
+                            html.Div(id="latest-state-panel"),
+                        ], className="full-height-card"),
+                    ], width=3, style={"paddingLeft": "0.5rem"}),
+                ]),
             ],
             fluid=True,
             style={"padding": "2rem", "backgroundColor": "#181a1b", "minHeight": "100vh"},
@@ -288,10 +402,10 @@ class ProximaUI:
                     "experiment-info",
                     "environment-info",
                     "component-summary",
-                    "policy-list",
-                    "goal-table",
+                    "latest-state-panel",
                     "graph-container",
-                    "live-values-panel",
+                    "generator-status-panel",
+                    "storage-status-panel",
                     "rover-status-panel",
                 ]
             ],
@@ -305,21 +419,27 @@ class ProximaUI:
             exp = self.fetch_document("experiments", self.exp_id)
             ws = self.fetch_document("world_systems", exp["world_system_id"]) if exp else None
             env = self.fetch_document("environments", ws["environment_id"]) if ws else None
-            goals = self.fetch_collection("goals")
-            policies = self.fetch_collection("policies")
 
+            # Component summary
             comp_summary = self.extract_component_counts(ws) if ws else {}
-            comp_table = self.generate_aggrid([{"Component": k, "Count": v} for k, v in comp_summary.items()])
+            comp_table = self.generate_aggrid([{"Component": k, "Count": v} for k, v in comp_summary.items()], auto_height=True)
 
-            goal_table = (
-                self.generate_aggrid(pd.DataFrame(goals).to_dict("records")) if goals else html.Div("No goals defined.")
+            # Latest state panel - USE AUTO HEIGHT (no scrolling)
+            latest_state_data = self.extract_latest_state(ws) if ws else {}
+            latest_state_table = self.generate_aggrid(
+                [{"Metric": k, "Value": v} for k, v in latest_state_data.items()], 
+                auto_height=True  # This will show all rows without scrolling
             )
-            policy_list = (
-                html.Ul([html.Li(f"{p['name']}: {p.get('trigger_condition')}") for p in policies])
-                if policies
-                else html.Div("No policies.")
-            )
-            exp_table = self.generate_aggrid([{k: v for k, v in exp.items() if k != "visualization_config"}])
+
+            # Component status tables (keep these with fixed height)
+            status_tables = self.build_component_status_tables(ws) if ws else {
+                "generators": html.Div("No data"), 
+                "storages": html.Div("No data"), 
+                "rovers": html.Div("No data")
+            }
+
+            # Experiment and environment info
+            exp_table = self.generate_aggrid([{k: v for k, v in exp.items() if k != "visualization_config"}]) if exp else html.Div("No experiment")
             env_table = (
                 self.generate_aggrid(
                     [{k: v if isinstance(v, (str, int, float)) else str(v) for k, v in env.items() if k != "_id"}]
@@ -328,22 +448,21 @@ class ProximaUI:
                 else html.Div("No environment.")
             )
 
-            viz_config = exp.get("visualization_config", self.viz_config_default) if exp else []
+            # Graphs
+            viz_config = exp.get("visualization_config", self.viz_config_default) if exp else self.viz_config_default
             graphs = self.build_graphs(df, viz_config)
-            latest = df.sort_values("timestamp").iloc[-1] if not df.empty else {}
-            live_data = [{"Metric": c["label"], "Latest Value": latest.get(c["field"], "N/A")} for c in viz_config]
-            latest_table = self.generate_aggrid(live_data)
-            rover_table = self.build_rover_states_table(df)
 
             return (
                 exp_table,
                 env_table,
                 comp_table,
-                policy_list,
-                goal_table,
+                html.Div([
+                    latest_state_table  # Now auto-height, no scrolling
+                ]),
                 html.Div(graphs),
-                latest_table,
-                rover_table,
+                status_tables["generators"],
+                status_tables["storages"],
+                status_tables["rovers"],
             )
 
     def run(self):

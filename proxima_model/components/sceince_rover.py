@@ -9,11 +9,13 @@ class ScienceRover(Agent):
         Args:
             agent_config (dict): Agent-specific configuration.
         """
-        self.id = agent_config["id"]
-        self.type = agent_config["type"]
-        self.power_usage_kWh = agent_config["power_usage_kWh"]
-        self.science_generation = agent_config["science_generation"]
-        self.battery_capacity_kWh = agent_config["battery_capacity_kWh"]
+        config = agent_config.get("config", agent_config)
+
+        # No ID field needed - be consistent with PowerGenerator/PowerStorage
+        self.config = config
+        self.power_usage_kWh = config.get("power_usage_kWh", 0.2)
+        self.science_generation = config.get("science_generation", 0.5)
+        self.battery_capacity_kWh = config.get("battery_capacity_kWh", 20)
         self.current_battery_kWh = agent_config.get("current_battery_kWh", self.battery_capacity_kWh)
         self.science_buffer = agent_config.get("science_buffer", 0.0)
         self.status = agent_config.get("status", "idle")
@@ -65,7 +67,6 @@ class ScienceRover(Agent):
             dict: Status snapshot.
         """
         return {
-            "id": self.id,
             "battery_kWh": self.current_battery_kWh,
             "science_buffer": self.science_buffer,
             "status": self.status,

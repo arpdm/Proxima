@@ -48,7 +48,7 @@ Establish the foundation of World System Beta using Agent-Based Modeling (ABM) a
 ## 3. 📓 Logger Module
 
 - [X] Enable live logging to CSV
-- [ ] Upload logs and last known good state to MongoDB
+- [X] Upload logs and last known good state to MongoDB
 - [X] Use `Mesa 3.0`-compatible logging loop (`agents.do("step")`, `agents.do("advance")`)
 - [X] Support multiple grids, agents, and batched simulation cycles
 

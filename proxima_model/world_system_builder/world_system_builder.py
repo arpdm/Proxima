@@ -18,42 +18,35 @@ def extract_environment_config(environment: dict, experiment: dict) -> dict:
         "p_need": 2.0,  # baseline power need
     }
 
+
 def process_component(template, quantity, config, agents_config, template_id, instance_config, domain, subtype):
-    """
-    Generalized component processor for any type/domain.
-    Only add one entry per active component (not per instance) to agents_config["all_components"].
-    """
     comp_type = template.get("type", "").lower()
     base_cfg = template.get("config", {}) or {}
     cfg = {**base_cfg, **(instance_config or {})}
 
-    # Add only one entry per active component
-    agents_config.setdefault("all_components", []).append({
-        "template_id": template_id,
-        "type": comp_type,
-        "domain": domain,
-        "subtype": subtype,
-        "config": cfg,
-        "quantity": quantity
-    })
-
     if domain == "energy":
         if comp_type == "power_generator":
-            config.setdefault("generators", []).extend([
-                {"template_id": template_id, "subtype": subtype, "config": cfg}
-                for _ in range(quantity)
-            ])
+            agents_config.setdefault("generators", []).append({
+                "template_id": template_id,
+                "subtype": subtype,
+                "config": cfg,
+                "quantity": quantity
+            })
         elif comp_type == "power_storage":
-            config.setdefault("storages", []).extend([
-                {"template_id": template_id, "subtype": subtype, "config": cfg}
-                for _ in range(quantity)
-            ])
+            agents_config.setdefault("storages", []).append({
+                "template_id": template_id,
+                "subtype": subtype,
+                "config": cfg,
+                "quantity": quantity
+            })
     elif domain == "science":
-        if comp_type == "science_rover":
-            agents_config.setdefault("science_rovers", []).extend([
-                {"template_id": template_id, "config": cfg}
-                for _ in range(quantity)
-            ])
+        if comp_type == "rover":
+            agents_config.setdefault("science_rovers", []).append({
+                "template_id": template_id,
+                "config": cfg,
+                "quantity": quantity
+            })
+
 
 def build_world_system_config(world_system_id: str, experiment_id: str, db: ProximaDB) -> dict:
     """
@@ -87,7 +80,7 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
                     template_id=template_id,
                     instance_config=instance_config,
                     domain=domain,
-                    subtype=subtype
+                    subtype=subtype,
                 )
     config["agents_config"] = agents_config
     return config
