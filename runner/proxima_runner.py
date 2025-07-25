@@ -38,19 +38,20 @@ class ProximaRunner:
         """
         # Configure and build world system
         config = build_world_system_config(self.ws_id, self.exp_id, self.proxima_db)
-        ws = WorldSystem(config)
+        # ws = WorldSystem(config)
+        print(config)
 
-        # Run Simulation
-        for _ in range(self.sim_time):
-            ws.step()
+        # # Run Simulation
+        # for _ in range(self.sim_time):
+        #     ws.step()
 
-            self.logger.log(
-                step=ws.steps,
-                model_metrics=ws.model_metrics,
-                agent_metrics=[ws.microgrid.agent_state, ws.get_rover_state()],
-            )
+        #     self.logger.log(
+        #         step=ws.steps,
+        #         model_metrics=ws.model_metrics,
+        #         agent_metrics=[ws.microgrid.agent_state, ws.get_rover_state()],
+        #     )
 
-        self.logger.save_to_file()
+        # self.logger.save_to_file()
 
 
 def main():
