@@ -6,7 +6,7 @@ import dash_bootstrap_components as dbc
 import dash_ag_grid as dag
 
 from dash import dcc, html
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State  # Add State here
 from data_engine.proxima_db_engine import ProximaDB
 
 
@@ -148,7 +148,7 @@ class ProximaUI:
         
         flattened.update({
             "Science Rovers": len(science_rovers),
-            "Science Generated": safe_numeric(ws_metrics.get("total_science_cumulative")),  # Keep as number
+            "Science Generated": safe_numeric(ws_metrics.get("total_science_cumulative")),
         })
         
         return flattened
@@ -157,52 +157,88 @@ class ProximaUI:
 
     def build_component_status_tables(self, ws):
         """
-        Build tables for generator and storage status from latest state.
+        Build tables for all component types dynamically from latest state.
         """
         latest_state = ws.get("latest_state", {})
         microgrid = latest_state.get("microgrid", {})
         
-        # Generator status table
-        generators = microgrid.get("generator_status", [])
-        gen_table_data = []
-        for i, gen in enumerate(generators):
-            gen_table_data.append({
-                "ID": f"Gen-{i+1}",
-                "Type": gen.get("subtype", "Unknown"),
-                "Power (kWh)": round(gen.get("generated_power_kWh", 0), 2),
-                "Efficiency": f"{gen.get('efficiency', 0) * 100:.0f}%",
-                "Availability": f"{gen.get('availability', 0) * 100:.0f}%",
-                "Capacity": gen.get("capacity", "N/A"),
-            })
-        
-        # Storage status table
-        storages = microgrid.get("storage_status", [])
-        storage_table_data = []
-        for i, storage in enumerate(storages):
-            storage_table_data.append({
-                "ID": f"Storage-{i+1}",
-                "Type": storage.get("subtype", "Unknown"),
-                "Charge (kWh)": round(storage.get("charge_level", 0), 2),
-                "SoC (%)": f"{storage.get('state_of_charge', 0) * 100:.1f}%",
-                "Capacity": storage.get("capacity", "N/A"),
-            })
-        
-        # Science rovers table
-        rovers = latest_state.get("science_rovers", [])
-        rover_table_data = []
-        for i, rover in enumerate(rovers):
-            rover_table_data.append({
-                "ID": f"Rover-{i+1}",
-                "Status": rover.get("status", "Unknown"),
-                "Battery (kWh)": round(rover.get("battery_kWh", 0), 2),
-                "Science Buffer": round(rover.get("science_buffer", 0), 2),
-            })
-        
-        return {
-            "generators": self.generate_aggrid(gen_table_data, height=300) if gen_table_data else html.Div("No generators"),
-            "storages": self.generate_aggrid(storage_table_data, height=300) if storage_table_data else html.Div("No storage units"),
-            "rovers": self.generate_aggrid(rover_table_data, height=300) if rover_table_data else html.Div("No rovers"),
+        # Define component configurations - completely generic
+        component_configs = {
+            "generators": {
+                "data_source": microgrid.get("generator_status", []),
+                "id_prefix": "Gen",
+            },
+            "storages": {
+                "data_source": microgrid.get("storage_status", []),
+                "id_prefix": "Storage", 
+            },
+            "rovers": {
+                "data_source": latest_state.get("science_rovers", []),
+                "id_prefix": "Rover",
+            }
         }
+        
+        tables = {}
+        
+        for component_type, config in component_configs.items():
+            table_data = self._build_generic_component_table(
+                config["data_source"], 
+                config["id_prefix"]
+            )
+            
+            tables[component_type] = (
+                self.generate_aggrid(table_data, height=300) 
+                if table_data 
+                else html.Div(f"No {component_type}")
+            )
+        
+        return tables
+
+    def _build_generic_component_table(self, components, id_prefix):
+        """
+        Build a table from any list of component dictionaries - completely generic.
+        """
+        if not components:
+            return []
+        
+        table_data = []
+        
+        for i, component in enumerate(components):
+            if not isinstance(component, dict):
+                continue
+                
+            # Start with just the ID
+            row = {"ID": f"{id_prefix}-{i+1}"}
+            
+            # Add ALL fields dynamically without any special handling
+            for key, value in component.items():
+                # Format the field name: snake_case -> Title Case
+                formatted_key = key.replace("_", " ").title()
+                formatted_value = self._format_value(value)
+                
+                row[formatted_key] = formatted_value
+            
+            table_data.append(row)
+        
+        return table_data
+
+    def _format_value(self, value):
+        """
+        Generic value formatting without field-specific knowledge.
+        """
+        if value is None:
+            return "N/A"
+        
+        # Handle numeric values
+        if isinstance(value, float):
+            # Auto-detect percentages (values between 0-1)
+            if 0 <= value <= 1:
+                return f"{value * 100:.1f}%"
+            else:
+                return round(value, 2)
+        
+        # Everything else as-is
+        return str(value)
 
     def build_graphs(self, df, viz_config):
         """
@@ -263,29 +299,65 @@ class ProximaUI:
 
     def generate_aggrid(self, data, height=250, auto_height=False):
         """
-        Generate an AG Grid table for the given data.
+        Generate an AG Grid table with responsive column sizing.
         """
         if not data:
             return html.Div("No data available.")
         
-        # Configure grid options for auto-height
+        # Configure grid options
         grid_options = {}
         style = {}
         
         if auto_height:
-            # Use dashGridOptions to set domLayout for auto-height
             grid_options = {"domLayout": "autoHeight"}
         else:
-            # Use fixed height
             style = {"height": f"{height}px"}
+        
+        # Create responsive column definitions
+        column_defs = []
+        for key in data[0].keys():
+            # Calculate estimated width based on content AND header
+            max_content_length = max(
+                len(str(key)),  # Header length
+                max(len(str(row.get(key, ""))) for row in data)  # Max content length
+            )
+            
+            # Ensure minimum width accommodates the header text
+            header_width = len(str(key)) * 12  # ~12px per character for header
+            content_width = max_content_length * 8  # ~8px per character for content
+            min_width = max(100, header_width, content_width)  # At least 100px minimum
+            
+            column_defs.append({
+                "field": key,
+                "headerName": key,
+                "minWidth": min_width,
+                "width": min_width,  # Set initial width
+                "flex": 1,  # Allow flex growth
+                "autoHeight": True,
+                "wrapText": True,
+                "cellStyle": {"whiteSpace": "normal"},
+                "sortable": True,
+                "resizable": True,
+                # Header-specific styling
+                "headerClass": "wrap-header",
+            })
         
         return dag.AgGrid(
             className="ag-theme-quartz-dark",
-            columnDefs=[{"field": k} for k in data[0].keys()],
+            columnDefs=column_defs,
             rowData=data,
-            columnSize="sizeToFit",
             style=style,
-            dashGridOptions=grid_options,  # Use this instead of domLayout directly
+            dashGridOptions={
+                **grid_options,
+                "suppressColumnVirtualisation": True,
+                "autoSizeStrategy": {
+                    "type": "fitGridWidth",
+                    "defaultMinWidth": 100,
+                },
+                # Enable header height auto-sizing
+                "autoHeaderHeight": True,
+                "wrapHeaderText": True,
+            },
         )
 
     # ---------------------- Layout & Callbacks ----------------------
@@ -326,6 +398,44 @@ class ProximaUI:
                         height: calc(100vh - 200px);
                         overflow-y: auto;
                     }
+                    /* AG Grid header text wrapping */
+                    .ag-theme-quartz-dark .ag-header-cell-text {
+                        white-space: normal !important;
+                        word-wrap: break-word !important;
+                        line-height: 1.2 !important;
+                    }
+                    .ag-theme-quartz-dark .ag-header-cell {
+                        height: auto !important;
+                        min-height: 40px !important;
+                    }
+                    .wrap-header {
+                        white-space: normal !important;
+                        word-wrap: break-word !important;
+                    }
+                    /* Vertical metric selector styling */
+                    .metric-checklist-vertical {
+                        max-height: 200px;
+                        overflow-y: auto;
+                        border: 1px solid #444;
+                        border-radius: 8px;
+                        padding: 10px;
+                        background-color: #2a2e33;
+                    }
+                    .metric-checklist-vertical .form-check {
+                        margin-bottom: 8px !important;
+                    }
+                    .metric-checklist-vertical .form-check-input {
+                        background-color: #404040 !important;
+                        border-color: #666 !important;
+                    }
+                    .metric-checklist-vertical .form-check-input:checked {
+                        background-color: #0d6efd !important;
+                        border-color: #0d6efd !important;
+                    }
+                    .metric-checklist-vertical .form-check-label {
+                        color: #e0e0e0 !important;
+                        font-size: 0.9rem;
+                    }
                 </style>
             </head>
             <body>
@@ -357,7 +467,21 @@ class ProximaUI:
                     dbc.Col([
                         html.Div([
                             html.H4("Graphs", className="text-info mb-2"),
-                            html.Div(id="graph-container"),
+                            # Control panel for selecting metrics - VERTICAL LAYOUT
+                            html.Div([
+                                html.H5("Select Metrics to Plot:", className="text-info mb-2"),
+                                dcc.Checklist(
+                                    id="metric-selector",
+                                    options=[],  # Will be populated by callback
+                                    value=[],
+                                    inline=False,  # Changed to vertical
+                                    className="metric-checklist-vertical",
+                                    style={"marginBottom": "20px"}
+                                ),
+                                html.Hr(style={"borderColor": "#444"}),
+                            ]),
+                            # Graph grid container
+                            html.Div(id="graph-grid"),
                         ], className="proxima-card"),
                     ], width=5, style={"paddingRight": "0.5rem"}),
                     
@@ -403,17 +527,20 @@ class ProximaUI:
                     "environment-info",
                     "component-summary",
                     "latest-state-panel",
-                    "graph-container",
                     "generator-status-panel",
                     "storage-status-panel",
                     "rover-status-panel",
                 ]
+            ] + [
+                Output("metric-selector", "options"),
             ],
             [Input("interval-component", "n_intervals")],
+            [State("metric-selector", "value")],
+            prevent_initial_call=False
         )
-        def update_dashboard(n):
+        def update_dashboard(n, current_selection):
             """
-            Update all dashboard panels on interval.
+            Update all dashboard panels on interval - CONTENT ONLY.
             """
             df = self.fetch_latest_logs()
             exp = self.fetch_document("experiments", self.exp_id)
@@ -424,14 +551,14 @@ class ProximaUI:
             comp_summary = self.extract_component_counts(ws) if ws else {}
             comp_table = self.generate_aggrid([{"Component": k, "Count": v} for k, v in comp_summary.items()], auto_height=True)
 
-            # Latest state panel - USE AUTO HEIGHT (no scrolling)
+            # Latest state panel
             latest_state_data = self.extract_latest_state(ws) if ws else {}
             latest_state_table = self.generate_aggrid(
                 [{"Metric": k, "Value": v} for k, v in latest_state_data.items()], 
-                auto_height=True  # This will show all rows without scrolling
+                auto_height=True
             )
 
-            # Component status tables (keep these with fixed height)
+            # Component status tables
             status_tables = self.build_component_status_tables(ws) if ws else {
                 "generators": html.Div("No data"), 
                 "storages": html.Div("No data"), 
@@ -448,22 +575,180 @@ class ProximaUI:
                 else html.Div("No environment.")
             )
 
-            # Graphs
-            viz_config = exp.get("visualization_config", self.viz_config_default) if exp else self.viz_config_default
-            graphs = self.build_graphs(df, viz_config)
+            # Get available fields for metric selector
+            if df is not None and not df.empty:
+                available_fields = [col for col in df.columns if col not in ['step', 'timestamp', 'experiment_id'] 
+                                   and pd.api.types.is_numeric_dtype(df[col])]
+                metric_options = [{"label": field.replace("_", " ").title(), "value": field} 
+                                 for field in available_fields]
+            else:
+                metric_options = []
 
             return (
                 exp_table,
                 env_table,
                 comp_table,
-                html.Div([
-                    latest_state_table  # Now auto-height, no scrolling
-                ]),
-                html.Div(graphs),
+                latest_state_table,
                 status_tables["generators"],
                 status_tables["storages"],
                 status_tables["rovers"],
+                metric_options,
             )
+
+        @self.app.callback(
+            Output("metric-selector", "value"),
+            [Input("metric-selector", "options")],
+            [State("metric-selector", "value")],
+            prevent_initial_call=True
+        )
+        def initialize_metrics_once(options, current_value):
+            """
+            Only set initial values if no selection exists yet.
+            """
+            # If user already has selections, keep them
+            if current_value:
+                return current_value
+                
+            # Only set defaults if no current selection
+            if not options:
+                return []
+            return [opt["value"] for opt in options[:4]]
+
+        @self.app.callback(
+            Output("graph-grid", "children"),
+            [Input("metric-selector", "value"), Input("interval-component", "n_intervals")]
+        )
+        def update_graph_grid(selected_metrics, n):
+            """
+            Update the graph grid based on selected metrics.
+            """
+            df = self.fetch_latest_logs()
+            return self.build_graph_grid(df, selected_metrics or [])
+
+    def build_interactive_graphs(self, df, available_fields=None):
+        """
+        Build interactive graph selection and grid layout.
+        """
+        if df is None or df.empty:
+            return html.Div("No log data available.")
+        
+        # Get available numeric fields from the dataframe
+        if available_fields is None:
+            available_fields = [col for col in df.columns if col not in ['step', 'timestamp', 'experiment_id'] 
+                               and pd.api.types.is_numeric_dtype(df[col])]
+        
+        # Default selected fields (first 4 available)
+        default_selected = available_fields[:4] if len(available_fields) >= 4 else available_fields
+        
+        return html.Div([
+            # Control panel for selecting metrics
+            html.Div([
+                html.H5("Select Metrics to Plot:", className="text-info mb-2"),
+                dcc.Checklist(
+                    id="metric-selector",
+                    options=[{"label": field.replace("_", " ").title(), "value": field} 
+                            for field in available_fields],
+                    value=default_selected,
+                    inline=True,
+                    className="metric-checklist",
+                    style={"color": "#e0e0e0", "marginBottom": "20px"}
+                ),
+                html.Hr(style={"borderColor": "#444"}),
+            ]),
+            
+            # Graph grid container
+            html.Div(id="graph-grid"),
+        ])
+
+    def build_graph_grid(self, df, selected_metrics):
+        """
+        Build a responsive grid of graphs based on selected metrics.
+        """
+        if not selected_metrics or df is None or df.empty:
+            return html.Div("Select metrics to display graphs.", className="text-secondary text-center")
+        
+        # Calculate tick interval for all graphs
+        if "step" in df.columns and not df.empty:
+            step_range = df["step"].max() - df["step"].min()
+            if step_range <= 50:
+                dtick = 5
+            elif step_range <= 200:
+                dtick = 10
+            elif step_range <= 500:
+                dtick = 25
+            else:
+                dtick = 50
+        else:
+            dtick = 10
+        
+        # Color palette for different metrics
+        colors = ["#00cc96", "#ab63fa", "#ff6692", "#19d3f3", "#ff9f40", "#ffff00", 
+                  "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2"]
+        
+        # Create graph tiles
+        graph_tiles = []
+        for i, metric in enumerate(selected_metrics):
+            if metric not in df.columns:
+                continue
+                
+            color = colors[i % len(colors)]
+            label = metric.replace("_", " ").title()
+            
+            fig = go.Figure()
+            fig.add_trace(
+                go.Scatter(
+                    x=df["step"],
+                    y=df[metric],
+                    mode="lines+markers",
+                    name=label,
+                    line=dict(color=color, width=2),
+                    marker=dict(size=3, color=color),
+                )
+            )
+            
+            fig.update_layout(
+                title=dict(
+                    text=label,
+                    font=dict(size=14, color="#e0e0e0")
+                ),
+                xaxis=dict(
+                    title="Step",
+                    color="#aaaaaa",
+                    dtick=dtick,
+                    gridcolor="#404040",
+                    showgrid=True,
+                ),
+                yaxis=dict(
+                    title=label,
+                    color="#aaaaaa",
+                    gridcolor="#404040",
+                    showgrid=True,
+                ),
+                template="plotly_dark",
+                paper_bgcolor="rgb(35,39,43)",
+                plot_bgcolor="rgb(25,25,25)",
+                font=dict(color="#e0e0e0", size=10),
+                margin=dict(l=50, r=20, t=40, b=40),
+                showlegend=False,
+                hovermode="x unified",
+            )
+            
+            # Create responsive tile
+            graph_tile = dbc.Col([
+                dcc.Graph(
+                    figure=fig,
+                    config={
+                        'displayModeBar': True,
+                        'displaylogo': False,
+                        'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
+                    },
+                    style={"height": "300px"}
+                )
+            ], width=6, lg=6, xl=4, className="mb-3")  # Responsive: 2 per row on medium, 3 on large
+            
+            graph_tiles.append(graph_tile)
+        
+        return dbc.Row(graph_tiles)
 
     def run(self):
         """
