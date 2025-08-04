@@ -1,9 +1,10 @@
 """
-ProximaRunner: Simulation runner with UI command support.
-Supports continuous/limited modes with pause/resume/stop controls.
+ProximaRunner: Simplified simulation runner with UI command support.
 """
 
 import time
+import traceback
+
 from data_engine.proxima_db_engine import ProximaDB
 from proxima_model.world_system_builder.world_system_builder import build_world_system_config
 from proxima_model.world_system_builder.world_system import WorldSystem
@@ -21,7 +22,7 @@ class ProximaRunner:
         self.ws_id = exp_config["world_system_id"]
         self.exp_id = exp_config["_id"]
 
-        # Setup logger and control variables
+        # Setup state
         self.logger = DataLogger(experiment_id=self.exp_id, db=self.proxima_db, ws_id=self.ws_id)
         self.is_running = False
         self.is_paused = False
@@ -29,128 +30,134 @@ class ProximaRunner:
 
     def run(self, continuous=None):
         """Main simulation runner."""
-        continuous = self.sim_time is None if continuous is None else continuous
-        
-        # Setup and start
+        continuous = continuous if continuous is not None else (self.sim_time is None)
+
         config = build_world_system_config(self.ws_id, self.exp_id, self.proxima_db)
         ws = WorldSystem(config)
-        self.is_running = True
-        self.is_paused = False
+        self._reset_state()
 
         try:
-            while self.is_running:
-                # Handle pause
-                while self.is_paused and self.is_running:
+            while self.is_running and (continuous or ws.steps < self.sim_time):
+                self._process_commands()
+
+                if self.is_paused:
                     time.sleep(0.1)
-                    self._check_commands()
-                
+                    continue
                 if not self.is_running:
                     break
 
-                # Simulation step
-                ws.step()
-                
-                # Get state from all sectors
-                science_state = ws.science_sector.get_state()
-                energy_state = ws.energy_sector.get_state()
-                manufacturing_state = ws.manufacturing_sector.get_state()
-                                
-                # Get organized metrics from world system
-                metrics = ws.model_metrics
-                
-                # Log with sector organization
-                self.logger.log(
-                    step=ws.steps,
-                    environment=metrics["environment"],
-                    energy=metrics["energy"], 
-                    science=metrics["science"],
-                    manufacturing=metrics["manufacturing"],  # Add this line
-                    latest_state={
-                        "step": ws.steps,
-                        "microgrid": energy_state,
-                        "science_rovers": science_state["science_rovers"],
-                        "manufacturing": manufacturing_state,  # Add this line
-                        "simulation_status": {
-                            "is_running": self.is_running,
-                            "is_paused": self.is_paused,
-                            "step_delay": self.step_delay,
-                            "mode": "continuous" if continuous else "limited",
-                            "timestamp": time.time()
-                        }
-                    }
-                )
-
-                # Check stop conditions
-                if not continuous and self.sim_time and ws.steps >= self.sim_time:
-                    break
-
-                self._check_commands()
-                time.sleep(self.step_delay)
+                self._execute_step(ws, continuous)
 
         except Exception as e:
             print(f"Simulation error: {e}")
-            import traceback
             traceback.print_exc()
         finally:
-            self.is_running = False
-            self.logger.save_to_file()
+            self._cleanup()
 
-    def _check_commands(self):
+    def _reset_state(self):
+        """Reset runner state for new simulation."""
+        self.is_running = True
+        self.is_paused = False
+
+    def _execute_step(self, ws, continuous):
+        """Execute single simulation step."""
+        ws.step()
+
+        self.logger.log(
+            step=ws.steps,
+            environment=ws.model_metrics["environment"],
+            energy=ws.model_metrics["energy"],
+            science=ws.model_metrics["science"],
+            manufacturing=ws.model_metrics["manufacturing"],
+            latest_state=self._build_state(ws.steps, continuous),
+        )
+
+        time.sleep(self.step_delay)
+
+    def _build_state(self, step, continuous):
+        """Build current state object."""
+        return {
+            "step": step,
+            "simulation_status": {
+                "is_running": self.is_running,
+                "is_paused": self.is_paused,
+                "step_delay": self.step_delay,
+                "mode": "continuous" if continuous else "limited",
+                "timestamp": time.time(),
+            },
+        }
+
+    def _process_commands(self):
         """Process runtime commands."""
         try:
             command = self.proxima_db.db["runtime_commands"].find_one_and_delete(
                 {"experiment_id": self.exp_id}, sort=[("timestamp", -1)]
             )
-            
+
             if not command:
                 return
-                
-            action = command.get("action")
-            print(f"Processing: {action}")
-            
-            actions = {
-                "pause": lambda: setattr(self, 'is_paused', True),
-                "resume": lambda: setattr(self, 'is_paused', False),
-                "stop": lambda: setattr(self, 'is_running', False),
-                "set_delay": lambda: setattr(self, 'step_delay', max(0.01, float(command.get("delay", 0.1))))
-            }
-            
-            if action in actions:
-                actions[action]()
-                print(f"Applied: {action}")
-                
+
+            self._execute_command(command)
+
         except Exception as e:
             print(f"Command error: {e}")
+
+    def _execute_command(self, command):
+        """Execute a single command."""
+        action = command.get("action")
+        print(f"Processing: {action}")
+
+        command_map = {
+            "pause": lambda: setattr(self, "is_paused", True),
+            "resume": lambda: setattr(self, "is_paused", False),
+            "stop": lambda: setattr(self, "is_running", False),
+            "set_delay": lambda: setattr(self, "step_delay", max(0.01, float(command.get("delay", 0.1)))),
+        }
+
+        if action in command_map:
+            command_map[action]()
+            print(f"Applied: {action}")
+
+    def _cleanup(self):
+        """Cleanup after simulation."""
+        self.is_running = False
+        self.logger.save_to_file()
+
+    def _check_startup_commands(self):
+        """Check for startup commands."""
+
+        command = self.proxima_db.db["startup_commands"].find_one_and_delete(
+            {"experiment_id": self.exp_id}, sort=[("timestamp", -1)]
+        )
+
+        if not command:
+            return False
+
+        action = command.get("action")
+        print(f"Starting: {action}")
+
+        if action == "start_continuous":
+            self.run(continuous=True)
+        elif action == "start_limited":
+            max_steps = command.get("max_steps", self.sim_time)
+            original_sim_time = self.sim_time
+            self.sim_time = max_steps
+            self.run(continuous=False)
+            self.sim_time = original_sim_time
+
+        return True
 
 
 def main():
     runner = ProximaRunner()
-    print("Proxima Runner ready. Waiting for UI commands...")
-    
+
     try:
         while True:
             if not runner.is_running:
-                command = runner.proxima_db.db["startup_commands"].find_one_and_delete(
-                    {"experiment_id": runner.exp_id}, sort=[("timestamp", -1)]
-                )
-                
-                if command:
-                    action = command.get("action")
-                    print(f"Starting: {action}")
-                    
-                    if action == "start_continuous":
-                        runner.run(continuous=True)
-                    elif action == "start_limited":
-                        max_steps = command.get("max_steps", runner.sim_time)
-                        original_sim_time = runner.sim_time
-                        runner.sim_time = max_steps
-                        runner.run(continuous=False)
-                        runner.sim_time = original_sim_time
-                        
-                    print("Simulation completed. Waiting...")
-                    
+                if runner._check_startup_commands():
+                    continue
             time.sleep(1)
-            
+
     except KeyboardInterrupt:
         print("\nShutting down...")
         runner.is_running = False
