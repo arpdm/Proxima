@@ -15,19 +15,19 @@ class PowerStorage:
         self.min_charge = config.get("min_operational_cap_kwh", 0)
         self.charge_efficiency = config.get("charge_efficiency", 0.95)
         self.discharge_efficiency = config.get("discharge_efficiency", 0.98)
-        
+
     @property
     def state_of_charge(self):
         return self.charge_level / self.capacity if self.capacity > 0 else 0
-    
+
     @property
     def available_capacity(self):
         return self.capacity - self.charge_level
-    
+
     @property
     def available_discharge(self):
         return max(0, self.charge_level - self.min_charge)
-    
+
     def charge(self, power_kw):
         """Charge battery with efficiency losses."""
         if power_kw <= 0:
@@ -35,7 +35,7 @@ class PowerStorage:
         max_charge = min(power_kw * self.charge_efficiency, self.available_capacity)
         self.charge_level += max_charge
         return max_charge / self.charge_efficiency  # Return actual power consumed
-    
+
     def discharge(self, power_kw):
         """Discharge battery with efficiency losses."""
         if power_kw <= 0:
@@ -48,73 +48,66 @@ class PowerStorage:
 class PowerGenerator:
     def __init__(self, gen_cfg):
         config = gen_cfg.get("config", gen_cfg)
-        self.subtype = gen_cfg.get("subtype", "solar")
+        self.subtype = gen_cfg.get("subtype")
         self.capacity = config.get("power_capacity_kwh", 10)
         self.efficiency = config.get("efficiency", 1.0)
-        self.current_output = 0  # Track actual output
-        
-    def generate(self, max_needed_kw, daylight=True):
+        self.current_output_kwh = 0
+
+    def generate(self, max_needed_kw):
         """Generate power based on conditions and actual need."""
-        if self.subtype == "solar" and not daylight:
-            self.current_output = 0
-            return 0
-        
-        # Generate up to capacity, but not more than needed
         max_output = self.capacity * self.efficiency
-        self.current_output = min(max_output, max_needed_kw)
-        return self.current_output
+        self.current_output_kwh = min(max_output, max_needed_kw)
+        return self.current_output_kwh
 
 
 class MicrogridManager(Agent):
     """Simplified microgrid with realistic power flow."""
-    
+
     def __init__(self, model, config):
         super().__init__(model)
         self.storages = []
         self.generators = []
-        
+
         # Initialize components
         for storage_cfg in config.get("storages", []):
             for _ in range(storage_cfg.get("quantity", 1)):
                 self.storages.append(PowerStorage(storage_cfg))
-                
+
         for gen_cfg in config.get("generators", []):
             for _ in range(gen_cfg.get("quantity", 1)):
                 self.generators.append(PowerGenerator(gen_cfg))
-        
+
         # Current state
         self.power_supplied = 0.0
         self.power_demanded = 0.0
         self.power_shortage = 0.0
-    
+
     @property
     def total_charge(self):
         return sum(s.charge_level for s in self.storages)
-    
+
     @property
     def total_capacity(self):
         return sum(s.capacity for s in self.storages)
-    
+
     @property
     def total_state_of_charge(self):
         return self.total_charge / self.total_capacity if self.total_capacity > 0 else 0
-    
+
     def step(self, power_demand):
         """Single step: handle power demand with generation and storage."""
         self.power_demanded = power_demand
-        
+
         # 1. Calculate total power that could be useful
         total_storage_capacity = sum(s.available_capacity for s in self.storages)
         max_useful_power = power_demand + (total_storage_capacity / 0.95)  # Account for charge efficiency
-    
+
         # 2. Generate power based on actual need (demand + storage capacity)
         total_generated = 0
-        self.generator_outputs = []
         remaining_useful_power = max_useful_power
-        
+
         for gen in self.generators:
-            generated = gen.generate(remaining_useful_power, daylight=self.model.daylight)
-            self.generator_outputs.append(generated)
+            generated = gen.generate(remaining_useful_power)
             total_generated += generated
             remaining_useful_power -= generated
             if remaining_useful_power <= 0:
@@ -147,13 +140,13 @@ class MicrogridManager(Agent):
                     break
                 if storage.available_capacity <= 0:
                     continue
-                
+
                 power_to_charge = min(remaining_excess, storage.available_capacity / storage.charge_efficiency)
-                
+
                 if power_to_charge > 0:
                     consumed = storage.charge(power_to_charge)
                     remaining_excess -= consumed
-        
+
         return self.power_supplied
 
     def get_metrics(self):
@@ -164,31 +157,5 @@ class MicrogridManager(Agent):
             "power_shortage_kW": self.power_shortage,
             "total_charge_level_kWh": self.total_charge,
             "total_state_of_charge": self.total_state_of_charge,
-            "total_charge_capacity_kWh": self.total_capacity
-        }
-    
-    def get_detailed_state(self):
-        """Get detailed component states."""
-        return {
-            "generators": [
-                {
-                    "subtype": gen.subtype,
-                    "capacity": gen.capacity,
-                    "current_output_kW": gen.current_output,
-                    "efficiency": gen.efficiency,
-                    "status": "active" if gen.current_output > 0 else "inactive"
-                }
-                for gen in self.generators
-            ],
-            "storages": [
-                {
-                    "subtype": s.subtype,
-                    "charge_level": s.charge_level,
-                    "capacity": s.capacity,
-                    "state_of_charge": s.state_of_charge,
-                    "available_capacity": s.available_capacity,
-                    "available_discharge": s.available_discharge
-                }
-                for s in self.storages
-            ]
+            "total_charge_capacity_kWh": self.total_capacity,
         }
