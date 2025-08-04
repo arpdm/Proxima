@@ -32,54 +32,58 @@ class DataLogger:
     def _generate_timestamp(self, step: int) -> datetime:
         return self.base_time + timedelta(hours=step)
 
-    def log(self, step, model_metrics, agent_metrics, latest_state):
-        """Log simulation data to both CSV and database."""
+    def log(self, step, **kwargs):
+        """Log simulation data with sector organization."""
         timestamp = self._generate_timestamp(step)
-
-        # Extract only the key metrics for time-series (no nested objects)
-        microgrid = latest_state.get("microgrid", {})
-        ws_metrics = latest_state.get("ws_metrics", {})
-        science_rovers = latest_state.get("science_rovers", [])
         
-        # Flatten to simple key-value pairs only
+        # Start with basic metadata
         log_entry = {
             "experiment_id": self.experiment_id,
             "step": step,
             "timestamp": timestamp,
-            
-            # World metrics
-            "daylight": ws_metrics.get("Daylight", 0),
-            "science_generated": ws_metrics.get("science_generated", 0),
-            
-            # Microgrid metrics  
-            "total_power_supply_kW": microgrid.get("total_power_supply_kW", 0),
-            "total_power_need_kW": microgrid.get("total_power_need_kW", 0),
-            "total_charge_level_kWh": microgrid.get("total_charge_level_kWh", 0),
-            "total_state_of_charge_%": microgrid.get("total_state_of_charge_%", 0),
-            "total_charge_capacity_kWh": microgrid.get("total_charge_capacity_kWh", 0),
-            
-            # Rover metrics (aggregated)
-            "active_rovers": len([r for r in science_rovers if r.get("is_operational", False)]),
-            "total_rovers": len(science_rovers),
-            "avg_rover_battery": sum(r.get("battery_kWh", 0) for r in science_rovers) / len(science_rovers) if science_rovers else 0,
         }
-
+        
+        # Extract latest_state if present
+        latest_state = kwargs.pop('latest_state', None)
+        
+        # Add sector data directly to log entry
+        for sector_name, sector_data in kwargs.items():
+            if isinstance(sector_data, dict):
+                log_entry[sector_name] = sector_data
+            else:
+                log_entry[sector_name] = sector_data
+    
         if self.log_to_db:
-            # Use insert_one for time-series collections (append-only)
+            # Store nested structure in MongoDB
             try:
                 self.db.db["logs_simulation"].insert_one(log_entry)
             except Exception as e:
                 print(f"⚠️  Warning: Could not insert log entry for step {step}: {e}")
 
-            # Also update world system latest_state (for UI snapshots)
-            self.db.db["world_systems"].update_one(
-                {"_id": self.ws_id},
-                {"$set": {"latest_state": latest_state}},
-            )
+            # Update world system state
+            if latest_state:
+                self.db.db["world_systems"].update_one(
+                    {"_id": self.ws_id},
+                    {"$set": {"latest_state": latest_state}},
+                )
 
-        # Add to CSV records (clean time-series data only)
+        # For CSV, flatten the structure
         if self.log_to_csv:
-            self.records.append(log_entry)
+            flat_record = {
+                "experiment_id": self.experiment_id,
+                "step": step,
+                "timestamp": timestamp,
+            }
+            
+            # Flatten nested dictionaries for CSV
+            for sector_name, sector_data in kwargs.items():
+                if isinstance(sector_data, dict):
+                    for key, value in sector_data.items():
+                        flat_record[f"{sector_name}_{key}"] = value
+                else:
+                    flat_record[sector_name] = value
+                    
+            self.records.append(flat_record)
 
     def save_to_file(self):
         if self.log_to_csv and self.records:

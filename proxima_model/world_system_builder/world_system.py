@@ -7,8 +7,8 @@ agent interactions, and data collection using Mesa.
 """
 
 from mesa import Model
-from proxima_model.components.energy_microgrid import MicrogridManager
-from proxima_model.components.sceince_rover import ScienceRover
+from proxima_model.sphere_engine.energy_sector import EnergySector
+from proxima_model.sphere_engine.science_sector import ScienceSector
 
 
 class WorldSystem(Model):
@@ -26,15 +26,11 @@ class WorldSystem(Model):
         self.daylight = self.is_day(self.steps)
         self.running = True
 
-        # Energy Sector
-        self.initialize_microgrid()
-
-        # Science Sector
-        self.initialize_agents()
+        # Initialize sectors
+        self.initialize_energy_sector()
+        self.initialize_science_sector()
 
         # System-level tracking
-        self.total_science = 0.0
-        self.total_power_draw = 0.0
         self.model_metrics = {}
 
     # ------------------ Environment & Time ------------------
@@ -54,92 +50,53 @@ class WorldSystem(Model):
         phase = t % cycle
         return 1 if phase < lunar_day else 0
 
-    # ------------------ Energy Sector ------------------
-    def initialize_microgrid(self):
-        """Initializes the lunar microgrid system."""
-        microgrid_config = {
+    # ================== Initialize World System Sectors ===================== #
+
+    def initialize_science_sector(self):
+        """Initialize the science sector."""
+        science_config = self.config.get("agents_config", {})
+        self.science_sector = ScienceSector(science_config)
+
+    def initialize_energy_sector(self):
+        """Initialize the energy sector."""
+        energy_config = {
             "generators": self.config.get("agents_config", {}).get("generators", []),
             "storages": self.config.get("agents_config", {}).get("storages", []),
             "p_need": self.config.get("p_need", 2.0)
         }
-        self.microgrid = MicrogridManager(self, config=microgrid_config)
+        self.energy_sector = EnergySector(self, energy_config)
 
-    def update_microgrid(self, power_draw):
-        """Steps the microgrid and returns available energy."""
-        self.microgrid.step(power_draw)
-        return self.microgrid.total_p_supply
-
-    def advance_microgrid(self):
-        """Advances the microgrid state."""
-        self.microgrid.advance()
-
-    # ------------------ Science Sector ------------------
-    def initialize_agents(self):
-        """Initializes all science rovers."""
-        self.science_rovers = []
-        rover_configs = self.config.get("agents_config", {}).get("science_rovers", [])
-        for agent_config in rover_configs:
-            quantity = agent_config.get("quantity", 1)
-            for _ in range(quantity):
-                rover = ScienceRover(agent_config)
-                self.science_rovers.append(rover)
-
-    def calculate_rover_power_demand(self):
-        """Calculates total power demand from rovers needing charge."""
-        total_power = 2  # baseline
-        for rover in self.science_rovers:
-            if rover.needs_charge():
-                total_power += rover.battery_capacity_kWh
-        return total_power
-
-    def update_rovers(self, available_energy):
-        """Updates rover states based on available energy."""
-        for rover in self.science_rovers:
-            if available_energy <= 0:
-                power_used, science_generated = 0.0, 0.0
-                rover.status = "waiting_for_power"
-                rover.is_operational = False
-            else:
-                power_used, science_generated = rover.step(available_energy)
-                available_energy = max(0.0, available_energy - power_used)
-                self.total_science += science_generated
-
-    def get_rover_state(self):
-        """Returns current state of all science rovers."""
-        return [rover.report() for rover in self.science_rovers]
-
-    # ------------------ Simulation Step ------------------
+    # ================= Run World System ===================================== #
+    
     def step(self):
         """
-        Executes a single simulation step: daylight toggle, microgrid update, agent actions, and metrics.
+        Executes a single simulation step: daylight toggle, energy management, science operations, and metrics.
         """
+        self.steps += 1
         self.daylight = self.is_day(self.steps)
 
-        self.total_power_draw = self.calculate_rover_power_demand()
-        available_energy = self.update_microgrid(self.total_power_draw)
+        # Get total power demand from all sectors
+        science_power_demand = self.science_sector.get_power_demand()
+        
+        # Energy sector processes demand and returns available power
+        available_energy = self.energy_sector.step(science_power_demand)
+        
+        # Science sector operates with whatever power is available
+        self.science_sector.step(available_energy)
 
-        # Track science generated THIS step (not cumulative)
-        step_science = 0.0
-        for rover in self.science_rovers:
-            if available_energy <= 0:
-                power_used, science_generated = 0.0, 0.0
-                rover.status = "waiting_for_power"
-                rover.is_operational = False
-            else:
-                power_used, science_generated = rover.step(available_energy)
-                available_energy = max(0.0, available_energy - power_used)
-                step_science += science_generated
+        # Check if simulation should continue
+        sim_time = self.config.get("sim_time")
+        if sim_time is not None:
+            self.running = self.steps < sim_time
+        else:
+            self.running = True
 
-        # Update cumulative total
-        self.total_science += step_science
-
-        self.advance_microgrid()
-
-        self.running = self.steps < self.config["sim_time"]
-
-        # Log step-level metrics (not cumulative)
+        # Get metrics from each sector and organize by sector
         self.model_metrics = {
-            "Daylight": self.daylight,
-            "science_generated": science_generated,
-            "total_science_cumulative": self.total_science
+            "environment": {
+                "daylight": self.daylight,
+                "step": self.steps,
+            },
+            "energy": self.energy_sector.get_metrics(),
+            "science": self.science_sector.get_metrics(),
         }

@@ -12,7 +12,7 @@ from data_engine.proxima_db_engine import ProximaDB
 
 
 class ProximaUI:
-    """ProximaUI: Main dashboard UI engine for the Proxima project."""
+    """ProximaUI: Dashboard for Proxima simulation with time series plotting."""
 
     def __init__(self, db, experiment_id="exp_001"):
         self.db = db
@@ -35,502 +35,437 @@ class ProximaUI:
         return self.db.db[collection_name].find_one({"_id": doc_id})
 
     def fetch_latest_logs(self, limit=50):
+        """Fetch logs with nested structure for plotting."""
         logs = self.fetch_collection(
             "logs_simulation", {"experiment_id": self.exp_id}, sort=("timestamp", -1), limit=limit
         )
+                
         if not logs:
             return pd.DataFrame()
-        
+
         flattened_logs = []
         for log in logs:
-            flat_log = {"step": log.get("step", 0), "timestamp": log.get("timestamp"), "experiment_id": log.get("experiment_id")}
+            # Start with basic fields
+            flat_log = {
+                "step": log.get("step", 0), 
+                "timestamp": log.get("timestamp", 0)
+            }
             
-            # Extract model metrics and agent states
+            # Process each key in the log
             for key, value in log.items():
-                if key not in ["agent_states", "step", "timestamp", "experiment_id"]:
+                # Skip metadata fields
+                if key in ["_id", "experiment_id", "timestamp", "step"]:
+                    continue
+                    
+                # If it's a nested dict (sector), flatten it WITHOUT sector prefix
+                if isinstance(value, dict):
+                    for inner_key, inner_value in value.items():
+                        if isinstance(inner_value, (int, float)) and not isinstance(inner_value, bool):
+                            flat_log[inner_key] = inner_value  # Use inner_key directly, no prefix
+                # Otherwise add directly if numeric
+                elif isinstance(value, (int, float)) and not isinstance(value, bool):
                     flat_log[key] = value
-            
-            for agent_state in log.get("agent_states", []):
-                if isinstance(agent_state, dict):
-                    for key, value in agent_state.items():
-                        if isinstance(value, (int, float, str)):
-                            flat_log[key] = value
-            
+        
             flattened_logs.append(flat_log)
         
-        return pd.DataFrame(flattened_logs)
-
-    def extract_component_counts(self, ws):
-        summary = {}
-        for domain_dict in ws.get("active_components", []):
-            for domain, components in domain_dict.items():
-                for comp in components:
-                    template_id = comp.get("template_id")
-                    subtype = comp.get("subtype", "N/A")
-                    quantity = comp.get("quantity", 1)
-                    key = f"{template_id} ({subtype})" if subtype != "N/A" else template_id
-                    summary[key] = summary.get(key, 0) + quantity
-        return summary
-
-    def extract_latest_state(self, ws):
-        latest_state = ws.get("latest_state", {})
-        if not latest_state:
-            return {}
+        df = pd.DataFrame(flattened_logs)
         
-        def safe_numeric(value, default=0):
-            try:
-                return round(float(value), 2) if value is not None else default
-            except (ValueError, TypeError):
-                return default
-        
-        flattened = {"Step": latest_state.get("step", 0)}
-        
-        # Microgrid metrics
-        microgrid = latest_state.get("microgrid", {})
-        if microgrid:
-            soc_raw = microgrid.get('total_state_of_charge_%', 0)
-            soc_percent = safe_numeric(soc_raw * 100) if soc_raw else 0
+        # Sort by step for proper time series plotting
+        if not df.empty and "step" in df.columns:
+            df = df.sort_values('step').reset_index(drop=True)
             
-            flattened.update({
-                "Power Supply (kW)": safe_numeric(microgrid.get("total_power_supply_kW")),
-                "Power Need (kW)": safe_numeric(microgrid.get("total_power_need_kW")),
-                "Charge Level (kWh)": safe_numeric(microgrid.get("total_charge_level_kWh")),
-                "State of Charge (%)": soc_percent,
-                "Generators": len(microgrid.get("generator_status", [])),
-                "Storage Units": len(microgrid.get("storage_status", [])),
-            })
-        
-        # Science metrics
-        science_rovers = latest_state.get("science_rovers", [])
-        ws_metrics = latest_state.get("ws_metrics", {})
-        flattened.update({
-            "Science Rovers": len(science_rovers),
-            "Science Generated": safe_numeric(ws_metrics.get("total_science_cumulative")),
-        })
-        
-        return flattened
+        return df
 
-    # ---------------------- UI Components ----------------------
+    def get_world_system_data(self):
+        """Get current world system data."""
+        try:
+            exp = self.fetch_document("experiments", self.exp_id)
+            if not exp:
+                return None
+            
+            ws = self.fetch_document("world_systems", exp["world_system_id"])
+            return ws
+        except Exception as e:
+            print(f"Error fetching world system: {e}")
+            return None
 
-    def build_component_status_tables(self, ws):
-        latest_state = ws.get("latest_state", {})
-        microgrid = latest_state.get("microgrid", {})
+    def build_sector_summary_tables(self):
+        """Build summary tables directly from sector-organized data."""
+        latest_logs = self.fetch_collection(
+            "logs_simulation", 
+            {"experiment_id": self.exp_id}, 
+            sort=("timestamp", -1), 
+            limit=1
+        )
         
-        configs = {
-            "generators": {"data": microgrid.get("generator_status", []), "prefix": "Gen"},
-            "storages": {"data": microgrid.get("storage_status", []), "prefix": "Storage"},
-            "rovers": {"data": latest_state.get("science_rovers", []), "prefix": "Rover"}
+        if not latest_logs:
+            empty_table = self.generate_aggrid([{"Metric": "No Data", "Value": "N/A"}], height=200)
+            return {"energy": empty_table, "science": empty_table, "system": empty_table}
+        
+        latest_log = latest_logs[0]
+        
+        # Extract sector data directly
+        environment_data = latest_log.get("environment", {})
+        energy_data = latest_log.get("energy", {})
+        science_data = latest_log.get("science", {})
+        
+        # Convert to table format
+        def sector_to_table(sector_data):
+            return [{"Metric": k, "Value": v} for k, v in sector_data.items()]
+        
+        # Generate tables
+        tables = {
+            "energy": self.generate_aggrid(sector_to_table(energy_data), height=250),
+            "science": self.generate_aggrid(sector_to_table(science_data), height=250),
+            "system": self.generate_aggrid(sector_to_table(environment_data), height=200),
         }
-        
-        tables = {}
-        for name, config in configs.items():
-            table_data = self._build_component_table(config["data"], config["prefix"])
-            tables[name] = self.generate_aggrid(table_data, height=300) if table_data else html.Div(f"No {name}")
         
         return tables
 
-    def _build_component_table(self, components, id_prefix):
-        if not components:
-            return []
-        
-        table_data = []
-        for i, component in enumerate(components):
-            if not isinstance(component, dict):
-                continue
-            
-            row = {"ID": f"{id_prefix}-{i+1}"}
-            for key, value in component.items():
-                formatted_key = key.replace("_", " ").title()
-                row[formatted_key] = self._format_value(value)
-            
-            table_data.append(row)
-        
-        return table_data
+    # ---------------------- UI Components ----------------------
 
-    def _format_value(self, value):
-        if value is None:
-            return "N/A"
-        if isinstance(value, float):
-            return f"{value * 100:.1f}%" if 0 <= value <= 1 else round(value, 2)
-        return str(value)
-
-    def generate_aggrid(self, data, height=250, auto_height=False):
-        if not data:
-            return html.Div("No data available.")
+    def generate_aggrid(self, table_data, height=300):
+        """Generate AgGrid table with simple formatting."""
+        if not table_data:
+            return html.Div("No data", className="text-secondary text-center")
         
-        grid_options = {"domLayout": "autoHeight"} if auto_height else {}
-        style = {} if auto_height else {"height": f"{height}px"}
-        
-        column_defs = []
-        for key in data[0].keys():
-            max_length = max(len(str(key)), max(len(str(row.get(key, ""))) for row in data))
-            min_width = max(100, max_length * 10)
-            
-            column_defs.append({
-                "field": key, "headerName": key, "minWidth": min_width, "flex": 1,
-                "sortable": True, "resizable": True, "autoHeight": True, "wrapText": True
+        # Auto-generate columns
+        columns = []
+        for key in table_data[0].keys():
+            columns.append({
+                "field": key, 
+                "headerName": key.replace("_", " ").title(),
+                "flex": 1
             })
         
         return dag.AgGrid(
             className="ag-theme-quartz-dark",
-            columnDefs=column_defs,
-            rowData=data,
-            style=style,
+            columnDefs=columns,
+            rowData=table_data,
+            style={"height": f"{height}px"},
             dashGridOptions={
-                **grid_options,
                 "suppressColumnVirtualisation": True,
-                "autoSizeStrategy": {"type": "fitGridWidth", "defaultMinWidth": 100},
-                "autoHeaderHeight": True, "wrapHeaderText": True
+                "rowHeight": 35,
+                "headerHeight": 40
             }
         )
 
     def build_graph_grid(self, df, selected_metrics):
-        if not selected_metrics or df is None or df.empty:
-            return html.Div("Select metrics to display graphs.", className="text-secondary text-center")
+        """Build grid of time series graphs."""
+        if df is None or df.empty or not selected_metrics:
+            return html.Div("No data available for plotting.", className="text-secondary text-center")
         
-        # FIXED: Better tick interval calculation
-        if "step" in df.columns and not df.empty:
-            step_range = df["step"].max() - df["step"].min()
-            total_points = len(df)
-            
-            # Calculate appropriate tick interval based on data density
-            if step_range <= 20:
-                dtick = 2
-            elif step_range <= 50:
-                dtick = 5
-            elif step_range <= 100:
-                dtick = 10
-            elif step_range <= 200:
-                dtick = 20
-            elif step_range <= 500:
-                dtick = 50
-            elif step_range <= 1000:
-                dtick = 100
-            else:
-                dtick = 200
-            
-            # If we have too many points, increase the interval
-            if total_points > 100:
-                dtick = max(dtick, step_range // 10)
-        else:
-            dtick = 10
-        
+        graphs = []
         colors = ["#00cc96", "#ab63fa", "#ff6692", "#19d3f3", "#ff9f40", "#ffff00"]
         
-        graph_tiles = []
         for i, metric in enumerate(selected_metrics):
             if metric not in df.columns:
                 continue
-                
+            
             color = colors[i % len(colors)]
-            label = metric.replace("_", " ").title()
             
             fig = go.Figure()
             fig.add_trace(go.Scatter(
-                x=df["step"], y=df[metric], mode="lines+markers", name=label,
-                line=dict(color=color, width=2), marker=dict(size=3, color=color)
+                x=df["step"], 
+                y=df[metric], 
+                mode="lines+markers",
+                name=metric,
+                line=dict(color=color, width=2),
+                marker=dict(size=4, color=color)
             ))
             
             fig.update_layout(
-                title=dict(text=label, font=dict(size=14, color="#e0e0e0")),
-                xaxis=dict(
-                    title="Step", 
-                    color="#aaaaaa", 
-                    dtick=dtick,  # Use calculated dtick
-                    gridcolor="#404040", 
-                    showgrid=True,
-                    tickmode="linear"  # Ensure linear ticking
+                title=dict(
+                    text=metric.replace("_", " ").title(),
+                    font=dict(size=14, color="#e0e0e0")
                 ),
-                yaxis=dict(title=label, color="#aaaaaa", gridcolor="#404040", showgrid=True),
-                template="plotly_dark", paper_bgcolor="rgb(35,39,43)", plot_bgcolor="rgb(25,25,25)",
-                font=dict(color="#e0e0e0", size=10), margin=dict(l=50, r=20, t=40, b=40),
-                showlegend=False, hovermode="x unified"
+                xaxis=dict(
+                    title="Step",
+                    color="#aaaaaa",
+                    gridcolor="#404040",
+                    showgrid=True
+                ),
+                yaxis=dict(
+                    title=metric,
+                    color="#aaaaaa", 
+                    gridcolor="#404040",
+                    showgrid=True
+                ),
+                template="plotly_dark",
+                paper_bgcolor="rgb(35,39,43)",
+                plot_bgcolor="rgb(25,25,25)",
+                font=dict(color="#e0e0e0", size=10),
+                height=300,
+                margin=dict(l=50, r=20, t=50, b=50),
+                showlegend=False,
+                hovermode="x unified"
             )
             
-            graph_tiles.append(dbc.Col([
-                dcc.Graph(figure=fig, config={'displayModeBar': True, 'displaylogo': False}, style={"height": "300px"})
+            graphs.append(dbc.Col([
+                dcc.Graph(
+                    figure=fig, 
+                    style={"height": "300px"},
+                    config={'displayModeBar': True, 'displaylogo': False}
+                )
             ], width=6, lg=6, xl=4, className="mb-3"))
         
-        return dbc.Row(graph_tiles)
+        return dbc.Row(graphs)
 
-    # ---------------------- Layout & Callbacks ----------------------
+    # ---------------------- Layout ----------------------
 
     def _setup_layout(self):
-        # Compact CSS
-        self.app.index_string = """
-        <!DOCTYPE html>
-        <html>
-            <head>
-                {%metas%}
-                <title>Proxima Dashboard</title>
-                {%favicon%}
-                {%css%}
-                <style>
-                    body { background-color: #181a1b !important; color: #e0e0e0 !important; }
-                    .proxima-card { background: #23272b; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.18); padding: 1.5rem; margin-bottom: 1.5rem; }
-                    .proxima-header { letter-spacing: 2px; font-weight: 700; }
-                    .full-height-card { background: #23272b; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.18); padding: 1.5rem; height: calc(100vh - 200px); overflow-y: auto; }
-                    .control-panel { background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); border: 1px solid #4a5568; border-radius: 16px; padding: 2rem; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
-                    .control-header { color: #64b5f6; font-size: 1.4rem; font-weight: 600; margin-bottom: 1.5rem; }
-                    .status-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 1rem 1.5rem; margin-bottom: 1.5rem; }
-                    .status-indicator { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 1.1rem; }
-                    .status-running { color: #4caf50; } .status-paused { color: #ff9800; } .status-stopped { color: #9e9e9e; }
-                    .status-details { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px; font-size: 0.9rem; color: #b0bec5; }
-                    .control-buttons { display: flex; gap: 8px; margin-bottom: 1.5rem; flex-wrap: wrap; }
-                    .control-btn { flex: 1; min-width: 120px; height: 44px; border: none; border-radius: 8px; font-weight: 600; font-size: 0.9rem; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
-                    .btn-start-continuous { background: linear-gradient(135deg, #4caf50, #66bb6a); color: white; }
-                    .btn-start-limited { background: linear-gradient(135deg, #2196f3, #42a5f5); color: white; }
-                    .btn-pause { background: linear-gradient(135deg, #ff9800, #ffb74d); color: white; }
-                    .btn-resume { background: linear-gradient(135deg, #00bcd4, #26c6da); color: white; }
-                    .btn-stop { background: linear-gradient(135deg, #f44336, #ef5350); color: white; }
-                    .control-btn:hover:not(:disabled) { transform: translateY(-2px); }
-                    .control-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-                    .input-group { display: flex; gap: 20px; margin-top: 1rem; }
-                    .input-container { flex: 1; display: flex; flex-direction: column; gap: 6px; }
-                    .input-label { font-size: 0.85rem; font-weight: 600; color: #90a4ae; text-transform: uppercase; }
-                    .control-input { background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.2) !important; border-radius: 8px !important; color: #e0e0e0 !important; padding: 8px 12px !important; }
-                    .metric-checklist-vertical { max-height: 200px; overflow-y: auto; border: 1px solid #444; border-radius: 8px; padding: 10px; background-color: #2a2e33; }
-                    .metric-checklist-vertical .form-check { margin-bottom: 8px !important; }
-                    .metric-checklist-vertical .form-check-input { background-color: #404040 !important; border-color: #666 !important; }
-                    .metric-checklist-vertical .form-check-input:checked { background-color: #0d6efd !important; border-color: #0d6efd !important; }
-                    .metric-checklist-vertical .form-check-label { color: #e0e0e0 !important; font-size: 0.9rem; }
-                </style>
-            </head>
-            <body>
-                {%app_entry%}
-                <footer>{%config%}{%scripts%}{%renderer%}</footer>
-            </body>
-        </html>
-        """
-
         self.app.layout = dbc.Container([
             dcc.Interval(id="interval-component", interval=1000, n_intervals=0),
-            html.H1("Proxima", className="text-primary text-center fs-3 mb-4 proxima-header"),
+            html.H1("Proxima Dashboard", className="text-center mb-4", style={"color": "#e0e0e0"}),
             
             # Control Panel
-            dbc.Row([dbc.Col([
-                html.Div([
-                    html.H4("Simulation Control", className="control-header"),
-                    html.Div(id="simulation-status", className="status-card"),
-                    html.Div([
-                        html.Button([html.I(className="fas fa-play", style={"marginRight": "6px"}), "Start Continuous"], 
-                                   id="btn-start-continuous", className="control-btn btn-start-continuous"),
-                        html.Button([html.I(className="fas fa-step-forward", style={"marginRight": "6px"}), "Start Limited"], 
-                                   id="btn-start-limited", className="control-btn btn-start-limited"),
-                        html.Button([html.I(className="fas fa-pause", style={"marginRight": "6px"}), "Pause"], 
-                                   id="btn-pause", className="control-btn btn-pause"),
-                        html.Button([html.I(className="fas fa-play", style={"marginRight": "6px"}), "Resume"], 
-                                   id="btn-resume", className="control-btn btn-resume"),
-                        html.Button([html.I(className="fas fa-stop", style={"marginRight": "6px"}), "Stop"], 
-                                   id="btn-stop", className="control-btn btn-stop"),
-                    ], className="control-buttons"),
-                    html.Div([
-                        html.Div([
-                            html.Label("Step Delay", className="input-label"),
-                            dcc.Input(id="step-delay-input", type="number", value=0.1, min=0.01, max=5.0, step=0.01, className="control-input")
-                        ], className="input-container"),
-                        html.Div([
-                            html.Label("Max Steps", className="input-label"),
-                            dcc.Input(id="max-steps-input", type="number", value=100, min=1, className="control-input")
-                        ], className="input-container"),
-                    ], className="input-group"),
-                ], className="control-panel"),
-            ], width=12, className="mb-3")]),
-            
-            # Info Row
             dbc.Row([
-                dbc.Col(html.Div(id="experiment-info", className="proxima-card"), width=4),
-                dbc.Col(html.Div(id="environment-info", className="proxima-card"), width=4),
-                dbc.Col(html.Div(id="component-summary", className="proxima-card"), width=4),
-            ], className="mb-3"),
-            
-            # Main Content Row
-            dbc.Row([
-                # Graphs
                 dbc.Col([
-                    html.Div([
-                        html.H4("Graphs", className="text-info mb-2"),
-                        html.Div([
-                            html.H5("Select Metrics to Plot:", className="text-info mb-2"),
-                            dcc.Checklist(id="metric-selector", options=[], value=[], inline=False, 
-                                         className="metric-checklist-vertical", style={"marginBottom": "20px"}),
-                            html.Hr(style={"borderColor": "#444"}),
-                        ]),
-                        html.Div(id="graph-grid"),
-                    ], className="proxima-card"),
-                ], width=5, style={"paddingRight": "0.5rem"}),
-                
-                # Status Panels
-                dbc.Col([
-                    html.Div([html.H4("Generator Status", className="text-center text-secondary mb-3"), 
-                             html.Div(id="generator-status-panel")], className="proxima-card"),
-                    html.Div([html.H4("Storage Status", className="text-center text-secondary mb-3"), 
-                             html.Div(id="storage-status-panel")], className="proxima-card"),
-                    html.Div([html.H4("Rover Status", className="text-center text-secondary mb-3"), 
-                             html.Div(id="rover-status-panel")], className="proxima-card"),
-                ], width=4, style={"paddingLeft": "0.5rem", "paddingRight": "0.5rem"}),
-                
-                # Latest State
-                dbc.Col([
-                    html.Div([html.H4("Latest System State", className="text-info mb-3"), 
-                             html.Div(id="latest-state-panel")], className="full-height-card"),
-                ], width=3, style={"paddingLeft": "0.5rem"}),
-            ]),
-        ], fluid=True, style={"padding": "2rem", "backgroundColor": "#181a1b", "minHeight": "100vh"})
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H4("Simulation Control", style={"color": "#e0e0e0"}),
+                            html.Div(id="status-display", className="mb-3", style={"color": "#e0e0e0", "fontSize": "16px", "fontWeight": "bold"}),
+                            dbc.ButtonGroup([
+                                dbc.Button("Start Continuous", id="btn-start-continuous", color="success", className="me-2"),
+                                dbc.Button("Start Limited", id="btn-start-limited", color="primary", className="me-2"),
+                                dbc.Button("Pause", id="btn-pause", color="warning", className="me-2"),
+                                dbc.Button("Resume", id="btn-resume", color="info", className="me-2"),
+                                dbc.Button("Stop", id="btn-stop", color="danger"),
+                            ], className="mb-3"),
+                            dbc.Row([
+                                dbc.Col([
+                                    dbc.Label("Step Delay (s)", style={"color": "#e0e0e0"}),
+                                    dbc.Input(id="step-delay", type="number", value=0.1, min=0.01, step=0.01, style={"backgroundColor": "rgb(45,49,53)", "border": "1px solid #404040", "color": "#e0e0e0"})
+                            ], width=6),
+                            dbc.Col([
+                                dbc.Label("Max Steps", style={"color": "#e0e0e0"}),
+                                dbc.Input(id="max-steps", type="number", value=100, min=1, style={"backgroundColor": "rgb(45,49,53)", "border": "1px solid #404040", "color": "#e0e0e0"})
+                            ], width=6)
+                        ])
+                    ], style={"backgroundColor": "rgb(35,39,43)", "color": "#e0e0e0"})
+                ], style={"backgroundColor": "rgb(35,39,43)", "border": "1px solid #404040"})
+            ], width=12)
+        ], className="mb-4"),
+        
+        # Main Dashboard - Full Width Graphs
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H4("Metrics Plots", style={"color": "#e0e0e0"}),
+                        dbc.Label("Select Metrics:", style={"color": "#e0e0e0", "marginBottom": "10px"}),
+                        dcc.Checklist(
+                            id="metric-selector",
+                            options=[],
+                            value=[],
+                            inline=False,
+                            style={
+                                "maxHeight": "150px", 
+                                "overflowY": "auto", 
+                                "marginBottom": "20px",
+                                "color": "#e0e0e0"
+                            },
+                            inputStyle={"marginRight": "8px"},
+                            labelStyle={"display": "block", "marginBottom": "5px", "color": "#e0e0e0"}
+                        ),
+                        html.Div(id="graph-grid")
+                    ], style={"backgroundColor": "rgb(35,39,43)", "color": "#e0e0e0"})
+                ], style={"backgroundColor": "rgb(35,39,43)", "border": "1px solid #404040"})
+            ], width=12)  # Full width now
+        ], className="mb-4"),
+        
+        # Sector Summaries
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardHeader("Energy Sector Summary", style={"backgroundColor": "rgb(45,49,53)", "color": "#e0e0e0", "fontWeight": "bold", "borderBottom": "1px solid #404040"}),
+                    dbc.CardBody(id="energy-summary", style={"backgroundColor": "rgb(35,39,43)", "color": "#e0e0e0"})
+                ], style={"backgroundColor": "rgb(35,39,43)", "border": "1px solid #404040"})
+            ], width=4),
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardHeader("Science Sector Summary", style={"backgroundColor": "rgb(45,49,53)", "color": "#e0e0e0", "fontWeight": "bold", "borderBottom": "1px solid #404040"}),
+                    dbc.CardBody(id="science-summary", style={"backgroundColor": "rgb(35,39,43)", "color": "#e0e0e0"})
+                ], style={"backgroundColor": "rgb(35,39,43)", "border": "1px solid #404040"})
+            ], width=4),
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardHeader("System Summary", style={"backgroundColor": "rgb(45,49,53)", "color": "#e0e0e0", "fontWeight": "bold", "borderBottom": "1px solid #404040"}),
+                    dbc.CardBody(id="system-summary", style={"backgroundColor": "rgb(35,39,43)", "color": "#e0e0e0"})
+                ], style={"backgroundColor": "rgb(35,39,43)", "border": "1px solid #404040"})
+            ], width=4)
+        ])
+        
+    ], fluid=True, style={"padding": "20px", "backgroundColor": "rgb(25,25,25)", "minHeight": "100vh"})
+
+    # ---------------------- Callbacks ----------------------
 
     def _register_callbacks(self):
-        # Main dashboard update
+        # All UI updates happen at the same interval rate (1000ms)
         @self.app.callback(
-            [Output(k, "children") for k in ["experiment-info", "environment-info", "component-summary", 
-                                           "latest-state-panel", "generator-status-panel", 
-                                           "storage-status-panel", "rover-status-panel"]],
-            [Input("interval-component", "n_intervals")], [State("metric-selector", "value")], prevent_initial_call=False
+            [Output("energy-summary", "children"),
+             Output("science-summary", "children"), 
+             Output("system-summary", "children"),
+             Output("status-display", "children")],
+            [Input("interval-component", "n_intervals")]
         )
-        def update_dashboard(n, current_selection):
-            df = self.fetch_latest_logs()
-            exp = self.fetch_document("experiments", self.exp_id)
-            ws = self.fetch_document("world_systems", exp["world_system_id"]) if exp else None
-            env = self.fetch_document("environments", ws["environment_id"]) if ws else None
-
-            # Generate all components
-            comp_summary = self.extract_component_counts(ws) if ws else {}
-            comp_table = self.generate_aggrid([{"Component": k, "Count": v} for k, v in comp_summary.items()], auto_height=True)
+        def update_dashboard(n):
+            # Get time series summary data directly from logs (no world system needed)
+            sector_tables = self.build_sector_summary_tables()
             
-            latest_state_data = self.extract_latest_state(ws) if ws else {}
-            latest_state_table = self.generate_aggrid([{"Metric": k, "Value": v} for k, v in latest_state_data.items()], auto_height=True)
+            # For status only, we need the world system data
+            ws = self.get_world_system_data()
+            if not ws:
+                empty = html.Div("No data", className="text-secondary text-center")
+                return empty, empty, empty, "Status: No data"
             
-            status_tables = self.build_component_status_tables(ws) if ws else {"generators": html.Div("No data"), "storages": html.Div("No data"), "rovers": html.Div("No data")}
+            # Status from world system
+            latest_state = ws.get("latest_state", {})
+            sim_status = latest_state.get("simulation_status", {})
+            is_running = sim_status.get("is_running", False)
+            is_paused = sim_status.get("is_paused", False)
+            step = latest_state.get("step", 0)
             
-            exp_table = self.generate_aggrid([{k: v for k, v in exp.items() if k != "visualization_config"}]) if exp else html.Div("No experiment")
-            env_table = self.generate_aggrid([{k: v if isinstance(v, (str, int, float)) else str(v) for k, v in env.items() if k != "_id"}]) if env else html.Div("No environment.")
-
-            return (exp_table, env_table, comp_table, latest_state_table, 
-                   status_tables["generators"], status_tables["storages"], status_tables["rovers"])
-
-        # Status display
-        @self.app.callback(Output("simulation-status", "children"), [Input("interval-component", "n_intervals")])
-        def update_simulation_status(n):
-            status = self.get_simulation_status()
-            status_class = f"status-{status['status']}"
-            icon = "🟢" if status["status"] == "running" else "🟡" if status["status"] == "paused" else "⚪"
+            if is_running and not is_paused:
+                status = f"🟢 Running - Step {step}"
+            elif is_running and is_paused:
+                status = f"🟡 Paused - Step {step}"
+            else:
+                status = f"⚪ Stopped - Step {step}"
             
-            return html.Div([
-                html.Div([
-                    html.Span(icon, style={"fontSize": "1.2rem", "marginRight": "8px"}),
-                    html.Span(f"Status: {status['status'].upper()}", className=f"status-indicator {status_class}"),
-                    html.Small(f" ({status.get('mode', 'unknown')} mode)", style={"color": "#999", "marginLeft": "8px"})
-                ]),
-                html.Div([
-                    html.Div([html.Strong("Current Step: "), html.Span(f"{status.get('current_step', 0):,}")]),
-                    html.Div([html.Strong("Step Delay: "), html.Span(f"{status.get('step_delay', 0.1)}s")])
-                ], className="status-details")
-            ])
+            return (sector_tables["energy"], 
+                   sector_tables["science"], 
+                   sector_tables["system"],
+                   status)
 
-        # Control buttons
+        # Metric options - ONLY update once at startup, then use no_update
         @self.app.callback(
-            [Output("btn-start-continuous", "disabled"), Output("btn-start-limited", "disabled"), 
-             Output("btn-pause", "disabled"), Output("btn-resume", "disabled"), Output("btn-stop", "disabled")],
-            [Input("btn-start-continuous", "n_clicks"), Input("btn-start-limited", "n_clicks"),
-             Input("btn-pause", "n_clicks"), Input("btn-resume", "n_clicks"), Input("btn-stop", "n_clicks"),
-             Input("step-delay-input", "value"), Input("max-steps-input", "value")],
-            prevent_initial_call=True
+            Output("metric-selector", "options"), 
+            [Input("interval-component", "n_intervals")], 
+            prevent_initial_call=False
         )
-        def handle_simulation_controls(start_cont, start_lim, pause, resume, stop, delay, max_steps):
-            import dash
-            ctx = dash.callback_context
-            if not ctx.triggered:
-                return False, False, True, True, True
-                
-            button_id = ctx.triggered[0]["prop_id"].split(".")[0]
-            
-            button_actions = {
-                "btn-start-continuous": ("start_continuous", (True, True, False, True, False)),
-                "btn-start-limited": ("start_limited", (True, True, False, True, False)),
-                "btn-pause": ("pause", (True, True, True, False, False)),
-                "btn-resume": ("resume", (True, True, False, True, False)),
-                "btn-stop": ("stop", (False, False, True, True, True)),
-                "step-delay-input": ("set_delay", None)
-            }
-            
-            if button_id in button_actions:
-                action, button_states = button_actions[button_id]
-                kwargs = {"delay": delay}
-                if action == "start_limited":
-                    kwargs["max_steps"] = max_steps
-                
-                self.send_simulation_command(action, **kwargs)
-                return button_states or (False, False, True, True, True)
-            
-            return False, False, True, True, True
-
-        # Graph callbacks
-        @self.app.callback(Output("metric-selector", "options"), [Input("interval-component", "n_intervals")], prevent_initial_call=False)
         def update_metric_options(n):
-            if n > 2:
+            # Only update options on first few intervals to avoid constant layout changes
+            if n > 3:  
                 return dash.no_update
+                
             df = self.fetch_latest_logs()
             if df is not None and not df.empty:
-                fields = [col for col in df.columns if col not in ['step', 'timestamp', 'experiment_id'] and pd.api.types.is_numeric_dtype(df[col])]
-                return [{"label": field.replace("_", " ").title(), "value": field} for field in fields]
-            return []
+                # Get numeric columns excluding meta fields
+                numeric_cols = []
+                for col in df.columns:
+                    if col not in ['step', 'timestamp', 'experiment_id']:
+                        if pd.api.types.is_numeric_dtype(df[col]):
+                            numeric_cols.append(col)                
+                options = [{"label": col.replace("_", " ").title(), "value": col} for col in numeric_cols]
+                return options
+            else:
+                print("❌ No data available for metrics")
+                return []
 
-        @self.app.callback(Output("metric-selector", "value"), [Input("metric-selector", "options")], [State("metric-selector", "value")], prevent_initial_call=True)
+        # Initialize metrics selection ONCE
+        @self.app.callback(
+            Output("metric-selector", "value"), 
+            [Input("metric-selector", "options")], 
+                [State("metric-selector", "value")], 
+                prevent_initial_call=True
+            )
         def initialize_metrics_once(options, current_value):
-            return current_value if current_value else [opt["value"] for opt in options[:4]] if options else []
+            # Only set initial values if none are selected
+            if not current_value and options:
+                key_metrics = []
+                available_values = [opt["value"] for opt in options]
+                
+                # Prioritize these metrics if available (no prefixes now)
+                preferred = ["daylight", "science_generated", "total_power_supply_kW", "total_charge_level_kWh", "operational_rovers"]
+                for metric in preferred:
+                    if metric in available_values:
+                        key_metrics.append(metric)
+                
+                # Fill up to 4 metrics
+                for opt in options:
+                    if len(key_metrics) >= 4:
+                        break
+                    if opt["value"] not in key_metrics:
+                        key_metrics.append(opt["value"])
+                
+                return key_metrics[:4]
+            return current_value
 
-        @self.app.callback(Output("graph-grid", "children"), [Input("metric-selector", "value"), Input("interval-component", "n_intervals")], prevent_initial_call=False)
+        # Graph grid - ONLY update content when metrics change or new data arrives
+        @self.app.callback(
+            Output("graph-grid", "children"), 
+            [Input("metric-selector", "value"), Input("interval-component", "n_intervals")], 
+            prevent_initial_call=False
+        )
         def update_graph_grid(selected_metrics, n):
             if not selected_metrics:
                 return html.Div("Select metrics to display graphs.", className="text-secondary text-center")
-            return self.build_graph_grid(self.fetch_latest_logs(), selected_metrics)
+            
+            df = self.fetch_latest_logs()
+            if df is None or df.empty:
+                return html.Div("No data available for plotting.", className="text-secondary text-center")
+            
+            return self.build_graph_grid(df, selected_metrics)
 
-    # ---------------------- Simulation Control ----------------------
+        # Control buttons - ONLY respond to actual clicks, not interval updates
+        @self.app.callback(
+            Output("btn-start-continuous", "disabled"),
+            [Input("btn-start-continuous", "n_clicks"),
+            Input("btn-start-limited", "n_clicks"),
+            Input("btn-pause", "n_clicks"),
+            Input("btn-resume", "n_clicks"),
+            Input("btn-stop", "n_clicks"),
+            Input("step-delay", "value"),
+            Input("max-steps", "value")],
+            prevent_initial_call=True
+        )
+        def handle_controls(start_cont, start_lim, pause, resume, stop, delay, max_steps):
+            import dash
+            ctx = dash.callback_context
+            if not ctx.triggered:
+                return dash.no_update  # Use no_update instead of False
+                
+            button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+            
+            commands = {
+                "btn-start-continuous": "start_continuous",
+                "btn-start-limited": "start_limited", 
+                "btn-pause": "pause",
+                "btn-resume": "resume",
+                "btn-stop": "stop",
+                "step-delay": "set_delay"
+            }
+            
+            if button_id in commands:
+                action = commands[button_id]
+                kwargs = {"delay": delay} if action == "set_delay" else {}
+                if action == "start_limited":
+                    kwargs["max_steps"] = max_steps
+                
+                self.send_command(action, **kwargs)
+            
+            return dash.no_update  # Don't change button state
 
-    def send_simulation_command(self, action, **kwargs):
+    # ---------------------- Command Sending ----------------------
+
+    def send_command(self, action, **kwargs):
+        """Send command to simulation."""
         collection = "startup_commands" if action in ["start_continuous", "start_limited"] else "runtime_commands"
-        command = {"action": action, "timestamp": time.time(), "experiment_id": self.exp_id, **kwargs}
+        command = {
+            "action": action,
+            "timestamp": time.time(),
+            "experiment_id": self.exp_id,
+            **kwargs
+        }
         
         try:
             self.db.db[collection].insert_one(command)
-            print(f"Command sent: {action}")
-            return {"status": "success", "message": f"Command '{action}' sent"}
         except Exception as e:
-            print(f"Command error: {e}")
-            return {"status": "error", "message": str(e)}
-
-    def get_simulation_status(self):
-        try:
-            exp = self.fetch_document("experiments", self.exp_id)
-            ws_id = exp.get("world_system_id") if exp else None
-            ws = self.fetch_document("world_systems", ws_id) if ws_id else None
-            
-            if not ws:
-                return {"status": "stopped", "current_step": 0, "step_delay": 0.1}
-                
-            latest_state = ws.get("latest_state", {})
-            simulation_status = latest_state.get("simulation_status", {})
-            
-            if not simulation_status:
-                return {"status": "stopped", "current_step": latest_state.get("step", 0), "step_delay": 0.1}
-            
-            is_running = simulation_status.get("is_running", False)
-            is_paused = simulation_status.get("is_paused", False)
-            
-            status = "paused" if is_running and is_paused else "running" if is_running else "stopped"
-            
-            return {
-                "status": status,
-                "current_step": latest_state.get("step", 0),
-                "step_delay": simulation_status.get("step_delay", 0.1),
-                "mode": simulation_status.get("mode", "unknown")
-            }
-            
-        except Exception as e:
-            print(f"Status fetch error: {e}")
-            return {"status": "stopped", "current_step": 0, "step_delay": 0.1}
+            print(f"❌ Command error: {e}")
 
     def run(self):
-        self.app.run(debug=True)
+        self.app.run(debug=True, host='0.0.0.0', port=8050)
 
 
 if __name__ == "__main__":

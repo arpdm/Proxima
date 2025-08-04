@@ -26,7 +26,7 @@ class ScienceRover(Agent):
         return self.current_battery_kWh >= self.battery_capacity_kWh
 
     def needs_charge(self) -> bool:
-        return self.current_battery_kWh < self.battery_capacity_kWh
+        return self.current_battery_kWh < self.power_usage_kWh
 
     def step(self, available_energy_kWh: float) -> tuple:
         """
@@ -39,9 +39,14 @@ class ScienceRover(Agent):
         science_generated = 0.0
 
         if self.needs_charge():
-            charge_needed = self.battery_capacity_kWh
+            # Fix: Calculate actual charge needed (remaining capacity)
+            charge_needed = self.battery_capacity_kWh - self.current_battery_kWh
             charge_this_step = min(charge_needed, available_energy_kWh)
             self.current_battery_kWh += charge_this_step
+
+            # Ensure we don't exceed capacity (safety check)
+            self.current_battery_kWh = min(self.current_battery_kWh, self.battery_capacity_kWh)
+
             power_draw = charge_this_step
             self.status = "charging"
             self.is_operational = False
@@ -66,9 +71,13 @@ class ScienceRover(Agent):
         Returns:
             dict: Status snapshot.
         """
+        battery_percentage = (self.current_battery_kWh / self.battery_capacity_kWh) * 100 if self.battery_capacity_kWh > 0 else 0
+        
         return {
-            "battery_kWh": self.current_battery_kWh,
-            "science_buffer": self.science_buffer,
+            "battery_kWh": round(self.current_battery_kWh, 2),
+            "battery_percentage": round(battery_percentage, 1),
+            "battery_capacity_kWh": self.battery_capacity_kWh,
+            "science_buffer": round(self.science_buffer, 2),
             "status": self.status,
             "is_operational": self.is_operational,
             "type": "science_rover",

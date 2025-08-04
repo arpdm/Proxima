@@ -26,23 +26,6 @@ class ProximaRunner:
         self.is_running = False
         self.is_paused = False
         self.step_delay = 0.1
-        
-        self._clear_old_status()
-
-    def _clear_old_status(self):
-        """Clear any old simulation status on startup."""
-        try:
-            ws = self.proxima_db.find_by_id("world_systems", self.ws_id)
-            if ws and "simulation_status" in ws.get("latest_state", {}):
-                latest_state = ws["latest_state"]
-                latest_state["simulation_status"] = {
-                    "is_running": False, "is_paused": False, 
-                    "step_delay": self.step_delay, "mode": "stopped"
-                }
-                self.proxima_db.update_document("world_systems", self.ws_id, {"latest_state": latest_state})
-                print("Cleared old simulation status")
-        except Exception as e:
-            print(f"Error clearing status: {e}")
 
     def run(self, continuous=None):
         """Main simulation runner."""
@@ -53,7 +36,6 @@ class ProximaRunner:
         ws = WorldSystem(config)
         self.is_running = True
         self.is_paused = False
-        self._update_status()
 
         try:
             while self.is_running:
@@ -67,15 +49,24 @@ class ProximaRunner:
 
                 # Simulation step
                 ws.step()
+                
+                # Get state from both sectors
+                science_state = ws.science_sector.get_state()
+                energy_state = ws.energy_sector.get_state()
+                                
+                # Get organized metrics from world system
+                metrics = ws.model_metrics
+                
+                # Log with sector organization
                 self.logger.log(
                     step=ws.steps,
-                    model_metrics=ws.model_metrics,
-                    agent_metrics=[ws.microgrid.agent_state, ws.get_rover_state()],
+                    environment=metrics["environment"],
+                    energy=metrics["energy"], 
+                    science=metrics["science"],
                     latest_state={
                         "step": ws.steps,
-                        "microgrid": ws.microgrid.agent_state,
-                        "science_rovers": ws.get_rover_state(),
-                        "ws_metrics": ws.model_metrics,
+                        "microgrid": energy_state,
+                        "science_rovers": science_state["science_rovers"],
                         "simulation_status": {
                             "is_running": self.is_running,
                             "is_paused": self.is_paused,
@@ -95,9 +86,10 @@ class ProximaRunner:
 
         except Exception as e:
             print(f"Simulation error: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             self.is_running = False
-            self._final_status_update()
             self.logger.save_to_file()
 
     def _check_commands(self):
@@ -122,71 +114,10 @@ class ProximaRunner:
             
             if action in actions:
                 actions[action]()
-                self._update_status()
                 print(f"Applied: {action}")
                 
         except Exception as e:
             print(f"Command error: {e}")
-
-    def _update_status(self):
-        """Update simulation status via logger."""
-        try:
-            ws_doc = self.proxima_db.find_by_id("world_systems", self.ws_id)
-            if not ws_doc:
-                return
-                
-            current_state = ws_doc.get("latest_state", {})
-            updated_state = {
-                "step": current_state.get("step", 0),
-                "microgrid": current_state.get("microgrid", {}),
-                "science_rovers": current_state.get("science_rovers", []),
-                "ws_metrics": current_state.get("ws_metrics", {}),
-                "simulation_status": {
-                    "is_running": self.is_running,
-                    "is_paused": self.is_paused,
-                    "step_delay": self.step_delay,
-                    "mode": "continuous",
-                    "timestamp": time.time()
-                }
-            }
-            
-            self.logger.log(
-                step=current_state.get("step", 0),
-                model_metrics=current_state.get("ws_metrics", {}),
-                agent_metrics=[current_state.get("microgrid", {}), current_state.get("science_rovers", [])],
-                latest_state=updated_state
-            )
-            print(f"Status: running={self.is_running}, paused={self.is_paused}")
-            
-        except Exception as e:
-            print(f"Status update error: {e}")
-
-    def _final_status_update(self):
-        """Set final stopped status."""
-        try:
-            ws_doc = self.proxima_db.find_by_id("world_systems", self.ws_id)
-            if ws_doc:
-                current_state = ws_doc.get("latest_state", {})
-                final_state = {
-                    "step": current_state.get("step", 0),
-                    "microgrid": current_state.get("microgrid", {}),
-                    "science_rovers": current_state.get("science_rovers", []),
-                    "ws_metrics": current_state.get("ws_metrics", {}),
-                    "simulation_status": {
-                        "is_running": False, "is_paused": False,
-                        "step_delay": self.step_delay, "mode": "stopped", "timestamp": time.time()
-                    }
-                }
-                
-                self.logger.log(
-                    step=current_state.get("step", 0),
-                    model_metrics=current_state.get("ws_metrics", {}),
-                    agent_metrics=[current_state.get("microgrid", {}), current_state.get("science_rovers", [])],
-                    latest_state=final_state
-                )
-                print("Final status: STOPPED")
-        except Exception as e:
-            print(f"Final status error: {e}")
 
 
 def main():
