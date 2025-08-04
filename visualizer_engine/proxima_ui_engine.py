@@ -100,7 +100,7 @@ class ProximaUI:
         
         if not latest_logs:
             empty_table = self.generate_aggrid([{"Metric": "No Data", "Value": "N/A"}], height=200)
-            return {"energy": empty_table, "science": empty_table, "system": empty_table}
+            return {"energy": empty_table, "science": empty_table, "system": empty_table, "manufacturing": empty_table}
         
         latest_log = latest_logs[0]
         
@@ -108,6 +108,7 @@ class ProximaUI:
         environment_data = latest_log.get("environment", {})
         energy_data = latest_log.get("energy", {})
         science_data = latest_log.get("science", {})
+        manufacturing_data = latest_log.get("manufacturing", {})  # Add this line
         
         # Convert to table format
         def sector_to_table(sector_data):
@@ -118,6 +119,7 @@ class ProximaUI:
             "energy": self.generate_aggrid(sector_to_table(energy_data), height=250),
             "science": self.generate_aggrid(sector_to_table(science_data), height=250),
             "system": self.generate_aggrid(sector_to_table(environment_data), height=200),
+            "manufacturing": self.generate_aggrid(sector_to_table(manufacturing_data), height=300),  # Add this line
         }
         
         return tables
@@ -281,19 +283,25 @@ class ProximaUI:
                     dbc.CardHeader("Energy Sector Summary", style={"backgroundColor": "rgb(45,49,53)", "color": "#e0e0e0", "fontWeight": "bold", "borderBottom": "1px solid #404040"}),
                     dbc.CardBody(id="energy-summary", style={"backgroundColor": "rgb(35,39,43)", "color": "#e0e0e0"})
                 ], style={"backgroundColor": "rgb(35,39,43)", "border": "1px solid #404040"})
-            ], width=4),
+            ], width=3),
             dbc.Col([
                 dbc.Card([
                     dbc.CardHeader("Science Sector Summary", style={"backgroundColor": "rgb(45,49,53)", "color": "#e0e0e0", "fontWeight": "bold", "borderBottom": "1px solid #404040"}),
                     dbc.CardBody(id="science-summary", style={"backgroundColor": "rgb(35,39,43)", "color": "#e0e0e0"})
                 ], style={"backgroundColor": "rgb(35,39,43)", "border": "1px solid #404040"})
-            ], width=4),
+            ], width=3),
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardHeader("Manufacturing Summary", style={"backgroundColor": "rgb(45,49,53)", "color": "#e0e0e0", "fontWeight": "bold", "borderBottom": "1px solid #404040"}),
+                    dbc.CardBody(id="manufacturing-summary", style={"backgroundColor": "rgb(35,39,43)", "color": "#e0e0e0"})
+                ], style={"backgroundColor": "rgb(35,39,43)", "border": "1px solid #404040"})
+            ], width=3),
             dbc.Col([
                 dbc.Card([
                     dbc.CardHeader("System Summary", style={"backgroundColor": "rgb(45,49,53)", "color": "#e0e0e0", "fontWeight": "bold", "borderBottom": "1px solid #404040"}),
                     dbc.CardBody(id="system-summary", style={"backgroundColor": "rgb(35,39,43)", "color": "#e0e0e0"})
                 ], style={"backgroundColor": "rgb(35,39,43)", "border": "1px solid #404040"})
-            ], width=4)
+            ], width=3)
         ])
         
     ], fluid=True, style={"padding": "20px", "backgroundColor": "rgb(25,25,25)", "minHeight": "100vh"})
@@ -305,6 +313,7 @@ class ProximaUI:
         @self.app.callback(
             [Output("energy-summary", "children"),
              Output("science-summary", "children"), 
+             Output("manufacturing-summary", "children"),  # Add this line
              Output("system-summary", "children"),
              Output("status-display", "children")],
             [Input("interval-component", "n_intervals")]
@@ -317,7 +326,7 @@ class ProximaUI:
             ws = self.get_world_system_data()
             if not ws:
                 empty = html.Div("No data", className="text-secondary text-center")
-                return empty, empty, empty, "Status: No data"
+                return empty, empty, empty, empty, "Status: No data"
             
             # Status from world system
             latest_state = ws.get("latest_state", {})
@@ -335,6 +344,7 @@ class ProximaUI:
             
             return (sector_tables["energy"], 
                    sector_tables["science"], 
+                   sector_tables["manufacturing"],  # Add this line
                    sector_tables["system"],
                    status)
 

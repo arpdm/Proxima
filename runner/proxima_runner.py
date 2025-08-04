@@ -50,9 +50,10 @@ class ProximaRunner:
                 # Simulation step
                 ws.step()
                 
-                # Get state from both sectors
+                # Get state from all sectors
                 science_state = ws.science_sector.get_state()
                 energy_state = ws.energy_sector.get_state()
+                manufacturing_state = ws.manufacturing_sector.get_state()
                                 
                 # Get organized metrics from world system
                 metrics = ws.model_metrics
@@ -63,10 +64,12 @@ class ProximaRunner:
                     environment=metrics["environment"],
                     energy=metrics["energy"], 
                     science=metrics["science"],
+                    manufacturing=metrics["manufacturing"],  # Add this line
                     latest_state={
                         "step": ws.steps,
                         "microgrid": energy_state,
                         "science_rovers": science_state["science_rovers"],
+                        "manufacturing": manufacturing_state,  # Add this line
                         "simulation_status": {
                             "is_running": self.is_running,
                             "is_paused": self.is_paused,

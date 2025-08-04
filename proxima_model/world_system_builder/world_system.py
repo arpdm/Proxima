@@ -9,6 +9,7 @@ agent interactions, and data collection using Mesa.
 from mesa import Model
 from proxima_model.sphere_engine.energy_sector import EnergySector
 from proxima_model.sphere_engine.science_sector import ScienceSector
+from proxima_model.sphere_engine.manufacturing_sector import ManufacturingSector
 
 
 class WorldSystem(Model):
@@ -29,6 +30,7 @@ class WorldSystem(Model):
         # Initialize sectors
         self.initialize_energy_sector()
         self.initialize_science_sector()
+        self.initialize_manufacturing_sector()
 
         # System-level tracking
         self.model_metrics = {}
@@ -66,6 +68,17 @@ class WorldSystem(Model):
         }
         self.energy_sector = EnergySector(self, energy_config)
 
+    def initialize_manufacturing_sector(self):
+        """Initialize the manufacturing sector."""
+        manufacturing_config = self.config.get("agents_config", {}).get("manufacturing", {})
+        
+        print(f"Initializing manufacturing sector")
+        
+        # Create manufacturing sector with model reference like microgrid
+        self.manufacturing_sector = ManufacturingSector(self, manufacturing_config)
+        
+        print(f"Initialized manufacturing stocks: {self.manufacturing_sector.stocks}")
+
     # ================= Run World System ===================================== #
     
     def step(self):
@@ -77,12 +90,22 @@ class WorldSystem(Model):
 
         # Get total power demand from all sectors
         science_power_demand = self.science_sector.get_power_demand()
+        manufacturing_power_demand = self.manufacturing_sector.get_power_demand()
+        total_power_demand = science_power_demand + manufacturing_power_demand
         
         # Energy sector processes demand and returns available power
-        available_energy = self.energy_sector.step(science_power_demand)
+        available_energy = self.energy_sector.step(total_power_demand)
         
-        # Science sector operates with whatever power is available
-        self.science_sector.step(available_energy)
+        # Allocate power to sectors (science priority, then manufacturing)
+        science_power = min(science_power_demand, available_energy)
+        remaining_power = available_energy - science_power
+        manufacturing_power = min(manufacturing_power_demand, remaining_power)
+        
+        # Science sector operates with allocated power
+        self.science_sector.step(science_power)
+        
+        # Manufacturing sector operates with remaining power
+        self.manufacturing_sector.step(manufacturing_power)
 
         # Check if simulation should continue
         sim_time = self.config.get("sim_time")
@@ -99,4 +122,5 @@ class WorldSystem(Model):
             },
             "energy": self.energy_sector.get_metrics(),
             "science": self.science_sector.get_metrics(),
+            "manufacturing": self.manufacturing_sector.get_metrics(),
         }
