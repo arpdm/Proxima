@@ -19,7 +19,7 @@ class DataLogger:
 
         self.records = []
         self.base_time = datetime.now(timezone.utc)
-        
+
         # Clear existing logs for this experiment on initialization
         # Use delete_many for time-series collections
         if self.log_to_db:
@@ -35,24 +35,24 @@ class DataLogger:
     def log(self, step, **kwargs):
         """Log simulation data with sector organization."""
         timestamp = self._generate_timestamp(step)
-        
+
         # Start with basic metadata
         log_entry = {
             "experiment_id": self.experiment_id,
             "step": step,
             "timestamp": timestamp,
         }
-        
+
         # Extract latest_state if present
-        latest_state = kwargs.pop('latest_state', None)
-        
+        latest_state = kwargs.pop("latest_state", None)
+
         # Add sector data directly to log entry
         for sector_name, sector_data in kwargs.items():
             if isinstance(sector_data, dict):
                 log_entry[sector_name] = sector_data
             else:
                 log_entry[sector_name] = sector_data
-    
+
         if self.log_to_db:
             # Store nested structure in MongoDB
             try:
@@ -74,7 +74,7 @@ class DataLogger:
                 "step": step,
                 "timestamp": timestamp,
             }
-            
+
             # Flatten nested dictionaries for CSV
             for sector_name, sector_data in kwargs.items():
                 if isinstance(sector_data, dict):
@@ -82,7 +82,7 @@ class DataLogger:
                         flat_record[f"{sector_name}_{key}"] = value
                 else:
                     flat_record[sector_name] = value
-                    
+
             self.records.append(flat_record)
 
     def save_to_file(self):
@@ -94,10 +94,7 @@ class DataLogger:
     def create_unique_index(self):
         """Create unique index to prevent duplicates - run once."""
         try:
-            self.db.db["logs_simulation"].create_index(
-                [("experiment_id", 1), ("step", 1)], 
-                unique=True
-            )
+            self.db.db["logs_simulation"].create_index([("experiment_id", 1), ("step", 1)], unique=True)
             print("✅ Created unique index on logs_simulation collection")
         except Exception as e:
             print(f"ℹ️  Index may already exist: {e}")

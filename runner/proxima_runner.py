@@ -63,6 +63,7 @@ class ProximaRunner:
         """Execute single simulation step."""
         ws.step()
 
+        # GUIDE: Add per sector
         self.logger.log(
             step=ws.steps,
             environment=ws.model_metrics["environment"],

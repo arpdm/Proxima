@@ -71,8 +71,10 @@ class ScienceRover(Agent):
         Returns:
             dict: Status snapshot.
         """
-        battery_percentage = (self.current_battery_kWh / self.battery_capacity_kWh) * 100 if self.battery_capacity_kWh > 0 else 0
-        
+        battery_percentage = (
+            (self.current_battery_kWh / self.battery_capacity_kWh) * 100 if self.battery_capacity_kWh > 0 else 0
+        )
+
         return {
             "battery_kWh": round(self.current_battery_kWh, 2),
             "battery_percentage": round(battery_percentage, 1),
