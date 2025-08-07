@@ -47,11 +47,14 @@ class DataLogger:
         latest_state = kwargs.pop("latest_state", None)
 
         # Add sector data directly to log entry
-        for sector_name, sector_data in kwargs.items():
-            if isinstance(sector_data, dict):
-                log_entry[sector_name] = sector_data
+        sector_data = {}
+        for sector_name, sector_data_values in kwargs.items():
+            if isinstance(sector_data_values, dict):
+                log_entry[sector_name] = sector_data_values
+                sector_data[sector_name] = sector_data_values  # Keep for latest_state
             else:
-                log_entry[sector_name] = sector_data
+                log_entry[sector_name] = sector_data_values
+                sector_data[sector_name] = sector_data_values  # Keep for latest_state
 
         if self.log_to_db:
             # Store nested structure in MongoDB
@@ -60,11 +63,14 @@ class DataLogger:
             except Exception as e:
                 print(f"⚠️  Warning: Could not insert log entry for step {step}: {e}")
 
-            # Update world system state
+            # Update world system state - include sector data
             if latest_state:
+                # Combine latest_state with sector data
+                complete_state = {**latest_state, "sectors": sector_data}  # Add all sector data to latest_state
+
                 self.db.db["world_systems"].update_one(
                     {"_id": self.ws_id},
-                    {"$set": {"latest_state": latest_state}},
+                    {"$set": {"latest_state": complete_state}},
                 )
 
         # For CSV, flatten the structure
@@ -76,12 +82,12 @@ class DataLogger:
             }
 
             # Flatten nested dictionaries for CSV
-            for sector_name, sector_data in kwargs.items():
-                if isinstance(sector_data, dict):
-                    for key, value in sector_data.items():
+            for sector_name, sector_data_values in kwargs.items():
+                if isinstance(sector_data_values, dict):
+                    for key, value in sector_data_values.items():
                         flat_record[f"{sector_name}_{key}"] = value
                 else:
-                    flat_record[sector_name] = value
+                    flat_record[sector_name] = sector_data_values
 
             self.records.append(flat_record)
 
