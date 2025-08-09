@@ -160,10 +160,19 @@ class ManufacturingSector:
         self.step_power_consumed = 0
         self.active_operations = 0
 
-        # Deficit Round Robin priority system
+        # Priority-as-token DRR system
         self.priorities = {}
         self.deficit_counters = {}
         self.sector_state = "active"  # active, inactive, decommissioned
+        
+        # DRR token configuration
+        self.token_cost_per_turn = config.get("drr_token_cost_per_turn", 1.0)
+        self.task_order = ["He3", "Metal", "Water", "Regolith", "Electrolysis"]
+        self.rr_idx = 0
+        
+        # Initialize deficit counters for all tasks
+        for t in self.task_order:
+            self.deficit_counters.setdefault(t, 0.0)
 
     def set_priorities(self, priorities_dict):
         """
@@ -184,58 +193,56 @@ class ManufacturingSector:
         else:
             self.sector_state = "active"
             self._set_all_agents_active()
-
-    def _set_all_agents_inactive(self):
-        """Set all agents to inactive state to minimize power consumption."""
-        for agent in self.isru_extractors + self.isru_generators:
-            if hasattr(agent, 'set_agent_state'):
-                agent.set_agent_state("inactive")
-
-    def _set_all_agents_active(self):
-        """Set all agents to active state for normal operations."""
-        for agent in self.isru_extractors + self.isru_generators:
-            if hasattr(agent, 'set_agent_state'):
-                agent.set_agent_state("active")
+            
+        # Zero deficit counters for zero-priority tasks
+        for t, p in self.priorities.items():
+            if p == 0.0:
+                self.deficit_counters[t] = 0.0
 
     def _deficit_round_robin_scheduler(self):
         """
-        Deficit Round Robin scheduler to select the next manufacturing task.
+        Priority-as-token DRR scheduler with max-DC + RR tie-breaking.
         
         ALGORITHM:
-        1. Check for tasks with available operations
-        2. Calculate weighted deficits (deficit / priority) 
-        3. Select task with highest weighted deficit
-        4. Returns None if no valid tasks available
-        
-        This ensures fair resource allocation over time and prevents
-        high-priority tasks from completely starving low-priority ones.
+        1. Cache task availability once
+        2. Top-up tokens for runnable + positive priority tasks; zero otherwise
+        3. Find max deficit among runnable tasks
+        4. Round-robin tie-break among max-DC winners
         
         Returns:
             str: Selected task name or None if no valid tasks
         """
-        # Check if all priorities are zero
-        if all(priority == 0.0 for priority in self.priorities.values()):
+        if not self.priorities or all(p == 0.0 for p in self.priorities.values()):
             return None
-        
-        # Get available operations for each task
-        available_tasks = {
-            task: self._get_available_operations_for_task(task) 
-            for task in self.priorities.keys() 
-            if self._get_available_operations_for_task(task)
-        }
-        
-        if not available_tasks:
+
+        # Cache availability once
+        avail = {t: bool(self._get_available_operations_for_task(t)) for t in self.task_order}
+
+        # Top-up tokens (only runnable + positive priority); zero otherwise
+        for t in self.task_order:
+            if avail[t] and self.priorities.get(t, 0.0) > 0.0:
+                self.deficit_counters[t] = self.deficit_counters.get(t, 0.0) + float(self.priorities[t])
+            else:
+                self.deficit_counters[t] = 0.0
+
+        # Candidates = runnable with positive DC
+        candidates = [t for t in self.task_order if avail[t] and self.deficit_counters.get(t, 0.0) > 0.0]
+        if not candidates:
             return None
-        
-        # Calculate weighted deficits and select best task
-        weighted_deficits = {}
-        for task_name in available_tasks.keys():
-            priority = self.priorities.get(task_name, 0.0)
-            if priority > 0:
-                deficit = self.deficit_counters.get(task_name, 0.0)
-                weighted_deficits[task_name] = deficit / priority
-        
-        return max(weighted_deficits.keys(), key=lambda k: weighted_deficits[k]) if weighted_deficits else None
+
+        # Max-DC with RR tie-break
+        max_dc = max(self.deficit_counters[t] for t in candidates)
+        eps = 1e-9
+        winners = {t for t in candidates if self.deficit_counters[t] >= max_dc - eps}
+
+        n = len(self.task_order)
+        for k in range(n):
+            idx = (self.rr_idx + k) % n
+            t = self.task_order[idx]
+            if t in winners:
+                self.rr_idx = (idx + 1) % n
+                return t
+        return None
 
     def _execute_task(self, task):
         """
@@ -346,7 +353,7 @@ class ManufacturingSector:
 
     def step(self, allocated_power):
         """
-        Execute a manufacturing simulation step.
+        Execute a manufacturing simulation step with priority-as-token DRR.
         
         EXECUTION SEQUENCE:
         1. Check sector state and power allocation
@@ -355,7 +362,8 @@ class ManufacturingSector:
         4. Execute extraction operations with available power
         5. Execute generation operations with remaining power
         6. Process all stock flows atomically
-        7. Update metrics and return unused power
+        7. Spend tokens only if work was actually done
+        8. Update metrics and return unused power
         
         Args:
             allocated_power: Power budget allocated by world system
@@ -366,7 +374,7 @@ class ManufacturingSector:
         if allocated_power <= 0 or self.sector_state == "inactive":
             return allocated_power
         
-        # Select task using DRR scheduler
+        # Select task using priority-as-token DRR scheduler
         selected_task = self._deficit_round_robin_scheduler()
         if selected_task is None:
             self._set_all_agents_inactive()
@@ -386,7 +394,10 @@ class ManufacturingSector:
             extractor_demand = extractor.get_power_demand()
             if extractor_demand > 0 and remaining_power >= extractor_demand:
                 extracted_resources, power_used = extractor.extract_resources(extractor_demand)
-                self.add_stock_flow("ISRU_Extractor", None, extracted_resources)
+                
+                if extracted_resources:  # Resources were actually produced
+                    self.add_stock_flow("ISRU_Extractor", None, extracted_resources)
+                    
                 self.step_power_consumed += power_used
                 remaining_power -= power_used
                 
@@ -401,13 +412,16 @@ class ManufacturingSector:
                 generated_resources, consumed_resources, power_used = generator.generate_resources(
                     generator_demand, self.stocks
                 )
-                self.add_stock_flow("ISRU_Generator", consumed_resources, generated_resources)
+                
+                if generated_resources:  # Resources were actually produced
+                    self.add_stock_flow("ISRU_Generator", consumed_resources, generated_resources)
+                    
                 self.step_power_consumed += power_used
                 remaining_power -= power_used
                 
                 if power_used > 0:
                     self.active_operations += 1
-                        
+                    
             elif generator_demand == 0:
                 # Try no-power operations (e.g., regolith processing)
                 generated_resources, consumed_resources, power_used = generator.generate_resources(0, self.stocks)
@@ -418,18 +432,17 @@ class ManufacturingSector:
         # Process all stock flows atomically
         self.process_all_stock_flows()
         self.total_power_consumed += self.step_power_consumed
+
+        # Spend tokens only if work actually happened (opportunity-fairness)
+        if selected_task is not None and self.active_operations > 0:
+            dc = self.deficit_counters.get(selected_task, 0.0)
+            self.deficit_counters[selected_task] = max(0.0, dc - self.token_cost_per_turn)
         
         return remaining_power
 
     def get_metrics(self):
         """
-        Return comprehensive manufacturing sector metrics.
-        
-        Provides performance data for monitoring and optimization:
-        - Power consumption and demand
-        - Operational status and activity levels
-        - Resource stock levels
-        - Sector state information
+        Return comprehensive manufacturing sector metrics including DRR token tracking.
         
         Returns:
             dict: Manufacturing sector performance metrics
@@ -439,6 +452,8 @@ class ManufacturingSector:
             "manufacturing_power_consumed": self.step_power_consumed,
             "manufacturing_active_operations": self.active_operations,
             "manufacturing_sector_state": self.sector_state,
+            "manufacturing_deficit_counters": self.deficit_counters.copy(),
+            "manufacturing_rr_index": self.rr_idx,
             "stock_H2_kg": self.stocks.get("H2_kg", 0),
             "stock_O2_kg": self.stocks.get("O2_kg", 0),
             "stock_H2O_kg": self.stocks.get("H2O_kg", 0),
@@ -446,3 +461,43 @@ class ManufacturingSector:
             "stock_Metal_kg": self.stocks.get("Metal_kg", 0),
             "stock_He3_kg": self.stocks.get("He3_kg", 0),
         }
+
+    def _get_available_operations_for_task(self, task):
+        """
+        Check if operations are available for the given task.
+        
+        Args:
+            task: Manufacturing task name
+            
+        Returns:
+            bool: True if task can be executed
+        """
+        if task == "He3":
+            # Need generators and extractors operational
+            return (len(self.isru_generators) > 0 and len(self.isru_extractors) > 0)
+        elif task == "Metal":
+            # Need generators and extractors operational
+            return (len(self.isru_generators) > 0 and len(self.isru_extractors) > 0)
+        elif task == "Water":
+            # Need extractors operational
+            return len(self.isru_extractors) > 0
+        elif task == "Regolith":
+            # Need extractors operational
+            return len(self.isru_extractors) > 0
+        elif task == "Electrolysis":
+            # Need generators and water stock
+            return (len(self.isru_generators) > 0 and self.stocks.get("H2O_kg", 0) > 0)
+        
+        return False
+
+    def _set_all_agents_inactive(self):
+        """Set all agents to inactive state to minimize power consumption."""
+        for agent in self.isru_extractors + self.isru_generators:
+            if hasattr(agent, 'set_agent_state'):
+                agent.set_agent_state("inactive")
+
+    def _set_all_agents_active(self):
+        """Set all agents to active state for normal operations."""
+        for agent in self.isru_extractors + self.isru_generators:
+            if hasattr(agent, 'set_agent_state'):
+                agent.set_agent_state("active")

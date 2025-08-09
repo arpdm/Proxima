@@ -23,6 +23,7 @@ class ISRUExtractor(Agent):
         self.efficiency = config.get("efficiency", 0.9)
         self.processing_time_t = config.get("processing_time_t", 3)
         self.extraction_modes = config.get("extraction_modes", ["ICE", "REGOLITH"])
+        self._processing_time = self.processing_time_t
 
         # Set initial operational mode to first available mode
         self.operational_mode = self.extraction_modes[0] if self.extraction_modes else "ICE"
@@ -49,20 +50,33 @@ class ISRUExtractor(Agent):
         extracted_resources = {}
         power_consumed = 0
 
-        # Ice extraction mode
-        if self.operational_mode == "ICE" and allocated_power >= self.ice_extraction_power_kWh:
-            # Apply efficiency - we're mining ice from the surface and melting it to water
+        # Check if we have enough power to operate
+        power_needed = self.get_power_demand()
+        if allocated_power < power_needed:
+            return {}, 0  # Can't operate without sufficient power
+
+        # Consume power for processing
+        power_consumed = power_needed
+        
+        # Decrement processing time
+        if self._processing_time > 0:
+            self._processing_time -= 1
+            
+            # Still processing - no output yet but consuming power
+            return {}, power_consumed
+        
+        # Processing complete - generate output and reset timer
+        if self.operational_mode == "ICE":
             actual_output = self.ice_extraction_output_kg * self.efficiency
             extracted_resources["H2O_kg"] = actual_output
-            power_consumed = self.ice_extraction_power_kWh
-
-        # Regolith extraction mode
-        elif self.operational_mode == "REGOLITH" and allocated_power >= self.regolith_extraction_power_kWh:
-            # Apply efficiency
+            
+        elif self.operational_mode == "REGOLITH":
             actual_output = self.regolith_extraction_output_kg * self.efficiency
             extracted_resources["FeTiO3_kg"] = actual_output
-            power_consumed = self.regolith_extraction_power_kWh
-
+    
+        # Reset processing time for next cycle
+        self._processing_time = self.processing_time_t
+    
         return extracted_resources, power_consumed
 
 
@@ -100,6 +114,9 @@ class ISRUGenerator(Agent):
         # Set initial operational mode to first available mode
         self.operational_mode = self.generator_modes[0] if self.generator_modes else "ELECTROLYSIS"
 
+        # Add processing time tracking for generator
+        self._processing_time = self.processing_time_t
+
     def set_operational_mode(self, mode):
         """Set the operational mode for this generator."""
         if mode in self.generator_modes:
@@ -125,13 +142,35 @@ class ISRUGenerator(Agent):
         consumed_resources = {}
         power_consumed = 0
 
-        # Electrolysis mode
-        if (
-            self.operational_mode == "ELECTROLYSIS"
-            and allocated_power >= self.electrolysis_power_kWh
-            and stocks.get("H2O_kg", 0) >= self.electrolysis_water_input_kg
-        ):
+        # Check operational mode and resource/power availability first
+        can_operate = False
+        power_needed = self.get_power_demand()
+        
+        if self.operational_mode == "ELECTROLYSIS":
+            can_operate = (allocated_power >= power_needed and 
+                          stocks.get("H2O_kg", 0) >= self.electrolysis_water_input_kg)
+        elif self.operational_mode == "HE3":
+            can_operate = (allocated_power >= power_needed and 
+                          stocks.get("FeTiO3_kg", 0) >= self.he3_extraction_regolith_input_kg)
+        elif self.operational_mode == "METAL":
+            can_operate = stocks.get("FeTiO3_kg", 0) >= self.regolith_processing_input_kg
+            
+        if not can_operate:
+            return {}, {}, 0  # Can't operate - insufficient power or resources
 
+        # Consume power for processing (if needed)
+        if power_needed > 0:
+            power_consumed = power_needed
+        
+        # Decrement processing time
+        if self._processing_time > 0:
+            self._processing_time -= 1
+            
+            # Still processing - consume power but no output yet
+            return {}, {}, power_consumed
+        
+        # Processing complete - generate output based on mode
+        if self.operational_mode == "ELECTROLYSIS":
             # Apply efficiency
             h2_output = self.electrolysis_h2_output_kg * self.efficiency
             o2_output = self.electrolysis_o2_output_kg * self.efficiency
@@ -139,24 +178,14 @@ class ISRUGenerator(Agent):
             generated_resources["H2_kg"] = h2_output
             generated_resources["O2_kg"] = o2_output
             consumed_resources["H2O_kg"] = self.electrolysis_water_input_kg
-            power_consumed = self.electrolysis_power_kWh
 
-        # He-3 extraction mode
-        elif (
-            self.operational_mode == "HE3"
-            and allocated_power >= self.he3_extraction_power_kWh
-            and stocks.get("FeTiO3_kg", 0) >= self.he3_extraction_regolith_input_kg
-        ):
-
+        elif self.operational_mode == "HE3":
             # Apply efficiency
             actual_output = self.he3_extraction_output_kg * self.efficiency
             generated_resources["He3_kg"] = actual_output
             consumed_resources["FeTiO3_kg"] = self.he3_extraction_regolith_input_kg
-            power_consumed = self.he3_extraction_power_kWh
 
-        # Metal processing mode (no power required)
-        elif self.operational_mode == "METAL" and stocks.get("FeTiO3_kg", 0) >= self.regolith_processing_input_kg:
-
+        elif self.operational_mode == "METAL":
             # Apply efficiency
             o2_output = self.regolith_processing_o2_output_kg * self.efficiency
             metal_output = self.regolith_processing_metal_output_kg * self.efficiency
@@ -164,6 +193,8 @@ class ISRUGenerator(Agent):
             generated_resources["O2_kg"] = o2_output
             generated_resources["Metal_kg"] = metal_output
             consumed_resources["FeTiO3_kg"] = self.regolith_processing_input_kg
-            power_consumed = 0  # No power required for regolith processing
 
+        # Reset processing time for next cycle
+        self._processing_time = self.processing_time_t
+        
         return generated_resources, consumed_resources, power_consumed
