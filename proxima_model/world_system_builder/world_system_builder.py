@@ -17,12 +17,15 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
 
     # Build base config
     config = {
-        "sim_time": experiment["simulation_time_stapes"],
-        "delta_t": experiment["time_step_duration_hours"],
+        # Fix typo with backward-compatible fallback
+        "sim_time": experiment.get("simulation_time_steps", experiment.get("simulation_time_stapes")),
+        "delta_t": experiment.get("time_step_duration_hours"),
         "day_hours": environment["day_hours"],
         "night_hours": environment["night_hours"],
         "p_need": 2.0,
         "agents_config": {},
+        "metrics": environment.get("metrics", []),
+        "dust_decay_per_step": environment.get("dust_decay_per_step", 0.0),
     }
 
     # Process all components by sector
@@ -45,7 +48,6 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
 
     # Load active goals configuration
     config["goals"] = _configure_goals_system(world_system, db)
-
     return config
 
 
@@ -79,49 +81,53 @@ def _configure_energy_sector(energy_components, templates):
 def _configure_science_sector(science_components, templates):
     """Configure science sector components."""
     config = {"science_rovers": []}
-
     for comp in science_components:
         template = templates.get(comp["template_id"])
         if not template:
-            print(f"Warning: Template {comp['template_id']} not found")
             continue
-
-        component_data = {
+        quantity = int(comp.get("quantity", 1))
+        rover_cfg = {
             "template_id": comp["template_id"],
-            "subtype": comp.get("subtype"),
-            "config": {**template.get("config", {}), **comp.get("config", {})},
-            "quantity": comp.get("quantity", 1),
+            "subtype": comp.get("subtype", template.get("subtype")),
+            "config": comp.get("config", template.get("default_config", {})),
+            "quantity": quantity,
         }
-
-        comp_type = template.get("type", "").lower()
-        if comp_type == "rover":
-            config["science_rovers"].append(component_data)
-
-    print(f"Configured science sector: {len(config['science_rovers'])} rovers")
+        # Pass-through metric contribution if provided
+        if "metric_contribution" in comp:
+            mc = comp["metric_contribution"]
+            rover_cfg["metric_contribution"] = {
+                "metric_id": mc.get("metric_id"),
+                "value": float(mc.get("contribution_value", mc.get("value", 0.0))),
+            }
+        config["science_rovers"].append(rover_cfg)
     return config
 
 
 def _configure_manufacturing_sector(manufacturing_components, templates, world_system):
     """Configure manufacturing sector components."""
-    agents_config = []
-
+    config = {"isru_extractors": [], "isru_generators": [], "initial_stocks": world_system.get("initial_stocks", {})}
     for comp in manufacturing_components:
         template = templates.get(comp["template_id"])
         if not template:
-            print(f"Warning: Template {comp['template_id']} not found")
             continue
-
-        agents_config.append(
-            {
-                "template_id": comp["template_id"],
-                "subtype": comp["subtype"],
-                "config": {**template.get("config", {}), **comp.get("config", {})},
-                "quantity": comp.get("quantity", 1),
+        base_cfg = {
+            "template_id": comp["template_id"],
+            "subtype": comp.get("subtype", template.get("subtype")),
+            "config": comp.get("config", template.get("default_config", {})),
+            "quantity": int(comp.get("quantity", 1)),
+        }
+        if "metric_contribution" in comp:
+            mc = comp["metric_contribution"]
+            base_cfg["metric_contribution"] = {
+                "metric_id": mc.get("metric_id"),
+                "value": float(mc.get("contribution_value", mc.get("value", 0.0))),
             }
-        )
-
-    print(f"Configured manufacturing sector: {len(agents_config)} agent types")
-    return {"agents_config": agents_config, "initial_stocks": world_system.get("initial_stocks", {})}
+        subtype = base_cfg.get("subtype", "").lower()
+        if subtype == "extractor":
+            config["isru_extractors"].append(base_cfg)
+        elif subtype == "generator":
+            config["isru_generators"].append(base_cfg)
+    return config
 
 
 def _configure_goals_system(world_system, db):
@@ -156,22 +162,26 @@ def _configure_goals_system(world_system, db):
 
         gtype = goal_doc.get("type", "functional_goal")
         if gtype == "performance_goal":
-            performance_goals.append({
-                "goal_id": goal_id,
-                "name": goal_doc.get("name", "Unknown Performance Goal"),
-                "metric_id": goal_doc.get("metric_id"),
-                "target_value": float(goal_doc.get("target_value", 0)),
-                "direction": goal_doc.get("direction", "minimize"),
-                "weight": float(goal_doc.get("weight", 1.0)),
-            })
+            performance_goals.append(
+                {
+                    "goal_id": goal_id,
+                    "name": goal_doc.get("name", "Unknown Performance Goal"),
+                    "metric_id": goal_doc.get("metric_id"),
+                    "target_value": float(goal_doc.get("target_value", 0)),
+                    "direction": goal_doc.get("direction", "minimize"),
+                    "weight": float(goal_doc.get("weight", 1.0)),
+                }
+            )
             print(f"Loaded performance goal: {goal_doc.get('name')} ({goal_id})")
         else:
-            functional_goals.append({
-                "goal_id": goal_id,
-                "name": goal_doc.get("name", "Unknown Goal"),
-                "priority_weight": priority_weight,
-                "sector_weights": goal_doc.get("sector_weights", {}),
-            })
+            functional_goals.append(
+                {
+                    "goal_id": goal_id,
+                    "name": goal_doc.get("name", "Unknown Goal"),
+                    "priority_weight": priority_weight,
+                    "sector_weights": goal_doc.get("sector_weights", {}),
+                }
+            )
 
     goals_config["active_goals"] = functional_goals
     goals_config["performance_goals"] = performance_goals
