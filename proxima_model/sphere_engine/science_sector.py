@@ -103,7 +103,7 @@ class ScienceSector:
         value = float(self.metric_contributions.get("value", self.metric_contributions.get("contribution_value", 0.0)))
         metric_map["IND-DUST-COV"] = len(self.science_rovers) * value * self.throttle_factor
         return metric_map
-    
+
     def get_metrics(self):
         """
         Get science sector metrics only.
