@@ -59,9 +59,16 @@ class ProximaRunner:
         self.is_running = True
         self.is_paused = False
 
+        # Update initial state in MongoDB
+        initial_state = self._build_state(0, True)
+        self._update_world_system_state(initial_state)
+
     def _execute_step(self, ws, continuous):
         """Execute single simulation step."""
         ws.step()
+
+        # Build current state
+        current_state = self._build_state(ws.steps, continuous)
 
         # GUIDE: Add per sector
         self.logger.log(
@@ -71,9 +78,11 @@ class ProximaRunner:
             science=ws.model_metrics["science"],
             manufacturing=ws.model_metrics["manufacturing"],
             performance=ws.model_metrics.get("performance", {}),
-            latest_state=self._build_state(ws.steps, continuous),
+            latest_state=current_state,
         )
 
+        # Update world system state in MongoDB
+        self._update_world_system_state(current_state)
         time.sleep(self.step_delay)
 
     def _build_state(self, step, continuous):
@@ -120,10 +129,37 @@ class ProximaRunner:
             command_map[action]()
             print(f"Applied: {action}")
 
+            # Update state in MongoDB after command execution
+            current_state = self._build_state(0, True)  # Step will be updated in next iteration
+            self._update_world_system_state(current_state)
+
     def _cleanup(self):
         """Cleanup after simulation."""
         self.is_running = False
+
+        # Update final state in MongoDB
+        final_state = self._build_state(0, False)
+        final_state["simulation_status"]["is_running"] = False
+        self._update_world_system_state(final_state)
+
         self.logger.save_to_file()
+
+    def _update_world_system_state(self, current_state):
+        """Update world system state in MongoDB for UI access."""
+        try:
+            # Update the world system document with current state
+            self.proxima_db.db["world_systems"].update_one(
+                {"_id": self.ws_id},
+                {
+                    "$set": {
+                        "latest_state": current_state,
+                        "last_updated": time.time()
+                    }
+                },
+                upsert=True
+            )
+        except Exception as e:
+            print(f"Failed to update world system state: {e}")
 
     def _check_startup_commands(self):
         """Check for startup commands."""
