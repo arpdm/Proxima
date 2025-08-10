@@ -7,6 +7,7 @@ Handles science rovers, research operations, and power management.
 
 from proxima_model.components.science_rover import ScienceRover
 
+
 class ScienceSector:
     """Manages science rovers and research operations."""
 
@@ -29,8 +30,10 @@ class ScienceSector:
 
     def _initialize_rovers(self):
         """Initialize all science rovers from config."""
+
         rover_configs = self.config.get("science_rovers", [])
         for agent_config in rover_configs:
+            self.metric_contributions = agent_config.get("metric_contribution")
             quantity = agent_config.get("quantity", 1)
             for _ in range(quantity):
                 rover = ScienceRover(agent_config)
@@ -89,6 +92,18 @@ class ScienceSector:
         self.total_science_cumulative += self.step_science_generated
         return self.total_power_used, self.step_science_generated
 
+    def _create_metric_map(self):
+        """
+        Create a map of metric IDs and their corresponding values.
+        Each task, operations, has certain impacts on the world system state space. Some have positivie impact, some negative impact.
+        Returns:
+            dict: A dictionary where keys are metric IDs and values are their contributions.
+        """
+        metric_map = {}
+        value = float(self.metric_contributions.get("value", self.metric_contributions.get("contribution_value", 0.0)))
+        metric_map["IND-DUST-COV"] = len(self.science_rovers) * value * self.throttle_factor
+        return metric_map
+    
     def get_metrics(self):
         """
         Get science sector metrics only.
@@ -96,22 +111,12 @@ class ScienceSector:
         Returns:
             dict: Science metrics for logging
         """
-        # Compute per-step metric contributions from configured rovers
-        metric_deltas = {}
-        for cfg in self.config.get("science_rovers", []):
-            mc = cfg.get("metric_contribution")
-            if not mc:
-                continue
-            metric_id = mc.get("metric_id")
-            value = float(mc.get("value", mc.get("contribution_value", 0.0)))
-            qty = int(cfg.get("quantity", 1))
-            if metric_id:
-                metric_deltas[metric_id] = metric_deltas.get(metric_id, 0.0) + qty * value * self.throttle_factor
 
+        # Compute per-step metric contributions from configured rovers
         return {
             "science_generated": self.step_science_generated,
             "total_science_cumulative": self.total_science_cumulative,
             "operational_rovers": len(self.science_rovers),
             "total_power_demand": self.total_power_demand,
-            "metric_contributions": metric_deltas,
+            "metric_contributions": self._create_metric_map(),
         }
