@@ -121,24 +121,23 @@ def _configure_manufacturing_sector(manufacturing_components, templates, world_s
         )
 
     print(f"Configured manufacturing sector: {len(agents_config)} agent types")
-
     return {"agents_config": agents_config, "initial_stocks": world_system.get("initial_stocks", {})}
 
 
 def _configure_goals_system(world_system, db):
     """Configure goals system from active goal IDs."""
-    goals_config = {"active_goals": [], "sector_priorities": {}}
 
+    goals_config = {"active_goals": [], "sector_priorities": {}, "performance_goals": []}
     active_goal_refs = world_system.get("active_goal_ids", [])
 
     if not active_goal_refs:
         print("No active goals found in world system")
         return goals_config
 
-    print(f"Loading {len(active_goal_refs)} active goals...")
+    functional_goals = []
+    performance_goals = []
 
     for goal_ref in active_goal_refs:
-        # Handle both old format (string) and new format (object with goal_id and priority)
         if isinstance(goal_ref, str):
             goal_id = goal_ref
             priority_weight = 1.0
@@ -150,26 +149,35 @@ def _configure_goals_system(world_system, db):
             print(f"Warning: Invalid goal reference: {goal_ref}")
             continue
 
-        # Load goal document from database
         goal_doc = db.find_by_id("goals", goal_id)
         if not goal_doc:
             print(f"Warning: Goal {goal_id} not found in database")
             continue
 
-        goal_data = {
-            "goal_id": goal_id,
-            "name": goal_doc.get("name", "Unknown Goal"),
-            "priority_weight": priority_weight,
-            "sector_weights": goal_doc.get("sector_weights", {}),
-        }
+        gtype = goal_doc.get("type", "functional_goal")
+        if gtype == "performance_goal":
+            performance_goals.append({
+                "goal_id": goal_id,
+                "name": goal_doc.get("name", "Unknown Performance Goal"),
+                "metric_id": goal_doc.get("metric_id"),
+                "target_value": float(goal_doc.get("target_value", 0)),
+                "direction": goal_doc.get("direction", "minimize"),
+                "weight": float(goal_doc.get("weight", 1.0)),
+            })
+            print(f"Loaded performance goal: {goal_doc.get('name')} ({goal_id})")
+        else:
+            functional_goals.append({
+                "goal_id": goal_id,
+                "name": goal_doc.get("name", "Unknown Goal"),
+                "priority_weight": priority_weight,
+                "sector_weights": goal_doc.get("sector_weights", {}),
+            })
 
-        goals_config["active_goals"].append(goal_data)
-        print(f"Loaded goal: {goal_data['name']} (ID: {goal_id}, Priority: {priority_weight})")
+    goals_config["active_goals"] = functional_goals
+    goals_config["performance_goals"] = performance_goals
 
-    # Calculate combined sector priorities from all active goals
-    goals_config["sector_priorities"] = _calculate_combined_sector_priorities(goals_config["active_goals"])
-
-    print(f"Combined sector priorities: {goals_config['sector_priorities']}")
+    # Combined sector priorities use only functional goals
+    goals_config["sector_priorities"] = _calculate_combined_sector_priorities(functional_goals)
     return goals_config
 
 
