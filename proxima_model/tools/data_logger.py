@@ -49,12 +49,8 @@ class DataLogger:
         # Add sector data directly to log entry
         sector_data = {}
         for sector_name, sector_data_values in kwargs.items():
-            if isinstance(sector_data_values, dict):
-                log_entry[sector_name] = sector_data_values
-                sector_data[sector_name] = sector_data_values  # Keep for latest_state
-            else:
-                log_entry[sector_name] = sector_data_values
-                sector_data[sector_name] = sector_data_values  # Keep for latest_state
+            log_entry[sector_name] = sector_data_values
+            sector_data[sector_name] = sector_data_values
 
         if self.log_to_db:
             # Store nested structure in MongoDB
@@ -85,7 +81,12 @@ class DataLogger:
             for sector_name, sector_data_values in kwargs.items():
                 if isinstance(sector_data_values, dict):
                     for key, value in sector_data_values.items():
-                        flat_record[f"{sector_name}_{key}"] = value
+                        # Special-case performance.metrics to expand per metric
+                        if sector_name == "performance" and key == "metrics" and isinstance(value, dict):
+                            for mid, mval in value.items():
+                                flat_record[f"metric_{mid}"] = mval
+                        else:
+                            flat_record[f"{sector_name}_{key}"] = value
                 else:
                     flat_record[sector_name] = sector_data_values
 
