@@ -3,12 +3,12 @@ from typing import Dict, Any, List, Optional, Protocol
 
 class Policy(Protocol):
     """Policy protocol for pluggable policies."""
+
     id: str
     name: str
     enabled: bool
 
-    def apply(self, engine: "PolicyEngine") -> Dict[str, Any]:
-        ...
+    def apply(self, engine: "PolicyEngine") -> Dict[str, Any]: ...
 
 
 class DustCoverageThrottlePolicy:
@@ -16,6 +16,7 @@ class DustCoverageThrottlePolicy:
     Throttle science and manufacturing based on Dust Coverage indicator.
     Keeps operations above a minimum floor to avoid total shutdown.
     """
+
     id = "PLCY-DUST-THROTTLE"
     name = "Dust Coverage Throttling"
     enabled = True
@@ -39,8 +40,10 @@ class DustCoverageThrottlePolicy:
 
         return {self.id: effects}
 
+
 class PolicyEngine:
     """Extensible policy engine that centralizes scoring and applies policies."""
+
     def __init__(self, world):
         self.world = world
         self._policies: List[Policy] = [
