@@ -70,6 +70,7 @@ class ProximaRunner:
             energy=ws.model_metrics["energy"],
             science=ws.model_metrics["science"],
             manufacturing=ws.model_metrics["manufacturing"],
+            performance=ws.model_metrics.get("performance", {}),
             latest_state=self._build_state(ws.steps, continuous),
         )
 
