@@ -179,6 +179,112 @@ Figure 3 Proxima Model Operation Flow
 
 # Dynamical Architecture
 
+## Dynamics
+
+### Agent Evolution with Resource Production and Environmental Side-effects
+
+**ICE Extraction Agents**
+
+$$
+X^{(\mathrm{ICE})}_t = A_{\mathrm{ICE}} \, X^{(\mathrm{ICE})}_{t-1} + B_{\mathrm{ICE}} \, P^{(\mathrm{ICE})}_t + C_{\mathrm{ICE}} \, E^{(\mathrm{ICE})}_t
+$$
+
+Where:
+$$
+X^{(\mathrm{ICE})}_t =
+\begin{bmatrix}
+H_2 \\
+O_2 \\
+E_{\text{dust}} \\
+E_{\text{surface}}
+\end{bmatrix}
+$$
+
+**Explanation:**  
+- Models **state update** for ICE extraction agents mining lunar ice for hydrogen and oxygen.  
+- $A_{\mathrm{ICE}}$: persistence/decay from previous timestep.  
+- $B_{\mathrm{ICE}}$: effect of **policies** (extraction rate, dust suppression, energy allocation).  
+- $C_{\mathrm{ICE}}$: effect of **external events** (equipment failure, impacts).  
+- Tracks both **outputs** (H₂, O₂) and **side-effects** (dust, surface degradation).
+
+---
+
+**Regolith Extraction Agents**
+
+$$
+X^{(\mathrm{REG})}_t = A_{\mathrm{REG}} \, X^{(\mathrm{REG})}_{t-1} + B_{\mathrm{REG}} \, P^{(\mathrm{REG})}_t + C_{\mathrm{REG}} \, E^{(\mathrm{REG})}_t
+$$
+
+Where:
+$$
+X^{(\mathrm{REG})}_t =
+\begin{bmatrix}
+\mathrm{He}_3 \\
+\mathrm{Metal} \\
+E_{\text{dust}} \\
+E_{\text{surface}}
+\end{bmatrix}
+$$
+
+**Explanation:**  
+- Similar to ICE extraction but for **regolith mining** (producing helium-3 and metals).  
+- Includes same **environmental impact tracking** variables for aggregation.
+
+---
+
+### Science Metric as Technology Unlock Driver
+$$
+S_t = S_{t-1} + \eta_{\mathrm{SCI}} \cdot r_{\mathrm{SCI}}(t) - \delta_{\mathrm{SCI}} \, S_{t-1}
+$$
+
+Unlock condition:
+$$
+S_t \geq S_{\mathrm{fusion}} \quad \Rightarrow \quad \text{Fusion technology unlocked}
+$$
+
+**Explanation:**  
+- $S_t$: cumulative science score.  
+- $\eta_{\mathrm{SCI}}$: science efficiency per rover-hour/mission.  
+- $r_{\mathrm{SCI}}(t)$: science rate at time \(t\).  
+- $\delta_{\mathrm{SCI}}$: knowledge decay rate.  
+- Crossing $S_{\mathrm{fusion}}$ unlocks helium-3 fusion tech.
+
+---
+
+### World System State Aggregation
+$$
+X^{(\mathrm{WSB})}_t = \omega_{\mathrm{ICE}} \, X^{(\mathrm{ICE})}_t + \omega_{\mathrm{REG}} \, X^{(\mathrm{REG})}_t + \omega_{\mathrm{SCI}} \, S_t
+$$
+
+Extension of the manuscript’s:
+$$
+X^{(\mathrm{WS})}_t = \sum_{i=1}^N \omega_i \, X^{(i)}_t
+$$
+
+**Explanation:**  
+- Aggregates ICE, REG, and SCI states into one composite lunar system state.  
+- Weights $\omega$ represent subsystem importance.
+
+---
+
+### Environmental Impact – Lunar Specialization
+$$
+E^{(\mathrm{Lunar})}_t = \gamma_1 E^{(\mathrm{Lunar})}_{t-1} + \gamma_2 \left( E_{\text{dust}} + E_{\text{surface}} \right) + \gamma_3 N_t - \gamma_4 P_{\mathrm{mitigation},t}
+$$
+
+**Explanation:**  
+- $E^{(\mathrm{Lunar})}_t$: total environmental impact index.  
+- $\gamma_1$: persistence of previous damage.  
+- $\gamma_2$: impact of dust and surface degradation.  
+- $\gamma_3 N_t$: effect of number of active agents/missions.  
+- $\gamma_4 P_{\mathrm{mitigation},t}$: mitigation policy effects.
+
+---
+
+
+
+## Policies
+
 ### Manufacturing Sector Priority Management Policy
 
 The Priority-as-Token Deficit Round Robin (DRR) scheduler is used to fairly allocate simulation “turns” among manufacturing tasks based on their assigned priorities. Each task earns tokens at a rate equal to its priority when it is runnable, and only runnable tasks can accumulate tokens (no banking while blocked). At each simulation step, the task with the highest token balance is selected to run, with a round-robin pointer breaking ties. After a task runs and produces work, a fixed number of tokens is spent from its balance. This approach ensures that over time, the share of turns each task receives is proportional to its priority, while still guaranteeing that lower-priority tasks get opportunities to run if they remain available. In our manufacturing sector, this DRR mechanism drives the selection of operational modes for ISRU extractors and generators, balancing He3 production, metal processing, water extraction, regolith mining, and electrolysis according to dynamic mission priorities.
@@ -299,7 +405,7 @@ With each phase/component, the world system will have:
 | Phase  | Goal |
 | ------ | ---- |
 | Phase 1 | Base infrastructure for simulation and expansion. |
-| Phase 2 | World system can grow.<br>Stress testing capabilities are in place, including Monte Carlo. Post-processing capabilities are added. |
+| Phase 2 | World system can grow.<br>Stress testing capabilities are in place, including Monte Carlo. Post-processing capabilities are added. Host mongo DB server. Host Proxima UI Engine with mongodb linkage.|
 | Phase 3 | Incorporate Econosphere.<br>Add fidelity in environmental effects of operations (this will require deep research). |
 | Phase 4 | Incorporate Sociosphere |
 | Phase 5 | Incorporate human psychosis. |

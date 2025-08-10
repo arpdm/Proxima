@@ -71,6 +71,7 @@ class ScienceSector:
         """
         self.step_science_generated = 0.0
         self.total_power_used = 0.0
+        self.operational_rovers_count = 0  # Track operational rovers for metrics
 
         # Throttle effective usable power
         remaining_power = available_power * self.throttle_factor
@@ -88,6 +89,10 @@ class ScienceSector:
                 self.total_power_used += power_used
                 self.step_science_generated += science_generated
 
+                # Count operational rovers (those that actually used power/generated science)
+                if power_used > 0 or science_generated > 0:
+                    self.operational_rovers_count += 1
+
         # Update cumulative science
         self.total_science_cumulative += self.step_science_generated
         return self.total_power_used, self.step_science_generated
@@ -95,13 +100,19 @@ class ScienceSector:
     def _create_metric_map(self):
         """
         Create a map of metric IDs and their corresponding values.
-        Each task, operations, has certain impacts on the world system state space. Some have positivie impact, some negative impact.
+        Only contributes metrics if rovers actually operated in this step.
+
         Returns:
             dict: A dictionary where keys are metric IDs and values are their contributions.
         """
         metric_map = {}
-        value = float(self.metric_contributions.get("value", self.metric_contributions.get("contribution_value", 0.0)))
-        metric_map["IND-DUST-COV"] = len(self.science_rovers) * value * self.throttle_factor
+
+        # Only calculate contributions if there are operational rovers
+        if hasattr(self, 'operational_rovers_count') and self.operational_rovers_count > 0:
+            value = float(self.metric_contributions.get("value", self.metric_contributions.get("contribution_value", 0.0)))
+            metric_id = self.metric_contributions.get("metric_id", "IND-DUST-COV")
+            metric_map[metric_id] = self.operational_rovers_count * value
+            
         return metric_map
 
     def get_metrics(self):
@@ -111,12 +122,10 @@ class ScienceSector:
         Returns:
             dict: Science metrics for logging
         """
-
-        # Compute per-step metric contributions from configured rovers
         return {
             "science_generated": self.step_science_generated,
             "total_science_cumulative": self.total_science_cumulative,
-            "operational_rovers": len(self.science_rovers),
+            "operational_rovers": getattr(self, 'operational_rovers_count', 0),
             "total_power_demand": self.total_power_demand,
             "metric_contributions": self._create_metric_map(),
         }

@@ -75,6 +75,10 @@ class ManufacturingSector:
         self.isru_extractors = []
         self.isru_generators = []
         self.config = config
+        
+        # Initialize metric contribution tracking
+        self.extractor_metric_contributions = {}
+        self.generator_metric_contributions = {}
 
         # Initialize ISRU agents based on configuration
         agents_config = self.config.get("agents_config", [])
@@ -336,6 +340,10 @@ class ManufacturingSector:
         Returns:
             float: Unused power returned to world system
         """
+        # Initialize operational tracking for metrics
+        self.operational_extractors_count = 0
+        self.operational_generators_count = 0
+        
         if allocated_power <= 0 or self.sector_state == "inactive":
             return allocated_power
 
@@ -375,6 +383,7 @@ class ManufacturingSector:
                 extractor_used += power_used
                 if power_used > 0:
                     self.active_operations += 1
+                    self.operational_extractors_count += 1  # Track operational extractors
 
         # Execute generation operations with remaining power (unthrottled)
         for generator in self.isru_generators:
@@ -389,11 +398,13 @@ class ManufacturingSector:
                 remaining_power -= power_used
                 if power_used > 0:
                     self.active_operations += 1
+                    self.operational_generators_count += 1  # Track operational generators
             elif generator_demand == 0:
                 generated_resources, consumed_resources, power_used = generator.generate_resources(0, self.stocks)
                 if generated_resources:
                     self.add_stock_flow("ISRU_Generator_NoP", consumed_resources, generated_resources)
                     self.active_operations += 1
+                    self.operational_generators_count += 1  # Track operational generators
 
         self.process_all_stock_flows()
         self.total_power_consumed += self.step_power_consumed
@@ -407,7 +418,8 @@ class ManufacturingSector:
     def _create_metric_map(self):
         """
         Create a map of metric IDs and their corresponding values.
-
+        Only contributes metrics if agents actually operated in this step.
+        
         Returns:
             dict: A dictionary where keys are metric IDs and values are their contributions.
         """
@@ -417,7 +429,7 @@ class ManufacturingSector:
                 "value", self.extractor_metric_contributions.get("contribution_value", 0.0)
             )
         )
-        metric_map["IND-DUST-COV"] = len(self.isru_extractors) * value * self.extractor_throttle
+        metric_map["IND-DUST-COV"] = self.operational_extractors_count * value
         return metric_map
 
     def get_metrics(self):
@@ -431,6 +443,8 @@ class ManufacturingSector:
             "power_demand": self.get_power_demand(),
             "power_consumed": self.step_power_consumed,
             "active_operations": self.active_operations,
+            "operational_extractors": getattr(self, 'operational_extractors_count', 0),  # Actual operational count
+            "operational_generators": getattr(self, 'operational_generators_count', 0),  # Actual operational count
             "sector_state": self.sector_state,
             "stock_H2_kg": self.stocks.get("H2_kg", 0),
             "stock_O2_kg": self.stocks.get("O2_kg", 0),
