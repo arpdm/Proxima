@@ -404,17 +404,17 @@ With each phase/component, the world system will have:
 
 | Phase  | Goal |
 | ------ | ---- |
-| Phase 1 | Base infrastructure for simulation and expansion. |
-| Phase 2 | World system can grow.<br>Stress testing capabilities are in place, including Monte Carlo. Post-processing capabilities are added. Host mongo DB server. Host Proxima UI Engine with mongodb linkage.|
-| Phase 3 | Incorporate Econosphere.<br>Add fidelity in environmental effects of operations (this will require deep research). |
-| Phase 4 | Incorporate Sociosphere |
-| Phase 5 | Incorporate human psychosis. |
-| Phase 6 | Incorporate Governance. Consolidate adaptive & control-informed strategies into a governance layer. Formalize learned policies and thresholds.<br>- Fuzzy Logic Systems<br>- Rule-Based Systems with adaptive thresholds<br>- Game Theory + Policy Evaluation |
-| Phase 7 | World system can advance. |
-| Phase 8 | Run system identification to fit surrogate models.<br>Translate ABM dynamics to differential equations.<br>Predict future behavior & design model-driven policies. |
-| Phase 9 | World System can adapt. |
-| Phase 10 | Cislunar policy definition. Explore how external policy forces (e.g., Earth-based governance) influence the internal dynamics of the World System Beta.<br><br>How centralized mandates affect autonomy<br>- Control-based resistance or adaptation strategies<br>- Energy governance under Earth-imposed restrictions |
-| Phase 11 | Develop a formal policy framework. Establish robust guidelines for decision-making, decentralized governance, and ethical constraints.<br>- Policy Synthesis Engine: aggregates lessons across phases<br>- Decision Tree Learning: derived from simulation logs<br>- Ethics & Constraint Engines: embed safety boundaries<br>- Policy Provenance Logs: ensure transparency and traceability |
+| Phase 1 [X] | Base infrastructure for simulation and expansion. |
+| Phase 2 [] | World system can grow.<br>Stress testing capabilities are in place, including Monte Carlo. Post-processing capabilities are added. Host mongo DB server. Host Proxima UI Engine with mongodb linkage.|
+| Phase 3 [] | Incorporate Econosphere.<br>Add fidelity in environmental effects of operations (this will require deep research). |
+| Phase 4 []| Incorporate Sociosphere |
+| Phase 5 []| Incorporate human psychosis. |
+| Phase 6 []| Incorporate Governance. Consolidate adaptive & control-informed strategies into a governance layer. Formalize learned policies and thresholds.<br>- Fuzzy Logic Systems<br>- Rule-Based Systems with adaptive thresholds<br>- Game Theory + Policy Evaluation |
+| Phase 7 []| World system can advance. |
+| Phase 8 []| Run system identification to fit surrogate models.<br>Translate ABM dynamics to differential equations.<br>Predict future behavior & design model-driven policies. |
+| Phase 9 []| World System can adapt. |
+| Phase 10 []| Cislunar policy definition. Explore how external policy forces (e.g., Earth-based governance) influence the internal dynamics of the World System Beta.<br><br>How centralized mandates affect autonomy<br>- Control-based resistance or adaptation strategies<br>- Energy governance under Earth-imposed restrictions |
+| Phase 11 []| Develop a formal policy framework. Establish robust guidelines for decision-making, decentralized governance, and ethical constraints.<br>- Policy Synthesis Engine: aggregates lessons across phases<br>- Decision Tree Learning: derived from simulation logs<br>- Ethics & Constraint Engines: embed safety boundaries<br>- Policy Provenance Logs: ensure transparency and traceability |
 
 ---
 

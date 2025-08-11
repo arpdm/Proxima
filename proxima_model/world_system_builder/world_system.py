@@ -69,31 +69,27 @@ class WorldSystem(Model):
 
         # Metrics are now a flat list on config
         self.metric_definitions = self.config.get("metrics", [])
-
         # Runtime metric state - store as direct float values
         self.performance_metrics = {
-            mdef.get("id"): 0.0
-            for mdef in self.metric_definitions
-            if isinstance(mdef, dict) and mdef.get("id")
+            mdef.get("id"): 0.0 for mdef in self.metric_definitions if isinstance(mdef, dict) and mdef.get("id")
         }
 
         # Environment dynamics
         self.dust_decay_per_step = float(self.config.get("dust_decay_per_step", 0.0))
-
         # Policy engine (centralizes scoring + throttling)
         self.policy = PolicyEngine(self)
 
     def _initialize_sectors(self):
         """Initialize all sectors dynamically based on configuration."""
         agents_config = self.config.get("agents_config", {})
-        
+
         # Initialize each sector based on their specific constructor requirements
         if "energy" in agents_config:
             self.sectors["energy"] = EnergySector(self, agents_config["energy"])
-        
+
         if "science" in agents_config:
             self.sectors["science"] = ScienceSector(agents_config["science"])
-        
+
         if "manufacturing" in agents_config:
             self.sectors["manufacturing"] = ManufacturingSector(self, agents_config["manufacturing"])
 
@@ -105,9 +101,12 @@ class WorldSystem(Model):
             tuple: (sector_power_allocations_dict, sector_priorities_dict)
         """
         # Get all operational sectors (excluding energy)
-        operational_sectors = {name: sector for name, sector in self.sectors.items() 
-                              if name != "energy" and hasattr(sector, "get_power_demand")}
-        
+        operational_sectors = {
+            name: sector
+            for name, sector in self.sectors.items()
+            if name != "energy" and hasattr(sector, "get_power_demand")
+        }
+
         # Initialize tracking dictionaries
         sector_power_weights = {name: 0.0 for name in operational_sectors}
         sector_priorities = {name: {} for name in operational_sectors}
@@ -120,7 +119,7 @@ class WorldSystem(Model):
             for sector_name, sector_config in sector_weights.items():
                 if sector_name not in operational_sectors:
                     continue  # Skip unknown sectors
-                    
+
                 if isinstance(sector_config, dict):
                     # Accumulate power allocation weights
                     power_alloc = sector_config.get("power_allocation", 0.0)
@@ -133,21 +132,19 @@ class WorldSystem(Model):
                             sector_priorities[sector_name][task] = current_priority + (goal_weight * task_weight)
 
         # Calculate power demands and allocations
-        sector_demands = {name: sector.get_power_demand() 
-                         for name, sector in operational_sectors.items()}
+        sector_demands = {name: sector.get_power_demand() for name, sector in operational_sectors.items()}
         total_demand = sum(sector_demands.values())
-        
+
         if total_demand <= available_power:
             # Sufficient power - give each sector what it needs
             return sector_demands, sector_priorities
-        
+
         # Insufficient power - allocate proportionally based on goal weights
         total_weight = sum(sector_power_weights.values())
         if total_weight == 0:
             # No goal weights - distribute equally
             equal_share = available_power / len(operational_sectors) if operational_sectors else 0
-            sector_allocated = {name: min(demand, equal_share) 
-                               for name, demand in sector_demands.items()}
+            sector_allocated = {name: min(demand, equal_share) for name, demand in sector_demands.items()}
         else:
             # Distribute based on normalized goal weights
             sector_allocated = {}
@@ -163,8 +160,7 @@ class WorldSystem(Model):
         self.policy.apply_policies()
 
         # Get operational sectors and calculate total power demand
-        operational_sectors = {name: sector for name, sector in self.sectors.items() 
-                          if name != "energy"}
+        operational_sectors = {name: sector for name, sector in self.sectors.items() if name != "energy"}
         total_power_demand = sum(sector.get_power_demand() for sector in operational_sectors.values())
 
         # Generate available power
@@ -178,7 +174,7 @@ class WorldSystem(Model):
         for sector_name, sector in operational_sectors.items():
             allocated_power = sector_allocated.get(sector_name, 0)
             priorities = sector_priorities.get(sector_name, {})
-            
+
             if hasattr(sector, "set_priorities") and priorities:
                 sector.set_priorities(priorities)
             sector.step(allocated_power)
