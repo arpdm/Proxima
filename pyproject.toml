@@ -14,11 +14,17 @@ py-events = "^0.1.2"
 numpy = "^1.26.4"
 scipy = "^1.13.0"
 pandas = "2.2.2"
+SNAKES = "*"
+black="*"
+pymongo="4.13"
 
 # Visualization Libraries
 matplotlib = "3.8.2"
 plotly = "5.18.0"
 seaborn = "^0.13.2"
+dash = "^2.16.1"
+dash-bootstrap-components = "^1.6.0"
+dash-ag-grid = "31.3.1"
 
 # Dynamical Systems & Control
 control = "^0.9.4"               # Python Control Systems Library
@@ -39,8 +45,23 @@ orjson = "^3.9.15"
 eventlet = "^0.35.2"
 pyyaml = "^6.0.2"
 
+[tool.black]
+line-length = 120
+target-version = ['py39']
+include = '\.pyi?$' # Includes .py and .pyi files
+exclude = '''
+    /(
+        \.git         # Exclude .git directories
+        | \.mypy_cache # Exclude mypy cache
+        | \.venv      # Exclude virtual environments
+        | \.github    # Exclude .github directory
+    )/
+'''
+
 [tool.poetry.scripts]
-world-system-beta = "proxima_model.sims.world_system_beta:main"
+world-system-beta = "proxima_model.world_systems.world_system_beta:main"
+world-system-db-setup = "data_engine.initial_db_setup:main"
+proxima-runner = "runner.proxima_runner:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
