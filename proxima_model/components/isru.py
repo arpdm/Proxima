@@ -32,7 +32,7 @@ class ISRUExtractor(Agent):
         """Set the operational mode for this extractor."""
         if mode in self.extraction_modes:
             self.operational_mode = mode
-            print(f"Extractor operational mode set to: {mode}")
+            # print(f"Extractor operational mode set to: {mode}")
         else:
             print(f"Invalid mode {mode}. Available modes: {self.extraction_modes}")
 
@@ -109,7 +109,7 @@ class ISRUGenerator(Agent):
 
         self.efficiency = config.get("efficiency", 0.85)
         self.processing_time_t = config.get("processing_time_t", 5)
-        self.generator_modes = config.get("generator_modes", ["HE3", "METAL", "ELECTROLYSIS"])
+        self.generator_modes = config.get("generator_modes", ["HE3", "METAL", "ELECTROLYSIS","INACTIVE"])
 
         # Set initial operational mode to first available mode
         self.operational_mode = self.generator_modes[0] if self.generator_modes else "ELECTROLYSIS"
@@ -156,7 +156,7 @@ class ISRUGenerator(Agent):
             )
         elif self.operational_mode == "METAL":
             can_operate = stocks.get("FeTiO3_kg", 0) >= self.regolith_processing_input_kg
-
+        
         if not can_operate:
             return {}, {}, 0  # Can't operate - insufficient power or resources
 

@@ -75,29 +75,36 @@ class ManufacturingSector:
         self.isru_extractors = []
         self.isru_generators = []
         self.config = config
-        
+
         # Initialize metric contribution tracking
         self.extractor_metric_contributions = {}
         self.generator_metric_contributions = {}
 
-        # Initialize ISRU agents based on configuration
-        agents_config = self.config.get("agents_config", [])
-        for agent_config in agents_config:
+        # Process ISRU extractors
+        extractor_configs = self.config.get("isru_extractors", [])
+        for agent_config in extractor_configs:
             metric_contribution = agent_config.get("metric_contribution")
             quantity = agent_config.get("quantity", 1)
-            subtype = agent_config.get("subtype")
-            merged_config = agent_config.get("config")
+            merged_config = agent_config.get("config", {})
 
-            # Create agents based on quantity
+            # Create extractor agents based on quantity
             for _ in range(quantity):
-                if subtype == "extractor":
-                    agent = ISRUExtractor(self.model, merged_config)
-                    self.extractor_metric_contributions = metric_contribution
-                    self.isru_extractors.append(agent)
-                elif subtype == "generator":
-                    agent = ISRUGenerator(self.model, merged_config)
-                    self.generator_metric_contributions = metric_contribution
-                    self.isru_generators.append(agent)
+                agent = ISRUExtractor(self.model, merged_config)
+                self.extractor_metric_contributions = metric_contribution
+                self.isru_extractors.append(agent)
+
+        # Process ISRU generators  
+        generator_configs = self.config.get("isru_generators", [])
+        for agent_config in generator_configs:
+            metric_contribution = agent_config.get("metric_contribution")
+            quantity = agent_config.get("quantity", 1)
+            merged_config = agent_config.get("config", {})
+
+            # Create generator agents based on quantity
+            for _ in range(quantity):
+                agent = ISRUGenerator(self.model, merged_config)
+                self.generator_metric_contributions = metric_contribution or {}
+                self.isru_generators.append(agent)
 
         # Resource stocks - loaded from database
         self.stocks = config.get(
@@ -111,6 +118,7 @@ class ManufacturingSector:
                 "He3_kg": 0.0,
             },
         )
+
 
         # Stock flow transaction system
         self.pending_stock_flows = []
@@ -208,16 +216,6 @@ class ManufacturingSector:
     def _execute_task(self, task):
         """
         Execute the selected manufacturing task by setting agent operational modes.
-
-        Maps high-level manufacturing tasks to specific agent configurations:
-        - He3: Requires regolith extraction + He3 generation
-        - Metal: Requires regolith extraction + metal processing
-        - Water: Requires ice extraction only
-        - Regolith: Requires regolith extraction only
-        - Electrolysis: Requires ice extraction + electrolysis generation
-
-        Args:
-            task: Manufacturing task name
         """
         task_modes = {
             "He3": ("HE3", "REGOLITH"),
@@ -229,10 +227,17 @@ class ManufacturingSector:
 
         if task in task_modes:
             generator_mode, extractor_mode = task_modes[task]
+            
+            # Always set generator modes - either to the required mode or inactive
             if generator_mode:
                 self._set_generator_modes(generator_mode)
+            else:
+                self._set_generator_modes("INACTIVE")
+                
             if extractor_mode:
                 self._set_extractor_modes(extractor_mode)
+            else:
+                self._set_extractor_modes("INACTIVE")
 
     def _set_extractor_modes(self, mode):
         """Set all extractors to specified operational mode."""
@@ -318,7 +323,7 @@ class ManufacturingSector:
         # Apply throttle to extractors only
         extractor_demand = sum(agent.get_power_demand() for agent in self.isru_extractors)
         generator_demand = sum(agent.get_power_demand() for agent in self.isru_generators)
-        return extractor_demand * self.extractor_throttle + generator_demand
+        return extractor_demand + generator_demand
 
     def step(self, allocated_power):
         """
@@ -348,6 +353,7 @@ class ManufacturingSector:
             return allocated_power
 
         selected_task = self._deficit_round_robin_scheduler()
+
         if selected_task is None:
             self._set_all_agents_inactive()
             return allocated_power
@@ -360,7 +366,7 @@ class ManufacturingSector:
         remaining_power = allocated_power
 
         # Throttled budget for extractors
-        extractor_budget = allocated_power * self.extractor_throttle
+        extractor_budget = allocated_power
         extractor_used = 0.0
 
         # Execute extraction operations first (respect throttle budget)
@@ -388,7 +394,7 @@ class ManufacturingSector:
         # Execute generation operations with remaining power (unthrottled)
         for generator in self.isru_generators:
             generator_demand = generator.get_power_demand()
-            if generator_demand > 0 and remaining_power >= generator_demand:
+            if generator_demand > 0 and remaining_power >= generator_demand and generator:
                 generated_resources, consumed_resources, power_used = generator.generate_resources(
                     generator_demand, self.stocks
                 )
@@ -456,33 +462,23 @@ class ManufacturingSector:
         }
 
     def _get_available_operations_for_task(self, task):
-        """
-        Check if operations are available for the given task.
-
-        Args:
-            task: Manufacturing task name
-
-        Returns:
-            bool: True if task can be executed
-        """
-        if task == "He3":
-            # Need generators and extractors operational
-            return len(self.isru_generators) > 0 and len(self.isru_extractors) > 0
-        elif task == "Metal":
-            # Need generators and extractors operational
-            return len(self.isru_generators) > 0 and len(self.isru_extractors) > 0
-        elif task == "Water":
-            # Need extractors operational
-            return len(self.isru_extractors) > 0
-        elif task == "Regolith":
-            # Need extractors operational
-            return len(self.isru_extractors) > 0
-        elif task == "Electrolysis":
-            # Need generators and water stock
-            return len(self.isru_generators) > 0 and self.stocks.get("H2O_kg", 0) > 0
-
+        """Get available operations for a task, respecting throttling."""
+        
+        # Calculate throttled agent counts
+        max_extractors = max(0, int(len(self.isru_extractors) * self.extractor_throttle))
+        max_generators = max(0, int(len(self.isru_generators)))
+        
+        # Tasks that need BOTH extractors AND generators
+        if task in ["He3", "Metal", "Electrolysis"]:
+            # Return True only if BOTH agent types are available
+            return (max_extractors > 0 and max_generators > 0)
+        
+        # Tasks that need extractors only
+        elif task in ["Regolith", "Water"]:
+            return (max_extractors > 0)
+        
         return False
-
+    
     def _set_all_agents_inactive(self):
         """Set all agents to inactive state to minimize power consumption."""
         for agent in self.isru_extractors + self.isru_generators:

@@ -203,13 +203,8 @@ class WorldSystem(Model):
     def _build_metric_scores(self, selected_ids=None):
         """
         Build a unified score report for metrics (environment + goal-linked).
-
-        Args:
-            selected_ids (list[str] | None): If provided, only include these metric IDs.
-
-        Returns:
-            dict: { metric_id: {name, unit, type, threshold_low, threshold_high, current, status, score, goal? } }
         """
+
         # Map definitions by id
         defs_by_id = {m.get("id"): m for m in self.metric_definitions if isinstance(m, dict) and m.get("id")}
 
@@ -228,7 +223,6 @@ class WorldSystem(Model):
         report = {}
         for metric_id in ids:
             mdef = defs_by_id.get(metric_id, {})
-            # Fix: Get current value directly as float, not from nested dict
             current = float(self.performance_metrics.get(metric_id, 0.0))
             low = float(mdef.get("threshold_low", 0.0)) if mdef else 0.0
             high = float(mdef.get("threshold_high", 1.0)) if mdef else 1.0
