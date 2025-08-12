@@ -146,6 +146,7 @@ This section defines the contract between strategy and execution in Proxima. It 
 
 
 ![Reverse Policy Flow](resources/reverse_policy_flow.png)
+
 Figure 1 Reverse Policy Flow
 
 Proxima adopts a goal-first, policy-from-data loop rather than traditional hand-crafted policy design. We declare high-level goals, run the world system, and let reinforcement learning search the control space to discover policies that meet those goals under constraints. From the resulting trajectories, we perform system identification and policy distillation to extract compact, human-readable policy equations (e.g., parametric rules or MPC-compatible forms), then re-insert and test those policies in simulation for stability, safety, and performance. This approach leverages RL’s ability to find non-obvious strategies in complex, coupled environments, while ending with interpretable, auditable policies suitable for governance and deployment.
@@ -156,6 +157,7 @@ Success hinges on good engineering: clear rewards tied to goals (with constraint
 # Structural Architecture
 
 ![Model Component Diagram](resources/Model_Component_Diagram.jpg)
+
 Figure 2 Proxima Model Component Diagram
 
 ## Proxima DB:
@@ -175,6 +177,7 @@ Simulation loop controller that builds the config, instantiates World System, ru
 
 
 ![Proxima Model Operation Flow](resources/Simulation_Flow_CONOPS.jpg)
+
 Figure 3 Proxima Model Operation Flow
 
 # Dynamical Architecture
@@ -185,12 +188,13 @@ Figure 3 Proxima Model Operation Flow
 
 **ICE Extraction Agents**
 
-$$
+```math
 X^{(\mathrm{ICE})}_t = A_{\mathrm{ICE}} \, X^{(\mathrm{ICE})}_{t-1} + B_{\mathrm{ICE}} \, P^{(\mathrm{ICE})}_t + C_{\mathrm{ICE}} \, E^{(\mathrm{ICE})}_t
-$$
+```
 
 Where:
-$$
+
+```math
 X^{(\mathrm{ICE})}_t =
 \begin{bmatrix}
 H_2 \\
@@ -198,7 +202,7 @@ O_2 \\
 E_{\text{dust}} \\
 E_{\text{surface}}
 \end{bmatrix}
-$$
+```
 
 **Explanation:**  
 - Models **state update** for ICE extraction agents mining lunar ice for hydrogen and oxygen.  
@@ -211,12 +215,13 @@ $$
 
 **Regolith Extraction Agents**
 
-$$
+```math
 X^{(\mathrm{REG})}_t = A_{\mathrm{REG}} \, X^{(\mathrm{REG})}_{t-1} + B_{\mathrm{REG}} \, P^{(\mathrm{REG})}_t + C_{\mathrm{REG}} \, E^{(\mathrm{REG})}_t
-$$
+```
 
 Where:
-$$
+
+```math
 X^{(\mathrm{REG})}_t =
 \begin{bmatrix}
 \mathrm{He}_3 \\
@@ -224,7 +229,7 @@ X^{(\mathrm{REG})}_t =
 E_{\text{dust}} \\
 E_{\text{surface}}
 \end{bmatrix}
-$$
+```
 
 **Explanation:**  
 - Similar to ICE extraction but for **regolith mining** (producing helium-3 and metals).  
@@ -233,14 +238,16 @@ $$
 ---
 
 ### Science Metric as Technology Unlock Driver
-$$
+
+```math
 S_t = S_{t-1} + \eta_{\mathrm{SCI}} \cdot r_{\mathrm{SCI}}(t) - \delta_{\mathrm{SCI}} \, S_{t-1}
-$$
+```
 
 Unlock condition:
-$$
+
+```math
 S_t \geq S_{\mathrm{fusion}} \quad \Rightarrow \quad \text{Fusion technology unlocked}
-$$
+```
 
 **Explanation:**  
 - $S_t$: cumulative science score.  
@@ -252,14 +259,16 @@ $$
 ---
 
 ### World System State Aggregation
-$$
+
+```math
 X^{(\mathrm{WSB})}_t = \omega_{\mathrm{ICE}} \, X^{(\mathrm{ICE})}_t + \omega_{\mathrm{REG}} \, X^{(\mathrm{REG})}_t + \omega_{\mathrm{SCI}} \, S_t
-$$
+```
 
 Extension of the manuscript’s:
-$$
+
+```math
 X^{(\mathrm{WS})}_t = \sum_{i=1}^N \omega_i \, X^{(i)}_t
-$$
+```
 
 **Explanation:**  
 - Aggregates ICE, REG, and SCI states into one composite lunar system state.  
@@ -268,9 +277,10 @@ $$
 ---
 
 ### Environmental Impact – Lunar Specialization
-$$
+
+```math
 E^{(\mathrm{Lunar})}_t = \gamma_1 E^{(\mathrm{Lunar})}_{t-1} + \gamma_2 \left( E_{\text{dust}} + E_{\text{surface}} \right) + \gamma_3 N_t - \gamma_4 P_{\mathrm{mitigation},t}
-$$
+```
 
 **Explanation:**  
 - $E^{(\mathrm{Lunar})}_t$: total environmental impact index.  
@@ -301,13 +311,14 @@ The Priority-as-Token Deficit Round Robin (DRR) scheduler is used to fairly allo
 * τ > 0 (token cost per turn; typically τ=1)
 
 #### 1) Token Top-Up (No Banking While Blocked)
-$$
+
+```math
 DC_i^{+}(t) =
 \begin{cases}
 DC_i(t) + p_i(t), & \text{if } A_i(t)=1 \text{ and } p_i(t) > 0, \\
 0, & \text{otherwise}.
 \end{cases}
-$$
+```
 
 **Description:** If a task is runnable (`A_i(t)=1`) and has positive priority, it earns tokens equal to its priority. If it’s blocked or has zero priority, its token balance is reset to 0.
 
