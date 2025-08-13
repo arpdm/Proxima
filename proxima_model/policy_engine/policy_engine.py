@@ -13,8 +13,40 @@ class Policy(Protocol):
 
 class DustCoverageThrottlePolicy:
     """
-    Throttle science and manufacturing based on Dust Coverage indicator.
-    Keeps operations above a minimum floor to avoid total shutdown.
+    Policy: Dust Coverage Throttling
+
+    Dynamically throttles activity in specified sectors (default: science and manufacturing)
+    based on the current Dust Coverage metric. This policy prevents total shutdown by enforcing
+    a minimum throttle floor, ensuring that operations continue at a reduced rate even under
+    adverse environmental conditions.
+
+    Parameters
+    ----------
+    metric_id : str
+        The metric ID to monitor for dust coverage (default: "IND-DUST-COV").
+    min_throttle : float
+        The minimum allowed throttle factor (default: 0.2). Operations will not be throttled below this value.
+    sectors : Optional[List[str]]
+        List of sector names to apply throttling to (default: ["science", "manufacturing"]).
+
+    Usage
+    -----
+    This policy is intended to be registered with the PolicyEngine. On each step, it:
+      - Computes a normalized score for the dust coverage metric (0 = worst, 1 = best).
+      - Sets the throttle factor for each target sector to max(min_throttle, score).
+      - Calls each sector's `set_throttle_factor` method if available.
+
+    Returns
+    -------
+    Dict[str, Any]
+        A dictionary keyed by policy ID, containing the metric, score, throttle value,
+        and a list of sectors affected.
+
+    Notes
+    -----
+    - Sectors must implement a `set_throttle_factor(float)` method for throttling to take effect.
+    - The policy is robust to metric fluctuations and avoids complete operational shutdowns
+      by maintaining a baseline level of activity.
     """
 
     id = "PLCY-DUST-THROTTLE"

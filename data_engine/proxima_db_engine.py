@@ -9,8 +9,6 @@ from pymongo.server_api import ServerApi
 
 class ProximaDB:
     def __init__(self, uri="mongodb://localhost:27017", db_name="proxima_db"):
-
-        uri = "mongodb+srv://arpiderm:PromiseOfProxims2025@proxima.t0bnv0m.mongodb.net/?retryWrites=true&w=majority&appName=Proxima"
         self.client = MongoClient(uri, server_api=ServerApi('1'))
         self.db = self.client[db_name]
 

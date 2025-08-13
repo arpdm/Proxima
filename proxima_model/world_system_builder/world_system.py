@@ -59,6 +59,7 @@ class WorldSystem(Model):
         super().__init__(seed=seed)
         self.config = config
         self.running = True
+        
 
         self.sectors = {}
         self._initialize_sectors()

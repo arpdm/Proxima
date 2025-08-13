@@ -295,6 +295,10 @@ E^{(\mathrm{Lunar})}_t = \gamma_1 E^{(\mathrm{Lunar})}_{t-1} + \gamma_2 \left( E
 
 ## Policies
 
+### Dust Coverage Index - Throttling
+
+[x] TBD
+
 ### Manufacturing Sector Priority Management Policy
 
 The Priority-as-Token Deficit Round Robin (DRR) scheduler is used to fairly allocate simulation “turns” among manufacturing tasks based on their assigned priorities. Each task earns tokens at a rate equal to its priority when it is runnable, and only runnable tasks can accumulate tokens (no banking while blocked). At each simulation step, the task with the highest token balance is selected to run, with a round-robin pointer breaking ties. After a task runs and produces work, a fixed number of tokens is spent from its balance. This approach ensures that over time, the share of turns each task receives is proportional to its priority, while still guaranteeing that lower-priority tasks get opportunities to run if they remain available. In our manufacturing sector, this DRR mechanism drives the selection of operational modes for ISRU extractors and generators, balancing He3 production, metal processing, water extraction, regolith mining, and electrolysis according to dynamic mission priorities.
@@ -416,7 +420,7 @@ With each phase/component, the world system will have:
 | Phase  | Goal | Status |
 | ------ | ---- | ------ |
 | Phase 1 | Base infrastructure for simulation and expansion. | ✅ |
-| Phase 2 [] | World system can grow.<br>Stress testing capabilities are in place, including Monte Carlo. Post-processing capabilities are added. Host mongo DB server. Host Proxima UI Engine with mongodb linkage.| 🚧 |
+| Phase 2 | World system can grow.<br>Stress testing capabilities are in place, including Monte Carlo. Post-processing capabilities are added. Host mongo DB server. Host Proxima UI Engine with mongodb linkage.| 🚧 |
 | Phase 3 | Incorporate Econosphere.<br>Add fidelity in environmental effects of operations (this will require deep research). |  |
 | Phase 4 | Incorporate Sociosphere |  |
 | Phase 5 | Incorporate human psychosis. |  |

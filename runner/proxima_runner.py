@@ -4,6 +4,7 @@ ProximaRunner: Simplified simulation runner with UI command support.
 
 import time
 import traceback
+import argparse
 
 from data_engine.proxima_db_engine import ProximaDB
 from proxima_model.world_system_builder.world_system_builder import build_world_system_config
@@ -11,9 +12,22 @@ from proxima_model.world_system_builder.world_system import WorldSystem
 from proxima_model.tools.data_logger import DataLogger
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Proxima Simulation Runner")
+    parser.add_argument("--headless", action="store_true", help="Run in headless mode (no UI commands)")
+    parser.add_argument("--db", choices=["local", "hosted"], default="local", help="Choose database: local or hosted")
+    parser.add_argument("--mongo-uri", type=str, default=None, help="MongoDB URI (overrides db choice)")
+    return parser.parse_args()
+
 class ProximaRunner:
-    def __init__(self):
-        self.proxima_db = ProximaDB()
+    def __init__(self, mongo_uri=None):
+
+        if mongo_uri:
+            uri = mongo_uri
+        else: # Local
+            uri = "mongodb://localhost:27017"
+
+        self.proxima_db = ProximaDB(uri=uri)
         self.proxima_db.db.db.logs_simulation.delete_many({})  # Clear old logs
 
         # Get experiment config
@@ -33,7 +47,7 @@ class ProximaRunner:
         continuous = continuous if continuous is not None else (self.sim_time is None)
 
         config = build_world_system_config(self.ws_id, self.exp_id, self.proxima_db)
-        ws = WorldSystem(config)
+        ws = WorldSystem(config, 100)
         self._reset_state()
 
         try:
@@ -187,19 +201,32 @@ class ProximaRunner:
 
 
 def main():
-    runner = ProximaRunner()
+
+    args = parse_args()
+    
+    # Determine MongoDB URI
+    if args.mongo_uri:
+        mongo_uri = args.mongo_uri
+    elif args.db == "local":
+        mongo_uri = None  # Use local
+    else:
+        mongo_uri = None  # Use local
+
+    runner = ProximaRunner(mongo_uri=mongo_uri)
 
     try:
-        while True:
-            if not runner.is_running:
-                if runner._check_startup_commands():
-                    continue
-            time.sleep(1)
-
+        if args.headless:
+            print("Running Proxima in Headless Mode")
+            runner.run(continuous=True)
+        else:
+            while True:
+                if not runner.is_running:
+                    if runner._check_startup_commands():
+                        continue
+                time.sleep(1)
     except KeyboardInterrupt:
         print("\nShutting down...")
         runner.is_running = False
-
 
 if __name__ == "__main__":
     main()
