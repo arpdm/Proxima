@@ -438,11 +438,10 @@ With each phase/component, the world system will have:
 | Logger can take snapshot of currently running world system state. | Phase 1 |
 | Logger can store system goals. | Phase 1 |
 | Logger can store policies. | Phase 1 |
-| Logger can store disturbance scenarios. | Phase 2 |
+| Logger can store disturbance scenarios. |  |
 | Logger can store world system agents. | Phase 1 |
 | Logger can store environment. | Phase 1 |
 | Logger can store world system advancement mission profiles. | |
-| Logger | Phase 3 |
 | Logger logs time series data to CSV or HDF5 | Phase 1 |
 | Logger will save time-series data with skipping steps defined | Phase 1 |
 
@@ -482,6 +481,7 @@ With each phase/component, the world system will have:
 | The UI can show live simulation data | Phase 1 |
 | The UI can show time-series plots | Phase 1 |
 | The UI can configure which parameters to plot | Phase 1 |
+| The UI is hosted on Cloud Runner | Phase 2 |
 
 ---
 
@@ -492,7 +492,7 @@ With each phase/component, the world system will have:
 | The simulation can run Monte Carlo | Phase 2 |
 | The simulation can run scenario-discovery | |
 | The simulation can run scenarios (defined in database) | |
-| The simulation can support stochastic runs | |
+| The simulation can support stochastic runs | Phase 2|
 | The simulation can resume from existing world system state | |
 
 ---
@@ -502,6 +502,7 @@ With each phase/component, the world system will have:
 | Capability | Development Phase |
 | ---------- | ----------------- |
 | Base infrastructure policies for science, energy, and economy. Not closed loop. | Phase 1 |
+| Growth policities | Phase 2 |
 | Bio-Inspired algorithms | |
 
 ---
@@ -511,8 +512,8 @@ With each phase/component, the world system will have:
 | Capability | Development Phase |
 | ---------- | ----------------- |
 | Chaos Analysis | |
-| Lyapunov exponent / bifurcation detection | |
-| Sensitivity mapping | |
+| Lyapunov exponent / bifurcation detection | Phase 2 |
+| Sensitivity Analysis | Phase 2 |
 | Dynamic policy tuning | |
 | Structural optimization of world system | |
 
@@ -524,17 +525,29 @@ With each phase/component, the world system will have:
 | ---------- | ----------------- |
 | *(No entries provided)* | |
 
----
 
-### 6.10. Post Processor
+
+### 6.10. Model
 
 | Capability | Development Phase |
 | ---------- | ----------------- |
-| The post processor can analyze simulation logs | |
+| World System Can Expand - | Phase 2 |
+| World System Can Import From World System Alpha | Phase 2 |
+| World System Has Nuclear Power | Phase 2 |
+| World System Has Rockers | Phase 2 |
+| World System Has Assembly Robots and 3D Printing Robots | Phase 2 |
+
+---
+
+### 6.11. Post Processor
+
+| Capability | Development Phase |
+| ---------- | ----------------- |
+| The post processor can analyze simulation logs - Post Processing Infrastructure | Phase 2 |
 | The post processor can compute system metrics | |
 | The post processor can generate summaries and comparative metrics | |
-| The processor can feed data to complexity engine with derived inputs | |
-| The post processor can analyze Monte Carlo runs and generate necessary statistics/plots. | |
+| The processor can feed data to complexity engine with derived inputs | Phase 2 |
+| The post processor can analyze Monte Carlo runs and generate necessary statistics/plots. (1) Feature Scoring (2) Heat Maps (3) Random Forest Feature Importance (4) Pair Scatter Plots (5) Time Series | Phase 2 |
 
 ---
 
