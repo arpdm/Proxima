@@ -74,7 +74,42 @@ class DustCoverageThrottlePolicy:
 
 
 class PolicyEngine:
-    """Extensible policy engine that centralizes scoring and applies policies."""
+    """
+    Extensible policy engine that centralizes scoring and applies policies.
+
+    The PolicyEngine manages a registry of operational policies, computes normalized scores
+    for world system metrics, and applies enabled policies to the simulation world. It supports
+    dynamic addition, enabling/disabling, and listing of policies.
+
+    Parameters
+    ----------
+    world : object
+        The simulation world object, which must provide metric definitions, sector access,
+        and a method for retrieving current metric values.
+
+    Attributes
+    ----------
+    _policies : List[Policy]
+        List of registered policy objects.
+
+    Methods
+    -------
+    score(metric_id: str) -> float
+        Returns a normalized score (0..1) for the given metric, based on its thresholds and type.
+    add_policy(policy: Policy) -> None
+        Registers a new policy with the engine.
+    enable_policy(policy_id: str, enabled: bool = True) -> bool
+        Enables or disables a policy by its ID.
+    list_policies() -> List[Dict[str, Any]]
+        Returns a summary of all registered policies and their status.
+    apply_policies() -> Dict[str, Any]
+        Applies all enabled policies and returns their aggregated effects.
+
+    Usage
+    -----
+    The PolicyEngine is typically instantiated with the simulation world and used to
+    manage and apply policies at each simulation step. Policies must implement the Policy protocol.
+    """
 
     def __init__(self, world):
         self.world = world
@@ -82,9 +117,21 @@ class PolicyEngine:
             DustCoverageThrottlePolicy(),  # default policy
         ]
 
-    # Scoring utility shared by all policies
     def score(self, metric_id: str) -> float:
-        """Return 0..1 score from current metric vs thresholds. 1=good."""
+        """
+        Return a normalized score (0..1) for the given metric.
+        1 = good, 0 = bad, based on metric type and thresholds.
+
+        Parameters
+        ----------
+        metric_id : str
+            The metric ID to score.
+
+        Returns
+        -------
+        float
+            Normalized score for the metric.
+        """
         mdef = next((m for m in self.world.metric_definitions if m.get("id") == metric_id), None)
         if not mdef:
             return 1.0
@@ -96,11 +143,33 @@ class PolicyEngine:
         score = (cur - low) / span if mtype == "positive" else (high - cur) / span
         return max(0.0, min(1.0, score))
 
-    # Policy registry management
     def add_policy(self, policy: Policy) -> None:
+        """
+        Register a new policy with the engine.
+
+        Parameters
+        ----------
+        policy : Policy
+            The policy object to add.
+        """
         self._policies.append(policy)
 
     def enable_policy(self, policy_id: str, enabled: bool = True) -> bool:
+        """
+        Enable or disable a policy by its ID.
+
+        Parameters
+        ----------
+        policy_id : str
+            The ID of the policy to enable/disable.
+        enabled : bool, optional
+            Whether to enable (True) or disable (False) the policy.
+
+        Returns
+        -------
+        bool
+            True if the policy was found and updated, False otherwise.
+        """
         for p in self._policies:
             if getattr(p, "id", None) == policy_id:
                 p.enabled = enabled
@@ -108,13 +177,28 @@ class PolicyEngine:
         return False
 
     def list_policies(self) -> List[Dict[str, Any]]:
+        """
+        List all registered policies and their status.
+
+        Returns
+        -------
+        List[Dict[str, Any]]
+            List of dictionaries summarizing each policy.
+        """
         return [
             {"id": getattr(p, "id", None), "name": getattr(p, "name", None), "enabled": getattr(p, "enabled", False)}
             for p in self._policies
         ]
 
-    # Apply all enabled policies and return aggregated effects
     def apply_policies(self) -> Dict[str, Any]:
+        """
+        Apply all enabled policies and return aggregated effects.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Dictionary of effects from all applied policies.
+        """
         effects: Dict[str, Any] = {}
         for policy in self._policies:
             if getattr(policy, "enabled", False):

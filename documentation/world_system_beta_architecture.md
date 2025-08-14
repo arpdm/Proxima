@@ -448,6 +448,9 @@ With each phase/component, the world system will have:
 | Logger can store world system advancement mission profiles. | |  |
 | Logger logs time series data to CSV or HDF5 | Phase 1 | ✅ |
 | Logger will save time-series data with skipping steps defined | Phase 1 | ✅ |
+| Logger logs on local server every DT Time | Phase 2  | 🚧 |
+| Logger logs on hosted server every DT Time | Phase 2 | 🚧 |
+
 
 ---
 
@@ -485,7 +488,7 @@ With each phase/component, the world system will have:
 | The UI can show live simulation data | Phase 1 | ✅ |
 | The UI can show time-series plots | Phase 1 | ✅ |
 | The UI can configure which parameters to plot | Phase 1 | ✅ |
-| The UI is hosted on Cloud Runner | Phase 2 | 🚧 |
+| The Read only versio of the UI is hosted on Cloud Runner | Phase 2 | 🚧 |
 
 ---
 
@@ -497,7 +500,7 @@ With each phase/component, the world system will have:
 | The simulation can run scenario-discovery | |  |
 | The simulation can run scenarios (defined in database) | |  |
 | The simulation can support stochastic runs | Phase 2| 🚧 |
-| The simulation can resume from existing world system state | |  |
+| The simulation can resume from existing world system state | Phase 2 | 🚧 |
 
 ---
 
@@ -517,7 +520,7 @@ With each phase/component, the world system will have:
 | ---------- | ----------------- | ------ |
 | Chaos Analysis |  |  |
 | Lyapunov exponent / bifurcation detection | Phase 2 | 🚧 |
-| Sensitivity Analysis | Phase 2 | 🚧 |
+| Sensitivity Analysis Platform | Phase 2 | 🚧 |
 | Dynamic policy tuning | |  |
 | Structural optimization of world system | |  |
 

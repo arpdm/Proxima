@@ -57,9 +57,9 @@ from proxima_model.policy_engine.policy_engine import PolicyEngine
 class WorldSystem(Model):
     def __init__(self, config, seed=None):
         super().__init__(seed=seed)
+        
         self.config = config
         self.running = True
-        
 
         self.sectors = {}
         self._initialize_sectors()

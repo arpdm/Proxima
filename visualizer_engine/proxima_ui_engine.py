@@ -7,6 +7,8 @@ import dash_ag_grid as dag
 import time
 import json
 import math
+import os
+
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 
@@ -21,6 +23,8 @@ class ProximaUI:
         self.db = db
         self.exp_id = experiment_id
         self.app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
+        self.update_rate = 1000
+        self.update_cycles = 60
         
         # Style constants
         self.COLORS = {
@@ -387,7 +391,7 @@ class ProximaUI:
 
         # Main layout
         self.app.layout = dbc.Container([
-            dcc.Interval(id="interval-component", interval=1000, n_intervals=0),
+            dcc.Interval(id="interval-component", interval=self.update_rate, n_intervals=self.update_cycles),
             
             # Header
             html.Div([
@@ -736,7 +740,15 @@ class ProximaUI:
 
     def run(self):
         """Run the dashboard application"""
-        self.app.run(debug=True, host='0.0.0.0', port=8050)
+        # Check if running in production (Cloud Run)
+        if os.environ.get('PORT'):
+            # Production mode - don't run here, let gunicorn handle it
+            print("running in read only cloud runner mode")
+            return self.app
+        else:
+            # Development mode
+            print("running in development mode")
+            self.app.run(debug=True, host='0.0.0.0', port=8050)
 
 
 if __name__ == "__main__":
