@@ -10,8 +10,11 @@ import certifi
 from pymongo.server_api import ServerApi
 
 class ProximaDB:
-    def __init__(self, uri="mongodb://localhost:27017", db_name="proxima_db"):
-        self.client = MongoClient(uri, server_api=ServerApi('1'), tls=True, tlsCAFile=certifi.where())
+    def __init__(self, uri="mongodb://localhost:27017", db_name="proxima_db", local = True):
+        if local:
+            self.client = MongoClient(uri)
+        else:
+            self.client = MongoClient(uri, server_api=ServerApi('1'), tls=True, tlsCAFile=certifi.where())
         self.db = self.client[db_name]
 
     # General Helpers

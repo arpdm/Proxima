@@ -19,12 +19,13 @@ def parse_args():
     parser.add_argument("--mongo-uri", type=str, default=None, help="MongoDB URI (overrides db choice)")
     return parser.parse_args()
 
+
 class ProximaRunner:
     def __init__(self, mongo_uri=None):
 
         if mongo_uri:
             uri = mongo_uri
-        else: # Local
+        else:  # Local
             uri = "mongodb://localhost:27017"
 
         self.proxima_db = ProximaDB(uri=uri)
@@ -163,14 +164,7 @@ class ProximaRunner:
         try:
             # Update the world system document with current state
             self.proxima_db.db["world_systems"].update_one(
-                {"_id": self.ws_id},
-                {
-                    "$set": {
-                        "latest_state": current_state,
-                        "last_updated": time.time()
-                    }
-                },
-                upsert=True
+                {"_id": self.ws_id}, {"$set": {"latest_state": current_state, "last_updated": time.time()}}, upsert=True
             )
         except Exception as e:
             print(f"Failed to update world system state: {e}")
@@ -203,7 +197,7 @@ class ProximaRunner:
 def main():
 
     args = parse_args()
-    
+
     # Determine MongoDB URI
     if args.mongo_uri:
         mongo_uri = args.mongo_uri
@@ -227,6 +221,7 @@ def main():
     except KeyboardInterrupt:
         print("\nShutting down...")
         runner.is_running = False
+
 
 if __name__ == "__main__":
     main()

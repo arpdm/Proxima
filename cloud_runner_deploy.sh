@@ -16,7 +16,7 @@ gcloud run deploy proxima \
   --min-instances 0 \
   --max-instances 10 \
   --timeout 300 \
-  --set-env-vars EXPERIMENT_ID=exp_001 \
+  --env-vars-file cloud_runner_env.yaml \
   --set-secrets MONGODB_URI=mongodb-uri:latest
 
 echo "Proxima UI Deployment complete!"

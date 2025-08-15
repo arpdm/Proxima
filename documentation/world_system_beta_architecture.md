@@ -63,7 +63,7 @@ This section defines the simulation’s functional contract—what **Proxima** c
 
 ---
 
-### 1.1.2 Goals Injections and Updates
+### Goals Injections and Updates
 
 - **Parametric goals:** World-system goals are expressed in parametric form (metric, target/bounds, horizon, weight), enabling versioning, comparison, and optimization.  
 - **External updates:** Authorized external actors (human or supervisory policy engine) may inject new goals or modify existing ones at runtime. All changes are timestamped, versioned, and auditable.  
@@ -380,6 +380,7 @@ $$
 
 **Description:** A task is considered available if its agents exist, the current stock `x(t)` meets or exceeds its resource requirements `r_i`, and there is positive power budget `B(t)`.
 
+
 ---
 
 #### 6) Long-Run Fairness
@@ -390,6 +391,10 @@ $$
 $$
 
 **Description:** Over a long horizon, the proportion of turns assigned to each task converges to its priority share. This ensures fair allocation of simulation time proportional to priorities.
+
+
+### Growth and Expansion Policies
+TBD
 
 
 ## 6. Proxima Capabilities
@@ -488,7 +493,7 @@ With each phase/component, the world system will have:
 | The UI can show live simulation data | Phase 1 | ✅ |
 | The UI can show time-series plots | Phase 1 | ✅ |
 | The UI can configure which parameters to plot | Phase 1 | ✅ |
-| The Read only versio of the UI is hosted on Cloud Runner | Phase 2 | 🚧 |
+| The Read only version of the UI is hosted on Cloud Runner | Phase 2 | ✅ |
 
 ---
 
