@@ -20,12 +20,15 @@ from data_engine.proxima_db_engine import ProximaDB
 class ProximaUI:
     """ProximaUI: Dashboard for Proxima simulation with time series plotting."""
 
-    def __init__(self, db, experiment_id="exp_001", update_rate_ms=1000, update_cycles=1, read_only=True):
+    def __init__(
+        self, db, experiment_id="exp_001", update_rate_ms=1000, update_cycles=1, read_only=True, ts_data_count=200
+    ):
         self.db = db
         self.exp_id = experiment_id
         self.app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
         self.update_rate = update_rate_ms
         self.update_cycles = update_cycles
+        self.ts_data_count = ts_data_count
         self.read_only = read_only  # If in public server, the simulation control panel is disabled.
 
         # Style constants
@@ -79,26 +82,18 @@ class ProximaUI:
         except Exception:
             return None
 
-    def fetch_latest_logs(self, limit: int = 500) -> Optional[pd.DataFrame]:
+    def fetch_latest_logs(self, limit: int = 200) -> Optional[pd.DataFrame]:
         """Fetch latest logs with sliding window"""
         try:
-            # Get latest step
-            latest_log = self.fetch_collection(
-                "logs_simulation", {"experiment_id": self.exp_id}, sort=("step", -1), limit=1
-            )
-            if not latest_log:
-                return None
 
-            latest_step = latest_log[0].get("step", 0)
-            start_step = max(0, latest_step - limit + 1)
-
-            # Fetch logs in range
             docs = self.fetch_collection(
                 "logs_simulation",
-                {"experiment_id": self.exp_id, "step": {"$gte": start_step, "$lte": latest_step}},
-                sort=("step", 1),
+                {"experiment_id": self.exp_id},
+                sort=("step", -1),
+                limit=limit,
             )
 
+            docs = list(reversed(docs))  # Now docs[0] is oldest, docs[-1] is newest
             return self._flatten_logs_to_dataframe(docs)
 
         except Exception as e:
@@ -262,6 +257,7 @@ class ProximaUI:
 
     def _status_badge(self, status: str, score: float = None) -> dbc.Badge:
         """Create status badge with appropriate color"""
+
         color_map = {"within": "success", "outside": "danger", "unknown": "warning"}
         color = color_map.get((status or "").lower(), "secondary")
         label = status if score is None else f"{status} ({score:.2f})"
@@ -269,14 +265,12 @@ class ProximaUI:
 
     def build_metric_tracker_table(self) -> html.Table:
         """Build metric tracker table with improved styling"""
-        latest_logs = self.fetch_collection(
-            "logs_simulation", {"experiment_id": self.exp_id}, sort=("timestamp", -1), limit=1
-        )
 
-        if not latest_logs:
+        ws = self.get_world_system_data()
+        if not ws:
             return html.Div("No metric scores yet.", className="text-secondary text-center")
 
-        scores = (latest_logs[0].get("performance", {}) or {}).get("scores", {}) or {}
+        scores = (ws.get("latest_state", {}).get("sectors", {}).get("performance", {}) or {}).get("scores", {}) or {}
         if not scores:
             return html.Div("No metric scores yet.", className="text-secondary text-center")
 
@@ -669,7 +663,7 @@ class ProximaUI:
             if n > 3:  # Only update options in first few cycles
                 return dash.no_update, dash.no_update
 
-            df = self.fetch_latest_logs()
+            df = self.fetch_latest_logs(limit=self.ts_data_count)
             if df is None or df.empty:
                 return [], []
 
@@ -784,15 +778,19 @@ class ProximaUI:
             else:
                 status = f"🔴 OFFLINE - Sol {step}"
 
-        # Get latest sector data
-        latest_logs = self.fetch_collection(
-            "logs_simulation", {"experiment_id": self.exp_id}, sort=("timestamp", -1), limit=1
-        )
-
         # Base style using dark background color
         base_style = {"fontSize": "13px", "padding": "8px 12px", "backgroundColor": "transparent"}
 
-        if not latest_logs:
+        ws = self.get_world_system_data()
+        latest_state = ws.get("latest_state", {}) if ws else {}
+        sectors = latest_state.get("sectors", {}) if latest_state else {}
+
+        energy = sectors.get("energy", {}) or {}
+        science = sectors.get("science", {}) or {}
+        mfg = sectors.get("manufacturing", {}) or {}
+        perf = sectors.get("performance", {}) or {}
+
+        if not ws or not latest_state:
             default_style = {**base_style, "border": "1px solid #6c757d", "color": "#6c757d"}
             return (
                 status,  # status-display children
@@ -805,12 +803,6 @@ class ProximaUI:
                 default_style,  # badge-mfg style
                 default_style,  # badge-dust style
             )
-
-        rec = latest_logs[0]
-        energy = rec.get("energy", {}) or {}
-        science = rec.get("science", {}) or {}
-        mfg = rec.get("manufacturing", {}) or {}
-        perf = rec.get("performance", {}) or {}
 
         # Power badge
         sup = energy.get("total_power_supply_kW", 0)
@@ -857,17 +849,13 @@ class ProximaUI:
 
     def _build_sector_data(self) -> List[Dict]:
         """Build sector data for the table with Sector column"""
-        latest_logs = self.fetch_collection(
-            "logs_simulation", {"experiment_id": self.exp_id}, sort=("timestamp", -1), limit=1
-        )
-
-        if not latest_logs:
+        ws = self.get_world_system_data()
+        if not ws:
             return [{"Sector": "No Data", "Metric": "No Data", "Value": "N/A", "_id": "no_data"}]
 
-        latest = latest_logs[0]
+        latest = ws.get("latest_state", {}).get("sectors", {})
         all_rows = []
 
-        # Define sectors to process
         sectors = {
             "Energy": latest.get("energy", {}),
             "Science": latest.get("science", {}),
@@ -878,14 +866,11 @@ class ProximaUI:
         for sector_name, sector_data in sectors.items():
             if not isinstance(sector_data, dict):
                 continue
-
             for k, v in sector_data.items():
-                # Handle complex values
                 if isinstance(v, (dict, list)):
                     v = json.dumps(v)
                 elif isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
                     v = str(v)
-
                 all_rows.append(
                     {"Sector": sector_name, "Metric": k, "Value": str(v), "_id": f"{sector_name.lower()}_{k}"}
                 )

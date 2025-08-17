@@ -12,10 +12,16 @@ def create_app():
     update_rate_ms = int(os.environ.get("UPDATE_RATE_MS", "1000"))
     update_cycles = int(os.environ.get("UPDATE_CYCLES", "1"))
     read_only = os.environ.get("READ_ONLY", "True").lower() == "true"
+    time_series_limit = int(os.environ.get("TIME_SERIES_LIMIT", "100"))
 
     db = ProximaDB(mongo_uri, local=False)
     ui = ProximaUI(
-        db, experiment_id=exp_id, update_rate_ms=update_rate_ms, update_cycles=update_cycles, read_only=read_only
+        db,
+        experiment_id=exp_id,
+        update_rate_ms=update_rate_ms,
+        update_cycles=update_cycles,
+        read_only=read_only,
+        ts_data_count=time_series_limit,
     )
 
     # Return the Dash app's Flask server

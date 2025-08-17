@@ -11,24 +11,28 @@ from proxima_model.world_system_builder.world_system_builder import build_world_
 from proxima_model.world_system_builder.world_system import WorldSystem
 from proxima_model.tools.data_logger import DataLogger
 
+# ==== DEF ====
+
+HOST_UPDATED_FREQUENCY = 600
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Proxima Simulation Runner")
     parser.add_argument("--headless", action="store_true", help="Run in headless mode (no UI commands)")
-    parser.add_argument("--db", choices=["local", "hosted"], default="local", help="Choose database: local or hosted")
     parser.add_argument("--mongo-uri", type=str, default=None, help="MongoDB URI (overrides db choice)")
     return parser.parse_args()
-
 
 class ProximaRunner:
     def __init__(self, mongo_uri=None):
 
         if mongo_uri:
-            uri = mongo_uri
+            hosted_uri = mongo_uri
+            print(hosted_uri)
         else:  # Local
-            uri = "mongodb://localhost:27017"
-
-        self.proxima_db = ProximaDB(uri=uri)
+            hosted_uri = "mongodb://localhost:27017"
+        
+        self.local_uri = "mongodb://localhost:27017"
+        self.proxima_db = ProximaDB(uri=self.local_uri)
+        self.proxima_hosted_db = ProximaDB(uri=hosted_uri) if hosted_uri else None
         self.proxima_db.db.db.logs_simulation.delete_many({})  # Clear old logs
 
         # Get experiment config
@@ -39,20 +43,27 @@ class ProximaRunner:
 
         # Setup state
         self.logger = DataLogger(experiment_id=self.exp_id, db=self.proxima_db, ws_id=self.ws_id)
+        self.hosted_logger = DataLogger(experiment_id=self.exp_id, db=self.proxima_hosted_db, ws_id=self.ws_id)
         self.is_running = False
         self.is_paused = False
+        self.continuous = True
+        self.ws = None
         self.step_delay = 0.1
+        self.host_update_frequency = HOST_UPDATED_FREQUENCY
 
     def run(self, continuous=None):
         """Main simulation runner."""
-        continuous = continuous if continuous is not None else (self.sim_time is None)
+        self.continuous = continuous if continuous is not None else (self.sim_time is None)
 
         config = build_world_system_config(self.ws_id, self.exp_id, self.proxima_db)
-        ws = WorldSystem(config, 100)
-        self._reset_state()
+        self.ws = WorldSystem(config, 100)
+        self.is_running = True
+        self.is_paused = False
+
+        update_counter = 0
 
         try:
-            while self.is_running and (continuous or ws.steps < self.sim_time):
+            while self.is_running and (continuous or self.ws.steps < self.sim_time):
                 self._process_commands()
 
                 if self.is_paused:
@@ -61,57 +72,22 @@ class ProximaRunner:
                 if not self.is_running:
                     break
 
-                self._execute_step(ws, continuous)
+                # Step the world system and update the state
+                self.ws.step()
+                update_counter += 1
+                update_hosted = (self.proxima_hosted_db and (update_counter >= self.host_update_frequency))
+                self._update_world_system_state(update_hosted=update_hosted)
+                if update_hosted:
+                    update_counter = 0
+                time.sleep(self.step_delay)
 
         except Exception as e:
             print(f"Simulation error: {e}")
             traceback.print_exc()
         finally:
-            self._cleanup()
-
-    def _reset_state(self):
-        """Reset runner state for new simulation."""
-        self.is_running = True
-        self.is_paused = False
-
-        # Update initial state in MongoDB
-        initial_state = self._build_state(0, True)
-        self._update_world_system_state(initial_state)
-
-    def _execute_step(self, ws, continuous):
-        """Execute single simulation step."""
-        ws.step()
-
-        # Build current state
-        current_state = self._build_state(ws.steps, continuous)
-
-        # GUIDE: Add per sector
-        self.logger.log(
-            step=ws.steps,
-            environment=ws.model_metrics["environment"],
-            energy=ws.model_metrics["energy"],
-            science=ws.model_metrics["science"],
-            manufacturing=ws.model_metrics["manufacturing"],
-            performance=ws.model_metrics.get("performance", {}),
-            latest_state=current_state,
-        )
-
-        # Update world system state in MongoDB
-        self._update_world_system_state(current_state)
-        time.sleep(self.step_delay)
-
-    def _build_state(self, step, continuous):
-        """Build current state object."""
-        return {
-            "step": step,
-            "simulation_status": {
-                "is_running": self.is_running,
-                "is_paused": self.is_paused,
-                "step_delay": self.step_delay,
-                "mode": "continuous" if continuous else "limited",
-                "timestamp": time.time(),
-            },
-        }
+            self.is_running = False
+            self.is_paused = False
+            self._update_world_system_state()
 
     def _process_commands(self):
         """Process runtime commands."""
@@ -144,30 +120,43 @@ class ProximaRunner:
             command_map[action]()
             print(f"Applied: {action}")
 
-            # Update state in MongoDB after command execution
-            current_state = self._build_state(0, True)  # Step will be updated in next iteration
-            self._update_world_system_state(current_state)
-
-    def _cleanup(self):
-        """Cleanup after simulation."""
-        self.is_running = False
-
-        # Update final state in MongoDB
-        final_state = self._build_state(0, False)
-        final_state["simulation_status"]["is_running"] = False
-        self._update_world_system_state(final_state)
-
-        self.logger.save_to_file()
-
-    def _update_world_system_state(self, current_state):
+    def _update_world_system_state(self, update_hosted=False):
         """Update world system state in MongoDB for UI access."""
-        try:
-            # Update the world system document with current state
-            self.proxima_db.db["world_systems"].update_one(
-                {"_id": self.ws_id}, {"$set": {"latest_state": current_state, "last_updated": time.time()}}, upsert=True
+
+        # Build current state
+        self.current_state = { 
+            "step": self.ws.steps,
+            "simulation_status": {
+                "is_running": self.is_running,
+                "is_paused": self.is_paused,
+                "step_delay": self.step_delay,
+                "mode": "continuous" if self.continuous else "limited",
+                "timestamp": time.time(),
+            },
+        }
+
+        # GUIDE: Add per sector
+        self.logger.log(
+            step= self.ws.steps,
+            environment= self.ws.model_metrics["environment"],
+            energy= self.ws.model_metrics["energy"],
+            science= self.ws.model_metrics["science"],
+            manufacturing= self.ws.model_metrics["manufacturing"],
+            performance= self.ws.model_metrics.get("performance", {}),
+            latest_state=self.current_state,
+        )
+
+        # Optionally update hosted DB
+        if update_hosted:
+            self.hosted_logger.log(
+                step=self.ws.steps,
+                environment=self.ws.model_metrics["environment"],
+                energy=self.ws.model_metrics["energy"],
+                science=self.ws.model_metrics["science"],
+                manufacturing=self.ws.model_metrics["manufacturing"],
+                performance=self.ws.model_metrics.get("performance", {}),
+                latest_state=self.current_state,
             )
-        except Exception as e:
-            print(f"Failed to update world system state: {e}")
 
     def _check_startup_commands(self):
         """Check for startup commands."""
@@ -201,10 +190,8 @@ def main():
     # Determine MongoDB URI
     if args.mongo_uri:
         mongo_uri = args.mongo_uri
-    elif args.db == "local":
-        mongo_uri = None  # Use local
     else:
-        mongo_uri = None  # Use local
+        mongo_uri = None
 
     runner = ProximaRunner(mongo_uri=mongo_uri)
 

@@ -292,114 +292,21 @@ E^{(\mathrm{Lunar})}_t = \gamma_1 E^{(\mathrm{Lunar})}_{t-1} + \gamma_2 \left( E
 ---
 
 
-
 ## Policies
 
 ### Dust Coverage Index - Throttling
-
 [x] TBD
 
 ### Manufacturing Sector Priority Management Policy
-
-The Priority-as-Token Deficit Round Robin (DRR) scheduler is used to fairly allocate simulation “turns” among manufacturing tasks based on their assigned priorities. Each task earns tokens at a rate equal to its priority when it is runnable, and only runnable tasks can accumulate tokens (no banking while blocked). At each simulation step, the task with the highest token balance is selected to run, with a round-robin pointer breaking ties. After a task runs and produces work, a fixed number of tokens is spent from its balance. This approach ensures that over time, the share of turns each task receives is proportional to its priority, while still guaranteeing that lower-priority tasks get opportunities to run if they remain available. In our manufacturing sector, this DRR mechanism drives the selection of operational modes for ISRU extractors and generators, balancing He3 production, metal processing, water extraction, regolith mining, and electrolysis according to dynamic mission priorities.
-
-**Sets and variables:**
-
-* t = 0,1,2,... (step index)
-* i ∈ 𝒯 = {He3, Metal, Water, Regolith, Electrolysis}
-* p_i(t) ≥ 0  (priority = tokens earned per step)
-* DC_i(t) ≥ 0 (deficit / token bank)
-* A_i(t) ∈ {0,1} (availability)
-* s(t) ∈ 𝒯 ∪ {∅} (selected task)
-* Y_i(t) ∈ {0,1} (work flag)
-* τ > 0 (token cost per turn; typically τ=1)
-
-#### 1) Token Top-Up (No Banking While Blocked)
-
-```math
-DC_i^{+}(t) =
-\begin{cases}
-DC_i(t) + p_i(t), & \text{if } A_i(t)=1 \text{ and } p_i(t) > 0, \\
-0, & \text{otherwise}.
-\end{cases}
-```
-
-**Description:** If a task is runnable (`A_i(t)=1`) and has positive priority, it earns tokens equal to its priority. If it’s blocked or has zero priority, its token balance is reset to 0.
-
----
-
-#### 2) Candidate Set and Winner (Max-Deficit; RR for Ties)
-$$
-\mathcal{C}(t) = \{\, i \in \mathcal{T} \mid A_i(t)=1,\ DC_i^{+}(t) > 0 \,\}
-$$
-
-$$
-DC^\star(t) = \max_{i \in \mathcal{C}(t)} DC_i^{+}(t)
-$$
-
-$$
-\mathcal{W}(t) = \{\, i \in \mathcal{C}(t) \mid DC_i^{+}(t) \ge DC^\star(t) - \varepsilon \,\}
-$$
-
-$$
-s(t) \in \mathcal{W}(t) \quad \text{(tie broken by round-robin)}
-$$
-
-**Description:** The scheduler selects from runnable tasks with positive tokens. The task(s) with the highest token balance form the winner set, and ties are broken using a round-robin pointer.
-
----
-
-#### 3) Token Spending (Per Turn, Only If Work Occurred)
-$$
-DC_{s(t)}(t+1) = \max\left(0,\, DC_{s(t)}^{+}(t) - \tau \cdot Y_{s(t)}(t)\right)
-$$
-
-$$
-DC_{j \ne s(t)}(t+1) = DC_{j}^{+}(t)
-$$
-
-**Description:** If the selected task completed work (`Y_{s(t)}=1`), it spends a fixed number of tokens `τ`. Non-selected tasks keep their updated balances.
-
----
-
-#### 4) Inactive Shortcut
-
-$$
-\sum_{i \in \mathcal{T}} p_i(t) = 0 \ \Longrightarrow\ \text{sector inactive at step } t
-$$
-
-**Description:** If all task priorities are zero, the manufacturing sector becomes inactive for that step, and no scheduling occurs.
-
----
-
-#### 5) Availability Example
-
-$$
-A_i(t) = \mathbf{1} \left[ \text{agents}(i) \land \mathbf{x}(t) \ge \mathbf{r}_i \land B(t) > 0 \right]
-$$
-
-**Description:** A task is considered available if its agents exist, the current stock `x(t)` meets or exceeds its resource requirements `r_i`, and there is positive power budget `B(t)`.
-
-
----
-
-#### 6) Long-Run Fairness
-
-$$
-\lim_{T \to \infty} \frac{1}{T} \sum_{t=1}^{T} \mathbf{1}[\,s(t)=i\,]
-= \frac{p_i}{\sum_{j \in \mathcal{T}} p_j}
-$$
-
-**Description:** Over a long horizon, the proportion of turns assigned to each task converges to its priority share. This ensures fair allocation of simulation time proportional to priorities.
-
+[x] TBD
 
 ### Growth and Expansion Policies
-TBD
+[x] TBD
 
 
-## 6. Proxima Capabilities
+## Proxima Capabilities
 
-### 6.1. Phases
+### Phases
 
 With each phase/component, the world system will have:
 
@@ -438,7 +345,7 @@ With each phase/component, the world system will have:
 
 ---
 
-### 6.2. Data Infrastructure
+### Data Infrastructure
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
@@ -453,13 +360,13 @@ With each phase/component, the world system will have:
 | Logger can store world system advancement mission profiles. | |  |
 | Logger logs time series data to CSV or HDF5 | Phase 1 | ✅ |
 | Logger will save time-series data with skipping steps defined | Phase 1 | ✅ |
-| Logger logs on local server every DT Time | Phase 2  | 🚧 |
-| Logger logs on hosted server every DT Time | Phase 2 | 🚧 |
+| Logger logs on local server every DT Time | Phase 2  | ✅ |
+| Logger logs on hosted server every DT Time | Phase 2 | ✅ |
 
 
 ---
 
-### 6.3. World System Configurator
+### World System Configurator
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
@@ -468,7 +375,7 @@ With each phase/component, the world system will have:
 
 ---
 
-### 6.4. Launcher
+### Launcher
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
@@ -481,7 +388,7 @@ With each phase/component, the world system will have:
 
 ---
 
-### 6.5. UI Engine
+### UI Engine
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
@@ -497,7 +404,7 @@ With each phase/component, the world system will have:
 
 ---
 
-### 6.6. Simulation
+### Simulation
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
@@ -509,7 +416,7 @@ With each phase/component, the world system will have:
 
 ---
 
-### 6.7. Policy Engine
+### Policy Engine
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
@@ -519,7 +426,7 @@ With each phase/component, the world system will have:
 
 ---
 
-### 6.8. Complexity Engine
+### Complexity Engine
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
@@ -531,7 +438,7 @@ With each phase/component, the world system will have:
 
 ---
 
-### 6.9. Event Engine
+### Event Engine
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
@@ -539,19 +446,20 @@ With each phase/component, the world system will have:
 
 ---
 
-### 6.10. Model
+### Model
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
 | World System Can Expand - | Phase 2 | 🚧 |
 | World System Can Import From World System Alpha | Phase 2 | 🚧 |
 | World System Has Nuclear Power | Phase 2 | 🚧 |
-| World System Has Rockers | Phase 2 | 🚧 |
-| World System Has Assembly Robots and 3D Printing Robots | Phase 2 |🚧  |
+| World System Has Rockets for transortation of cargo | Phase 2 | 🚧 |
+| World System Has Assembly Robots and 3D Printing Robots | Phase 2 | 🚧 |
+| Calculate contribution of each metric to sector | Phase 2 | 🚧 |
 
 ---
 
-### 6.11. Post Processor
+### Post Processor
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |

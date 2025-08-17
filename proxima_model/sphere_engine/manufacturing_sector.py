@@ -12,56 +12,39 @@ based on dynamic priority systems and available power budgets.
 CORE ALGORITHMS:
 ===============
 
-1. DEFICIT ROUND ROBIN (DRR) TASK SCHEDULING:
-   - Maintains deficit counters for each manufacturing task
-   - Calculates weighted deficits (deficit / priority) for fair scheduling
-   - Selects tasks with highest weighted deficit to prevent resource starvation
-   - Supports tasks: He3, Metal, Water, Regolith, Electrolysis
+1) Each managed stock has a target band [min, max] from config (defaults shown).
+2) At each step, compute deficiency = max(0, min_target - current_stock).
+3) Choose the task whose *primary output stock* has the largest deficiency,
+   but only if that task is currently feasible (agents available by type).
+4) If no deficiency > 0, set all agents INACTIVE and return unused power.
 
-2. AGENT STATE MANAGEMENT:
-   - Three states: active, inactive, decommissioned
-   - Automatic state transitions based on priority levels
-   - Power demand returns zero when agents are inactive
-   - Prevents unnecessary resource consumption during low-priority periods
-
-3. STOCK FLOW TRANSACTION SYSTEM:
-   - Pending stock flows accumulate during operations
-   - Atomic processing prevents race conditions
-   - Tracks resource consumption and generation separately
-   - Maintains resource conservation across all operations
-
-4. OPERATIONAL MODE COORDINATION:
-   - Maps manufacturing tasks to agent operational modes
-   - Coordinates extractor and generator modes for complex workflows
-   - Example: He3 production requires REGOLITH extraction + HE3 generation
-
-OPERATION FLOW:
-==============
-Initialization:
-- Create ISRU agents (extractors/generators) based on configuration
-- Initialize resource stocks from database values
-- Set up priority system and deficit counters
-
-Priority Update (from World System):
-- Receive new task priorities from goal-based allocation
-- Update agent states (active/inactive) based on priority levels
-- Configure operational modes for selected tasks
-
-Simulation Step:
-1. Check sector state - exit early if inactive
-2. Run DRR scheduler to select highest-priority task
-3. Set all agents to appropriate operational modes
-4. Execute extraction operations (if power available)
-5. Execute generation operations (if power available)
-6. Process all stock flow transactions atomically
-7. Update metrics and return unused power
 """
+from __future__ import annotations
 
+from typing import Dict, List, Tuple, Optional, Any
 from proxima_model.components.isru import ISRUExtractor, ISRUGenerator
 
 
 class ManufacturingSector:
     """Manages ISRU operations, resource stocks, and manufacturing processes."""
+
+    # Task → (generator_mode, extractor_mode)
+    TASK_TO_MODES: Dict[str, Tuple[Optional[str], Optional[str]]] = {
+        "He3": ("HE3", "REGOLITH"),
+        "Metal": ("METAL", "REGOLITH"),
+        "Water": (None, "ICE"),
+        "Regolith": (None, "REGOLITH"),
+        "Electrolysis": ("ELECTROLYSIS", "ICE"),
+    }
+
+    # Task → primary output stock key
+    TASK_TO_STOCK: Dict[str, str] = {
+        "He3": "He3_kg",
+        "Metal": "Metal_kg",
+        "Water": "H2O_kg",
+        "Regolith": "FeTiO3_kg",
+        "Electrolysis": "O2_kg",  # adjust if you track H2 separately or prioritize H2
+    }
 
     def __init__(self, model, config):
         """
@@ -72,177 +55,78 @@ class ManufacturingSector:
             config: Manufacturing configuration from database
         """
         self.model = model
-        self.isru_extractors = []
-        self.isru_generators = []
         self.config = config
+
+        self.isru_extractors: List[ISRUExtractor] = []
+        self.isru_generators: List[ISRUGenerator] = []
+        self.pending_stock_flows: List[Dict[str, Dict[str, float]]] = []
+        
+        self.extractor_throttle = 1.0  # 0..1 applied to extractors only
 
         # Initialize metric contribution tracking
         self.extractor_metric_contributions = {}
         self.generator_metric_contributions = {}
 
-        # Process ISRU extractors
-        extractor_configs = self.config.get("isru_extractors", [])
-        for agent_config in extractor_configs:
-            metric_contribution = agent_config.get("metric_contribution")
-            quantity = agent_config.get("quantity", 1)
-            merged_config = agent_config.get("config", {})
+        # Metrics
+        self.total_power_consumed = 0.0
+        self.step_power_consumed = 0.0
+        self.active_operations = 0
+        self.operational_extractors_count = 0
+        self.operational_generators_count = 0
 
-            # Create extractor agents based on quantity
-            for _ in range(quantity):
-                agent = ISRUExtractor(self.model, merged_config)
+        # Sector lifecycle
+        self.sector_state = "active"  # active|inactive|decommissioned
+
+        # Build agents
+        for agent_cfg in self.config.get("isru_extractors", []):
+            qty = agent_cfg.get("quantity", 1)
+            metric_contribution = agent_cfg.get("metric_contribution")
+            merged = agent_cfg.get("config", {})
+            for _ in range(qty):
+                self.isru_extractors.append(ISRUExtractor(self.model, merged))
                 self.extractor_metric_contributions = metric_contribution
-                self.isru_extractors.append(agent)
 
-        # Process ISRU generators
-        generator_configs = self.config.get("isru_generators", [])
-        for agent_config in generator_configs:
-            metric_contribution = agent_config.get("metric_contribution")
-            quantity = agent_config.get("quantity", 1)
-            merged_config = agent_config.get("config", {})
-
-            # Create generator agents based on quantity
-            for _ in range(quantity):
-                agent = ISRUGenerator(self.model, merged_config)
+        for agent_cfg in self.config.get("isru_generators", []):
+            metric_contribution = agent_cfg.get("metric_contribution")
+            qty = agent_cfg.get("quantity", 1)
+            merged = agent_cfg.get("config", {})
+            for _ in range(qty):
+                self.isru_generators.append(ISRUGenerator(self.model, merged))
                 self.generator_metric_contributions = metric_contribution or {}
-                self.isru_generators.append(agent)
 
-        # Resource stocks - loaded from database
-        self.stocks = config.get(
+        # Stocks
+        self.stocks: Dict[str, float] = config.get(
             "initial_stocks",
-            {
-                "H2_kg": 0.0,
-                "O2_kg": 0.0,
-                "H2O_kg": 0.0,
-                "FeTiO3_kg": 0.0,
-                "Metal_kg": 0.0,
-                "He3_kg": 0.0,
-            },
+            {"H2_kg": 0.0, "O2_kg": 0.0, "H2O_kg": 0.0, "FeTiO3_kg": 0.0, "Metal_kg": 0.0, "He3_kg": 0.0},
         )
 
-        # Stock flow transaction system
-        self.pending_stock_flows = []
-
-        # Performance metrics
-        self.total_power_consumed = 0
-        self.step_power_consumed = 0
-        self.active_operations = 0
-
-        # Priority-as-token DRR system
-        self.priorities = {}
-        self.deficit_counters = {}
-        self.sector_state = "active"  # active, inactive, decommissioned
-
-        # DRR token configuration
-        self.token_cost_per_turn = config.get("drr_token_cost_per_turn", 1.0)
-        self.task_order = ["He3", "Metal", "Water", "Regolith", "Electrolysis"]
-        self.rr_idx = 0
-        self.extractor_throttle = 1.0  # 0..1 applied to extractors only
-
-        # Initialize deficit counters for all tasks
-        for t in self.task_order:
-            self.deficit_counters.setdefault(t, 0.0)
-
-    def set_priorities(self, priorities_dict):
-        """
-        Set manufacturing sector priorities and update sector state.
-
-        Automatically transitions sector to inactive when all priorities are zero,
-        optimizing power consumption during low-priority periods.
-
-        Args:
-            priorities_dict: Task priorities from goal-based allocation
-        """
-        self.priorities.update(priorities_dict)
-
-        # Update sector state based on priorities
-        if all(priority == 0.0 for priority in self.priorities.values()):
-            self.sector_state = "inactive"
-            self._set_all_agents_inactive()
-        else:
-            self.sector_state = "active"
-            self._set_all_agents_active()
-
-        # Zero deficit counters for zero-priority tasks
-        for t, p in self.priorities.items():
-            if p == 0.0:
-                self.deficit_counters[t] = 0.0
-
-    def _deficit_round_robin_scheduler(self):
-        """
-        Priority-as-token DRR scheduler with max-DC + RR tie-breaking.
-        """
-        if not self.priorities or all(p == 0.0 for p in self.priorities.values()):
-            return None
-
-        # Cache availability once
-        avail = {t: bool(self._get_available_operations_for_task(t)) for t in self.task_order}
-
-        # Top-up tokens (only runnable + positive priority); zero otherwise
-        for t in self.task_order:
-            if avail[t] and self.priorities.get(t, 0.0) > 0.0:
-                self.deficit_counters[t] = self.deficit_counters.get(t, 0.0) + float(self.priorities[t])
-            else:
-                self.deficit_counters[t] = 0.0
-
-        # Candidates = runnable with positive DC
-        candidates = [t for t in self.task_order if avail[t] and self.deficit_counters.get(t, 0.0) > 0.0]
-        if not candidates:
-            return None
-
-        # Max-DC with RR tie-break
-        max_dc = max(self.deficit_counters[t] for t in candidates)
-        eps = 1e-9
-        winners = [t for t in self.task_order if t in candidates and self.deficit_counters[t] >= max_dc - eps]
-
-        # Improved round-robin selection among winners
-        if len(winners) == 1:
-            selected = winners[0]
-        else:
-            # Find the next winner in round-robin order
-            current_winner_idx = None
-            for i, task in enumerate(winners):
-                task_idx = self.task_order.index(task)
-                if task_idx >= self.rr_idx:
-                    current_winner_idx = i
-                    break
-
-            # If no winner found after current index, wrap around
-            if current_winner_idx is None:
-                current_winner_idx = 0
-
-            selected = winners[current_winner_idx]
-
-            # Update round-robin index to next position after selected task
-            selected_idx = self.task_order.index(selected)
-            self.rr_idx = (selected_idx + 1) % len(self.task_order)
-
-        return selected
-
-    def _execute_task(self, task):
-        """
-        Execute the selected manufacturing task by setting agent operational modes.
-        """
-        task_modes = {
-            "He3": ("HE3", "REGOLITH"),
-            "Metal": ("METAL", "REGOLITH"),
-            "Water": (None, "ICE"),
-            "Regolith": (None, "REGOLITH"),
-            "Electrolysis": ("ELECTROLYSIS", "ICE"),
+        # Minimal buffer targets (can be overridden via config['buffer_targets'])
+        default_targets = {
+            "He3_kg": {"min": 20,  "max": 300},
+            "Metal_kg": {"min": 20, "max": 300},
+            "H2O_kg": {"min": 0.0,  "max": 0.0},
+            "FeTiO3_kg": {"min": 20.0, "max": 100.0},
+            "O2_kg": {"min": 0.0,  "max": 0.0},
+        }
+        self.buffer_targets: Dict[str, Dict[str, float]] = {
+            **default_targets, **config.get("buffer_targets", {})
         }
 
-        if task in task_modes:
-            generator_mode, extractor_mode = task_modes[task]
-
-            # Always set generator modes - either to the required mode or inactive
-            if generator_mode:
-                self._set_generator_modes(generator_mode)
-            else:
-                self._set_generator_modes("INACTIVE")
-
-            if extractor_mode:
-                self._set_extractor_modes(extractor_mode)
-            else:
-                self._set_extractor_modes("INACTIVE")
+    def _apply_task_modes(self, task: str) -> None:
+        """Set agent' operational mode based on requested task"""
+        g_mode, e_mode = self.TASK_TO_MODES[task]
+        if g_mode:
+            for g in self.isru_generators:
+                g.set_operational_mode(g_mode)
+        else:
+            for g in self.isru_generators:
+                g.set_operational_mode("INACTIVE")
+        if e_mode:
+            for ex in self.isru_extractors:
+                ex.set_operational_mode(e_mode)
+        else:
+            for ex in self.isru_extractors:
+                ex.set_operational_mode("INACTIVE")
 
     def _set_extractor_modes(self, mode):
         """Set all extractors to specified operational mode."""
@@ -258,7 +142,9 @@ class ManufacturingSector:
         """Return current stocks (read-only copy)."""
         return self.stocks.copy()
 
-    def add_stock_flow(self, source_component, consumed_resources=None, generated_resources=None):
+    def add_stock_flow(self, source_component: str,
+                       consumed: Optional[Dict[str, float]] = None,
+                       generated: Optional[Dict[str, float]] = None) -> None:
         """
         Add a stock flow transaction to pending queue.
 
@@ -273,8 +159,8 @@ class ManufacturingSector:
         self.pending_stock_flows.append(
             {
                 "source": source_component,
-                "consumed": consumed_resources or {},
-                "generated": generated_resources or {},
+                "consumed": consumed or {},
+                "generated": generated or {},
             }
         )
 
@@ -330,19 +216,39 @@ class ManufacturingSector:
         generator_demand = sum(agent.get_power_demand() for agent in self.isru_generators)
         return extractor_demand + generator_demand
 
+    def _select_task_minimal(self) -> Optional[str]:
+        """Pick the single task with the largest positive deficiency.
+
+        deficiency(stock) = max(0, min_target - current_stock)
+        Only consider tasks whose agent types are available.
+        """
+        # Compute deficiency per task's primary stock
+        best_task: Optional[str] = None
+        best_def: float = 0.0
+
+        for task, stock_key in self.TASK_TO_STOCK.items():
+            if not self._available_for_task(task):
+                continue
+            tgt = self.buffer_targets.get(stock_key, {"min": 0.0}).get("min", 0.0)
+            cur = self.stocks.get(stock_key, 0.0)
+            deficiency = max(0.0, float(tgt) - float(cur))
+            # Deterministic tie-break by fixed task order in TASK_TO_STOCK
+            if deficiency > best_def:
+                best_def = deficiency
+                best_task = task
+
+        return best_task if best_def > 0.0 else None
+
     def step(self, allocated_power):
         """
-        Execute a manufacturing simulation step with priority-as-token DRR.
+        Execute a manufacturing of materials based on bffer-based policy
 
         EXECUTION SEQUENCE:
-        1. Check sector state and power allocation
-        2. Run DRR scheduler to select priority task
-        3. Configure agent operational modes
-        4. Execute extraction operations with available power
-        5. Execute generation operations with remaining power
-        6. Process all stock flows atomically
-        7. Spend tokens only if work was actually done
-        8. Update metrics and return unused power
+        1) If sector is inactive or no power → return power.
+        2) Pick a single task by largest stock deficiency.
+        3) Apply modes for that task.
+        4) Run generators first, then extractors (respect throttle).
+        5) Commit stock flows atomically; return unused power.
 
         Args:
             allocated_power: Power budget allocated by world system
@@ -353,83 +259,67 @@ class ManufacturingSector:
         # Initialize operational tracking for metrics
         self.operational_extractors_count = 0
         self.operational_generators_count = 0
-
+        self.active_operations = 0
+        self.step_power_consumed = 0.0
+      
         if allocated_power <= 0 or self.sector_state == "inactive":
-            return allocated_power
-
-        # Calculate power needs for selected task
-        selected_task = self._deficit_round_robin_scheduler()
-        if selected_task is None:
             self._set_all_agents_inactive()
             return allocated_power
 
-        self._set_all_agents_active()
-        self._execute_task(selected_task)
+        selected_task = self._select_task_minimal()
+        if selected_task is None:
+            # Nothing is below minimum → do nothing to save power
+            self._set_all_agents_inactive()
+            return allocated_power
 
-        # Calculate total power needed for this task
-        total_generator_demand = sum(g.get_power_demand() for g in self.isru_generators)
+        self._apply_task_modes(selected_task)
 
-        # Reserve power for generators first, then allocate remaining to extractors
-        generator_budget = min(total_generator_demand, allocated_power)
-
+        # Generator-first budgeting (unchanged from your flow)
         remaining_power = allocated_power
-        self.active_operations = 0
-        self.step_power_consumed = 0
+        total_generator_demand = sum(g.get_power_demand() for g in self.isru_generators)
+        generator_budget = min(total_generator_demand, remaining_power)
 
         # Execute generation operations first (with reserved power)
-        for generator in self.isru_generators:
-            generator_demand = generator.get_power_demand()
-            # print(f"Generator mode: {generator.operational_mode}, Power demand: {generator_demand}, Remaining power: {remaining_power}")
-
-            if generator_demand > 0 and remaining_power >= generator_demand:
-                generated_resources, consumed_resources, power_used = generator.generate_resources(
-                    generator_demand, self.stocks
-                )
-                if generated_resources:
-                    self.add_stock_flow("ISRU_Generator", consumed_resources, generated_resources)
-                    # print(f"Generated with power: {generated_resources}")
-
-                self.step_power_consumed += power_used
-                remaining_power -= power_used
-                if power_used > 0:
+        for g in self.isru_generators:
+            pd = g.get_power_demand()
+            if pd > 0 and remaining_power >= pd:
+                gen, cons, used = g.generate_resources(pd, self.stocks)
+                if gen:
+                    self.add_stock_flow("ISRU_Generator", cons, gen)
+                self.step_power_consumed += used
+                remaining_power -= used
+                if used > 0:
                     self.active_operations += 1
                     self.operational_generators_count += 1
-            elif generator_demand == 0:
-                generated_resources, consumed_resources, power_used = generator.generate_resources(0, self.stocks)
-                if generated_resources:
-                    self.add_stock_flow("ISRU_Generator_NoP", consumed_resources, generated_resources)
-                    # print(f"Generated without power: {generated_resources}")
+            elif pd == 0:
+                gen, cons, used = g.generate_resources(0, self.stocks)
+                if gen:
+                    self.add_stock_flow("ISRU_Generator_NoP", cons, gen)
                     self.active_operations += 1
                     self.operational_generators_count += 1
 
         # Execute extraction operations with remaining power
         extractor_used = 0.0
-        for extractor in self.isru_extractors:
-            extractor_demand = extractor.get_power_demand()
-            if extractor_demand <= 0:
+        extractor_cap = max(0, int(len(self.isru_extractors) * self.extractor_throttle))
+        for i, ex in enumerate(self.isru_extractors):
+            if i >= extractor_cap:
+                break
+            pd = ex.get_power_demand()
+            if pd <= 0:
                 continue
-
-            # Use remaining power after generators
-            if extractor_demand <= remaining_power and extractor_used + extractor_demand <= (
-                allocated_power - generator_budget
-            ):
-                extracted_resources, power_used = extractor.extract_resources(extractor_demand)
-                if extracted_resources:
-                    self.add_stock_flow("ISRU_Extractor", None, extracted_resources)
-                self.step_power_consumed += power_used
-                remaining_power -= power_used
-                extractor_used += power_used
-                if power_used > 0:
+            if pd <= remaining_power and extractor_used + pd <= (allocated_power - generator_budget):
+                gen, used = ex.extract_resources(pd)
+                if gen:
+                    self.add_stock_flow("ISRU_Extractor", None, gen)
+                self.step_power_consumed += used
+                remaining_power -= used
+                extractor_used += used
+                if used > 0:
                     self.active_operations += 1
-                    self.operational_extractors_count += 1  # Track operational extractors
+                    self.operational_extractors_count += 1
 
         self.process_all_stock_flows()
         self.total_power_consumed += self.step_power_consumed
-
-        if selected_task is not None and self.active_operations > 0:
-            dc = self.deficit_counters.get(selected_task, 0.0)
-            self.deficit_counters[selected_task] = max(0.0, dc - self.token_cost_per_turn)
-
         return remaining_power
 
     def _create_metric_map(self):
@@ -463,41 +353,31 @@ class ManufacturingSector:
             "operational_extractors": getattr(self, "operational_extractors_count", 0),  # Actual operational count
             "operational_generators": getattr(self, "operational_generators_count", 0),  # Actual operational count
             "sector_state": self.sector_state,
-            "stock_H2_kg": self.stocks.get("H2_kg", 0),
-            "stock_O2_kg": self.stocks.get("O2_kg", 0),
-            "stock_H2O_kg": self.stocks.get("H2O_kg", 0),
-            "stock_FeTiO3_kg": self.stocks.get("FeTiO3_kg", 0),
-            "stock_Metal_kg": self.stocks.get("Metal_kg", 0),
-            "stock_He3_kg": self.stocks.get("He3_kg", 0),
+            **{f"stock_{k}": v for k, v in self.stocks.items()},
             "metric_contributions": self._create_metric_map(),
         }
 
-    def _get_available_operations_for_task(self, task):
+    def _available_for_task(self, task: str) -> bool:
         """Get available operations for a task, respecting throttling."""
 
-        # Calculate throttled agent counts
         max_extractors = max(0, int(len(self.isru_extractors) * self.extractor_throttle))
         max_generators = max(0, int(len(self.isru_generators)))
-
-        # Tasks that need BOTH extractors AND generators
         if task in ["He3", "Metal", "Electrolysis"]:
-            # Return True only if BOTH agent types are available
             return max_extractors > 0 and max_generators > 0
-
-        # Tasks that need extractors only
         elif task in ["Regolith", "Water"]:
             return max_extractors > 0
-
         return False
 
-    def _set_all_agents_inactive(self):
-        """Set all agents to inactive state to minimize power consumption."""
+    def _set_all_agents_inactive(self) -> None:
         for agent in self.isru_extractors + self.isru_generators:
             if hasattr(agent, "set_agent_state"):
                 agent.set_agent_state("inactive")
+        # Also set modes to INACTIVE so power_demand=0
+        for g in self.isru_generators:
+            g.set_operational_mode("INACTIVE")
+        for ex in self.isru_extractors:
+            ex.set_operational_mode("INACTIVE")
 
-    def _set_all_agents_active(self):
-        """Set all agents to active state for normal operations."""
-        for agent in self.isru_extractors + self.isru_generators:
-            if hasattr(agent, "set_agent_state"):
-                agent.set_agent_state("active")
+    def set_buffer_targets(self, targets: Dict[str, Dict[str, float]]):
+        """Hot-update buffer targets; keys are stock names, values have 'min'/'max'."""
+        self.buffer_targets.update(targets or {})

@@ -20,8 +20,6 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
         # Fix typo with backward-compatible fallback
         "sim_time": experiment.get("simulation_time_steps", experiment.get("simulation_time_stapes")),
         "delta_t": experiment.get("time_step_duration_hours"),
-        "day_hours": environment["day_hours"],
-        "night_hours": environment["night_hours"],
         "p_need": 2.0,
         "agents_config": {},
         "metrics": environment.get("metrics", []),
@@ -133,23 +131,18 @@ def _configure_manufacturing_sector(manufacturing_components, templates, world_s
 def _configure_goals_system(world_system, db):
     """Configure goals system from active goal IDs."""
 
-    goals_config = {"active_goals": [], "sector_priorities": {}, "performance_goals": []}
-    active_goal_refs = world_system.get("active_goal_ids", [])
+    goals_config = {"performance_goals": []}
+    active_goal_refs = world_system.get("active_goal_ids", []) or []
 
     if not active_goal_refs:
         print("No active goals found in world system")
         return goals_config
 
-    functional_goals = []
-    performance_goals = []
-
     for goal_ref in active_goal_refs:
         if isinstance(goal_ref, str):
             goal_id = goal_ref
-            priority_weight = 1.0
         else:
             goal_id = goal_ref.get("goal_id")
-            priority_weight = goal_ref.get("priority", 1.0)
 
         if not goal_id:
             print(f"Warning: Invalid goal reference: {goal_ref}")
@@ -160,54 +153,17 @@ def _configure_goals_system(world_system, db):
             print(f"Warning: Goal {goal_id} not found in database")
             continue
 
-        gtype = goal_doc.get("type", "functional_goal")
-        if gtype == "performance_goal":
-            performance_goals.append(
-                {
-                    "goal_id": goal_id,
-                    "name": goal_doc.get("name", "Unknown Performance Goal"),
-                    "metric_id": goal_doc.get("metric_id"),
-                    "target_value": float(goal_doc.get("target_value", 0)),
-                    "direction": goal_doc.get("direction", "minimize"),
-                    "weight": float(goal_doc.get("weight", 1.0)),
-                }
-            )
-            print(f"Loaded performance goal: {goal_doc.get('name')} ({goal_id})")
-        else:
-            functional_goals.append(
-                {
-                    "goal_id": goal_id,
-                    "name": goal_doc.get("name", "Unknown Goal"),
-                    "priority_weight": priority_weight,
-                    "sector_weights": goal_doc.get("sector_weights", {}),
-                }
-            )
+        if goal_doc.get("type", "functional_goal") != "performance_goal":
+            # Silently ignore functional goals in this simplified system
+            continue
 
-    goals_config["active_goals"] = functional_goals
-    goals_config["performance_goals"] = performance_goals
+        goals_config["performance_goals"].append({
+            "goal_id": goal_id,
+            "name": goal_doc.get("name", "Unknown Performance Goal"),
+            "metric_id": goal_doc.get("metric_id"),
+            "target_value": float(goal_doc.get("target_value", 0)),
+            "direction": goal_doc.get("direction", "minimize"),
+            "weight": float(goal_doc.get("weight", 1.0)),
+        })
 
-    # Combined sector priorities use only functional goals
-    goals_config["sector_priorities"] = _calculate_combined_sector_priorities(functional_goals)
     return goals_config
-
-
-def _calculate_combined_sector_priorities(active_goals):
-    """Calculate combined sector priorities from multiple active goals."""
-    combined_priorities = {}
-    total_priority = sum(goal["priority_weight"] for goal in active_goals)
-
-    if total_priority == 0:
-        return combined_priorities
-
-    for goal in active_goals:
-        weight = goal["priority_weight"] / total_priority
-
-        for sector, sector_weights in goal["sector_weights"].items():
-            if sector not in combined_priorities:
-                combined_priorities[sector] = {}
-
-            for task, task_weight in sector_weights.items():
-                current = combined_priorities[sector].get(task, 0.0)
-                combined_priorities[sector][task] = current + (weight * task_weight)
-
-    return combined_priorities
