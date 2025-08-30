@@ -478,3 +478,11 @@ With each phase/component, the world system will have:
 | Mesa 3.0 | | 
 | SimPy | | 
 | Plotly \| Dash | |
+
+-------------
+
+# REFERENCES
+
+## ISRU EXTRACTION and PROCESSIGN
+
+- https://spacenews.com/interlune-plans-to-gather-scarce-lunar-helium-3-for-quantum-computing-on-earth/ 

@@ -22,7 +22,7 @@ class ISRUExtractor(Agent):
         self.regolith_extraction_output_kg = config.get("regolith_extraction_output_kg", 100)
         self.efficiency = config.get("efficiency", 0.9)
         self.processing_time_t = config.get("processing_time_t", 3)
-        self.extraction_modes = config.get("extraction_modes", ["ICE", "REGOLITH"])
+        self.extraction_modes = config.get("extraction_modes", ["ICE", "REGOLITH", "INACTIVE"])
         self._processing_time = self.processing_time_t
 
         # Set initial operational mode to first available mode
@@ -88,31 +88,22 @@ class ISRUGenerator(Agent):
         self.subtype = "generator"
         self.max_power_usage_kWh = config.get("max_power_usage_kWh", 65)
 
-        # Electrolysis parameters
-        self.electrolysis_power_kWh = config.get("electrolysis_power_kWh", 15)
-        self.electrolysis_water_input_kg = config.get("electrolysis_water_input_kg", 2.7)
-        self.electrolysis_h2_output_kg = config.get("electrolysis_h2_output_kg", 0.3)
-        self.electrolysis_o2_output_kg = config.get("electrolysis_o2_output_kg", 2.4)
-
-        # Regolith processing parameters (for METAL mode)
-        self.regolith_processing_input_kg = config.get("regolith_processing_input_kg", 100)
-        self.regolith_processing_o2_output_kg = config.get("regolith_processing_o2_output_kg", 12)
-        self.regolith_processing_metal_output_kg = config.get("regolith_processing_metal_output_kg", 10)
+        # Process Environment Resources
+        for res in model.config.get("resources", []):
+            if res.get("resource") == "helium3":
+                self.helium_concenteration_limits = res
 
         # He-3 extraction parameters
-        self.he3_extraction_regolith_input_kg = config.get("he3_extraction_regolith_input_kg", 500)
-        self.he3_extraction_power_kWh = config.get("he3_extraction_power_kWh", 50)
-        self.he3_extraction_output_kg = config.get("he3_extraction_output_kg", 0.1)
+        self.he3_regolith_processing_throughput_kg_per_step = config.get("he3_regolith_processing_throughput_tons_per_step", 100*1e3) # Throughput kg/step
+        self.he3_extraction_power_kWh = config.get("he3_extraction_power_kWh", 50)        
+        self.he3_c_min_ppb, self.he3_c_max_ppb = self.helium_concenteration_limits["density_ppb"][0], self.helium_concenteration_limits["density_ppb"][1]
+        self.he3_c_mode_ppb = (self.he3_c_min_ppb + self.he3_c_max_ppb) / 2
 
         self.efficiency = config.get("efficiency", 0.85)
-        self.processing_time_t = config.get("processing_time_t", 5)
-        self.generator_modes = config.get("generator_modes", ["HE3", "METAL", "ELECTROLYSIS", "INACTIVE"])
+        self.generator_modes = config.get("generator_modes", ["HE3", "INACTIVE"])
 
         # Set initial operational mode to first available mode
-        self.operational_mode = self.generator_modes[0] if self.generator_modes else "ELECTROLYSIS"
-
-        # Add processing time tracking for generator
-        self._processing_time = self.processing_time_t
+        self.operational_mode = self.generator_modes[0] if self.generator_modes else "INACTIVE"
 
     def set_operational_mode(self, mode):
         """Set the operational mode for this generator."""
@@ -122,75 +113,44 @@ class ISRUGenerator(Agent):
             print(f"Invalid mode {mode}. Available modes: {self.generator_modes}")
 
     def get_power_demand(self):
-        """Return current power demand based on operational mode."""
-        if self.operational_mode == "ELECTROLYSIS":
-            return self.electrolysis_power_kWh
-        elif self.operational_mode == "HE3":
-            return self.he3_extraction_power_kWh
-        elif self.operational_mode == "METAL":
-            return 0  # Regolith processing doesn't need power
-        else:
-            return 0
+        """Return current power demand based on operational mode using a mapping."""
+        mode_power_map = {
+            "HE3": self.he3_extraction_power_kWh,
+            "INACTIVE": 0
+        }
+        return mode_power_map.get(self.operational_mode, 0)
 
-    def generate_resources(self, allocated_power, stocks):
-        """Perform actual generation operations with allocated power."""
+    def generate_he3(self, stocks):
+        """Generation logic for HE3 mode."""
         generated_resources = {}
         consumed_resources = {}
-        power_consumed = 0
+        power_consumed = self.he3_extraction_power_kWh
 
-        # Check operational mode and resource/power availability first
-        can_operate = False
-        power_needed = self.get_power_demand()
-
-        if self.operational_mode == "ELECTROLYSIS":
-            can_operate = (
-                allocated_power >= power_needed and stocks.get("H2O_kg", 0) >= self.electrolysis_water_input_kg
-            )
-        elif self.operational_mode == "HE3":
-            can_operate = (
-                allocated_power >= power_needed and stocks.get("FeTiO3_kg", 0) >= self.he3_extraction_regolith_input_kg
-            )
-        elif self.operational_mode == "METAL":
-            can_operate = stocks.get("FeTiO3_kg", 0) >= self.regolith_processing_input_kg
-
-        if not can_operate:
-            return {}, {}, 0  # Can't operate - insufficient power or resources
-
-        # Consume power for processing (if needed)
-        if power_needed > 0:
-            power_consumed = power_needed
-
-        # Decrement processing time
-        if self._processing_time > 0:
-            self._processing_time -= 1
-            # Still processing - consume power but no output yet
-            return {}, {}, power_consumed
-
-        # Processing complete - generate output based on mode
-        if self.operational_mode == "ELECTROLYSIS":
-            # Apply efficiency
-            h2_output = self.electrolysis_h2_output_kg * self.efficiency
-            o2_output = self.electrolysis_o2_output_kg * self.efficiency
-
-            generated_resources["H2_kg"] = h2_output
-            generated_resources["O2_kg"] = o2_output
-            consumed_resources["H2O_kg"] = self.electrolysis_water_input_kg
-
-        elif self.operational_mode == "HE3":
-            # Apply efficiency
-            actual_output = self.he3_extraction_output_kg * self.efficiency
-            generated_resources["He3_kg"] = actual_output
-            consumed_resources["FeTiO3_kg"] = self.he3_extraction_regolith_input_kg
-
-        elif self.operational_mode == "METAL":
-            # Apply efficiency
-            o2_output = self.regolith_processing_o2_output_kg * self.efficiency
-            metal_output = self.regolith_processing_metal_output_kg * self.efficiency
-
-            generated_resources["O2_kg"] = o2_output
-            generated_resources["Metal_kg"] = metal_output
-            consumed_resources["FeTiO3_kg"] = self.regolith_processing_input_kg
-
-        # Reset processing time for next cycle
-        self._processing_time = self.processing_time_t
+        self.helium_concentration_ppb = np.random.triangular(
+            self.he3_c_min_ppb, self.he3_c_mode_ppb, self.he3_c_max_ppb
+        )
+        actual_output = (
+            self.he3_regolith_processing_throughput_kg_per_step
+            * self.helium_concentration_ppb
+            * 1e-9
+            * self.efficiency
+        )
+        print("HE3 Generated", actual_output)
+        generated_resources["He3_kg"] = actual_output
         return generated_resources, consumed_resources, power_consumed
+
+    def generate_inactive(self, stocks):
+        """No operation for INACTIVE mode."""
+        return {}, {}, 0
+
+    def generate_resources(self, allocated_power, stocks):
+        """Perform generation operations based on operational mode."""
+        mode_func_map = {
+            "HE3": self.generate_he3,
+            "INACTIVE": self.generate_inactive,
+        }
+        func = mode_func_map.get(self.operational_mode, self.generate_inactive)
+        power_needed = self.get_power_demand()
+        if allocated_power < power_needed:
+            return {}, {}, 0  # Can't operate - insufficient power
+        return func(stocks)

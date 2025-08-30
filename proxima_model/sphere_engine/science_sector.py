@@ -108,9 +108,9 @@ class ScienceSector:
         metric_map = {}
 
         # Only calculate contributions if there are operational rovers
-        if hasattr(self, "operational_rovers_count") and self.operational_rovers_count > 0:
+        if self.operational_rovers_count > 0:
             value = float(
-                self.metric_contributions.get("value", self.metric_contributions.get("contribution_value", 0.0))
+                self.metric_contributions.get("contribution_value", 0.0)
             )
             metric_id = self.metric_contributions.get("metric_id", "IND-DUST-COV")
             metric_map[metric_id] = self.operational_rovers_count * value

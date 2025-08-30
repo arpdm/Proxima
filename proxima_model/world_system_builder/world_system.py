@@ -64,6 +64,7 @@ class WorldSystem(Model):
         self.running = True
 
         # Optional allocation mode: "proportional" (default) or "equal"
+        # TODO: This needs to be turned into a policy later on
         self.allocation_mode = (self.config.get("allocation_mode") or "proportional").lower()
         self.sectors: Dict[str, object] = {}
         self._initialize_sectors()
@@ -72,7 +73,7 @@ class WorldSystem(Model):
         goals_cfg = self.config.get("goals", {}) or {}
         self.performance_goals = goals_cfg.get("performance_goals", []) or []
 
-        # Metrics configuration is retained as-is
+        # Metrics configuration
         self.metric_definitions = self.config.get("metrics", [])
         self.performance_metrics = {
             mdef.get("id"): 0.0 for mdef in self.metric_definitions if isinstance(mdef, dict) and mdef.get("id")
@@ -81,7 +82,7 @@ class WorldSystem(Model):
         # Environment dynamics
         self.dust_decay_per_step = float(self.config.get("dust_decay_per_step", 0.0))
 
-        # Policy engine (kept for scoring / external throttles if any)
+        # Policy engine
         self.policy = PolicyEngine(self)
 
     def _initialize_sectors(self):
@@ -126,6 +127,7 @@ class WorldSystem(Model):
             return demands
 
         # Case 2: Scarcity → fair split
+        # TODO: This will be changed based on policy
         if self.allocation_mode == "equal":
             # Equal-share baseline, capped by demand
             n = len(operational)
@@ -208,8 +210,8 @@ class WorldSystem(Model):
             low = float(mdef.get("threshold_low", 0.0)) if mdef else 0.0
             high = float(mdef.get("threshold_high", 1.0)) if mdef else 1.0
             mtype = mdef.get("type", "positive") if mdef else "positive"
-            score = self.policy.score(metric_id)  # centralized scoring
-            status = "within" if mdef and (low <= current <= high) else ("unknown" if not mdef else "outside")
+            score = self.policy.score(metric_id)
+            status = "within" if mdef and (low <= current <= high) else ("unknown" if not mdef else "outside") #TODO: This can be based on the goal taget value
 
             entry = {
                 "name": mdef.get("name", metric_id) if mdef else metric_id,
@@ -252,7 +254,7 @@ class WorldSystem(Model):
         for sector_name, sector in self.sectors.items():
             if hasattr(sector, "get_metrics"):
                 m = sector.get_metrics()
-                self.model_metrics[sector_name] = m
+                self.model_metrics[sector_name] = sector.get_metrics()
                 contrib = (m or {}).get("metric_contributions", {})
                 for metric_id, delta in contrib.items():
                     aggregated_contrib[metric_id] = aggregated_contrib.get(metric_id, 0.0) + float(delta)

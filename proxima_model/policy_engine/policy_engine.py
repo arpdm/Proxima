@@ -59,6 +59,8 @@ class DustCoverageThrottlePolicy:
         self.sectors = sectors or ["science", "manufacturing"]
 
     def apply(self, engine: "PolicyEngine") -> Dict[str, Any]:
+        #TODO: throttling policy needs to be adjusted. this is not realistic.
+        #TODO: Performance goal target is not used. Use it.
         score = engine.score(self.metric_id)
         throttle = max(self.min_throttle, score)
 

@@ -30,11 +30,9 @@ class ManufacturingSector:
 
     # Task → (generator_mode, extractor_mode)
     TASK_TO_MODES: Dict[str, Tuple[Optional[str], Optional[str]]] = {
-        "He3": ("HE3", "REGOLITH"),
-        "Metal": ("METAL", "REGOLITH"),
+        "He3": ("HE3", None),
         "Water": (None, "ICE"),
-        "Regolith": (None, "REGOLITH"),
-        "Electrolysis": ("ELECTROLYSIS", "ICE"),
+        "Regolith": (None, "REGOLITH")
     }
 
     # Task → primary output stock key
@@ -61,7 +59,7 @@ class ManufacturingSector:
         self.isru_generators: List[ISRUGenerator] = []
         self.pending_stock_flows: List[Dict[str, Dict[str, float]]] = []
         
-        self.extractor_throttle = 1.0  # 0..1 applied to extractors only
+        self.extractor_throttle = 1.0
 
         # Initialize metric contribution tracking
         self.extractor_metric_contributions = {}
@@ -97,23 +95,24 @@ class ManufacturingSector:
         # Stocks
         self.stocks: Dict[str, float] = config.get(
             "initial_stocks",
-            {"H2_kg": 0.0, "O2_kg": 0.0, "H2O_kg": 0.0, "FeTiO3_kg": 0.0, "Metal_kg": 0.0, "He3_kg": 0.0},
+            {"H2O_kg": 0.0, "FeTiO3_kg": 0.0,"He3_kg": 0.0},
         )
 
         # Minimal buffer targets (can be overridden via config['buffer_targets'])
         default_targets = {
             "He3_kg": {"min": 20,  "max": 300},
-            "Metal_kg": {"min": 20, "max": 300},
-            "H2O_kg": {"min": 0.0,  "max": 0.0},
+            "H2O_kg": {"min": 2.0,  "max": 10.0},
             "FeTiO3_kg": {"min": 20.0, "max": 100.0},
-            "O2_kg": {"min": 0.0,  "max": 0.0},
         }
+
         self.buffer_targets: Dict[str, Dict[str, float]] = {
             **default_targets, **config.get("buffer_targets", {})
         }
 
     def _apply_task_modes(self, task: str) -> None:
         """Set agent' operational mode based on requested task"""
+        #TODO: One robot per task instead of configuring all of them for the same task
+        #TODO: Fair scheduling
         g_mode, e_mode = self.TASK_TO_MODES[task]
         if g_mode:
             for g in self.isru_generators:
@@ -266,6 +265,7 @@ class ManufacturingSector:
             self._set_all_agents_inactive()
             return allocated_power
 
+        # TODO: Multiple tasks in one step depending on available robots
         selected_task = self._select_task_minimal()
         if selected_task is None:
             # Nothing is below minimum → do nothing to save power
@@ -291,12 +291,6 @@ class ManufacturingSector:
                 if used > 0:
                     self.active_operations += 1
                     self.operational_generators_count += 1
-            elif pd == 0:
-                gen, cons, used = g.generate_resources(0, self.stocks)
-                if gen:
-                    self.add_stock_flow("ISRU_Generator_NoP", cons, gen)
-                    self.active_operations += 1
-                    self.operational_generators_count += 1
 
         # Execute extraction operations with remaining power
         extractor_used = 0.0
@@ -304,9 +298,7 @@ class ManufacturingSector:
         for i, ex in enumerate(self.isru_extractors):
             if i >= extractor_cap:
                 break
-            pd = ex.get_power_demand()
-            if pd <= 0:
-                continue
+            pd = max(0, ex.get_power_demand())
             if pd <= remaining_power and extractor_used + pd <= (allocated_power - generator_budget):
                 gen, used = ex.extract_resources(pd)
                 if gen:
@@ -359,13 +351,14 @@ class ManufacturingSector:
 
     def _available_for_task(self, task: str) -> bool:
         """Get available operations for a task, respecting throttling."""
-
+        # TODO: Generators need to contribute to dust coverage index as well
         max_extractors = max(0, int(len(self.isru_extractors) * self.extractor_throttle))
         max_generators = max(0, int(len(self.isru_generators)))
-        if task in ["He3", "Metal", "Electrolysis"]:
-            return max_extractors > 0 and max_generators > 0
-        elif task in ["Regolith", "Water"]:
+
+        if task in ["Regolith", "Water"]:
             return max_extractors > 0
+        elif task in ["He3"]:
+            return max_generators > 0
         return False
 
     def _set_all_agents_inactive(self) -> None:
@@ -380,4 +373,5 @@ class ManufacturingSector:
 
     def set_buffer_targets(self, targets: Dict[str, Dict[str, float]]):
         """Hot-update buffer targets; keys are stock names, values have 'min'/'max'."""
+        #TODO: Use dynamic buffer target updates
         self.buffer_targets.update(targets or {})

@@ -17,12 +17,12 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
 
     # Build base config
     config = {
-        # Fix typo with backward-compatible fallback
         "sim_time": experiment.get("simulation_time_steps", experiment.get("simulation_time_stapes")),
         "delta_t": experiment.get("time_step_duration_hours"),
         "p_need": 2.0,
         "agents_config": {},
         "metrics": environment.get("metrics", []),
+        "resources": environment.get("resources", []),
         "dust_decay_per_step": environment.get("dust_decay_per_step", 0.0),
     }
 
