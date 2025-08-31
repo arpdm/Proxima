@@ -73,7 +73,7 @@ class ManufacturingSector:
         self.operational_generators_count = 0
 
         # Sector lifecycle
-        self.sector_state = "active"  # active|inactive|decommissioned
+        self.sector_state = "active"
 
         # Build agents
         for agent_cfg in self.config.get("isru_extractors", []):
@@ -108,24 +108,6 @@ class ManufacturingSector:
         self.buffer_targets: Dict[str, Dict[str, float]] = {
             **default_targets, **config.get("buffer_targets", {})
         }
-
-    def _apply_task_modes(self, task: str) -> None:
-        """Set agent' operational mode based on requested task"""
-        #TODO: One robot per task instead of configuring all of them for the same task
-        #TODO: Fair scheduling
-        g_mode, e_mode = self.TASK_TO_MODES[task]
-        if g_mode:
-            for g in self.isru_generators:
-                g.set_operational_mode(g_mode)
-        else:
-            for g in self.isru_generators:
-                g.set_operational_mode("INACTIVE")
-        if e_mode:
-            for ex in self.isru_extractors:
-                ex.set_operational_mode(e_mode)
-        else:
-            for ex in self.isru_extractors:
-                ex.set_operational_mode("INACTIVE")
 
     def _set_extractor_modes(self, mode):
         """Set all extractors to specified operational mode."""
@@ -215,28 +197,54 @@ class ManufacturingSector:
         generator_demand = sum(agent.get_power_demand() for agent in self.isru_generators)
         return extractor_demand + generator_demand
 
-    def _select_task_minimal(self) -> Optional[str]:
-        """Pick the single task with the largest positive deficiency.
-
-        deficiency(stock) = max(0, min_target - current_stock)
-        Only consider tasks whose agent types are available.
+    def _assign_agents_to_tasks(self):
         """
-        # Compute deficiency per task's primary stock
-        best_task: Optional[str] = None
-        best_def: float = 0.0
-
+        Assign extractors and generators to tasks based on deficiency.
+        Agents not assigned to a task are set to INACTIVE.
+        """
+        # Compute deficiency for each task
+        deficiencies = []
         for task, stock_key in self.TASK_TO_STOCK.items():
-            if not self._available_for_task(task):
-                continue
             tgt = self.buffer_targets.get(stock_key, {"min": 0.0}).get("min", 0.0)
             cur = self.stocks.get(stock_key, 0.0)
             deficiency = max(0.0, float(tgt) - float(cur))
-            # Deterministic tie-break by fixed task order in TASK_TO_STOCK
-            if deficiency > best_def:
-                best_def = deficiency
-                best_task = task
+            if deficiency > 0:
+                deficiencies.append((task, deficiency))
 
-        return best_task if best_def > 0.0 else None
+        # Sort tasks by deficiency (descending)
+        sorted_tasks = [t for t, _ in sorted(deficiencies, key=lambda x: -x[1])]
+
+        # Assign extractors
+        extractor_modes = []
+        for task in sorted_tasks:
+            _, e_mode = self.TASK_TO_MODES.get(task, (None, None))
+            if e_mode:
+                extractor_modes.append(e_mode)
+        for i, extractor in enumerate(self.isru_extractors):
+            if i < len(extractor_modes):
+                extractor.set_operational_mode(extractor_modes[i])
+            else:
+                # Assign to the most needed task if any exist
+                if extractor_modes:
+                    extractor.set_operational_mode(extractor_modes[0])  # Most needed task's mode
+                else:
+                    extractor.set_operational_mode("INACTIVE")
+
+        # Assign generators
+        generator_modes = []
+        for task in sorted_tasks:
+            g_mode, _ = self.TASK_TO_MODES.get(task, (None, None))
+            if g_mode:
+                generator_modes.append(g_mode)
+        for i, generator in enumerate(self.isru_generators):
+            if i < len(generator_modes):
+                generator.set_operational_mode(generator_modes[i])
+            else:
+                # Assign to the most needed task if any exist
+                if generator_modes:
+                    generator.set_operational_mode(generator_modes[0])  # Most needed task's mode
+                else:
+                    generator.set_operational_mode("INACTIVE")
 
     def step(self, allocated_power):
         """
@@ -265,16 +273,9 @@ class ManufacturingSector:
             self._set_all_agents_inactive()
             return allocated_power
 
-        # TODO: Multiple tasks in one step depending on available robots
-        selected_task = self._select_task_minimal()
-        if selected_task is None:
-            # Nothing is below minimum → do nothing to save power
-            self._set_all_agents_inactive()
-            return allocated_power
+        self._assign_agents_to_tasks()
 
-        self._apply_task_modes(selected_task)
-
-        # Generator-first budgeting (unchanged from your flow)
+        # Generator-first budgeting
         remaining_power = allocated_power
         total_generator_demand = sum(g.get_power_demand() for g in self.isru_generators)
         generator_budget = min(total_generator_demand, remaining_power)
@@ -312,7 +313,6 @@ class ManufacturingSector:
 
         self.process_all_stock_flows()
         self.total_power_consumed += self.step_power_consumed
-        return remaining_power
 
     def _create_metric_map(self):
         """
@@ -348,18 +348,6 @@ class ManufacturingSector:
             **{f"stock_{k}": v for k, v in self.stocks.items()},
             "metric_contributions": self._create_metric_map(),
         }
-
-    def _available_for_task(self, task: str) -> bool:
-        """Get available operations for a task, respecting throttling."""
-        # TODO: Generators need to contribute to dust coverage index as well
-        max_extractors = max(0, int(len(self.isru_extractors) * self.extractor_throttle))
-        max_generators = max(0, int(len(self.isru_generators)))
-
-        if task in ["Regolith", "Water"]:
-            return max_extractors > 0
-        elif task in ["He3"]:
-            return max_generators > 0
-        return False
 
     def _set_all_agents_inactive(self) -> None:
         for agent in self.isru_extractors + self.isru_generators:

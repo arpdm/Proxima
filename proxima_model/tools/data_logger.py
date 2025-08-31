@@ -93,6 +93,7 @@ class DataLogger:
             self.records.append(flat_record)
 
     def save_to_file(self):
+        print(self.log_to_csv)
         if self.log_to_csv and self.records:
             df = pd.DataFrame(self.records)
             df.to_csv(self.csv_path, index=False)

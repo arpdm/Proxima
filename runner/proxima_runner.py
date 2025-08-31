@@ -13,35 +13,37 @@ from proxima_model.tools.data_logger import DataLogger
 
 # ==== DEF ====
 
-HOST_UPDATED_FREQUENCY = 600
+HOST_UPDATED_FREQUENCY = 600  # How often to update the hosted DB with simulation state
 
 def parse_args():
+    """Parse command-line arguments for runner options."""
     parser = argparse.ArgumentParser(description="Proxima Simulation Runner")
     parser.add_argument("--headless", action="store_true", help="Run in headless mode (no UI commands)")
     parser.add_argument("--mongo-uri", type=str, default=None, help="MongoDB URI (overrides db choice)")
     return parser.parse_args()
 
 class ProximaRunner:
-    def __init__(self, mongo_uri=None):
+    """Main simulation runner class for Proxima."""
 
+    def __init__(self, mongo_uri=None):
+        # Setup database connections
         if mongo_uri:
             hosted_uri = mongo_uri
-            print(hosted_uri)
         else:  # Local
-            hosted_uri = "mongodb://localhost:27017"
+            hosted_uri = None
         
         self.local_uri = "mongodb://localhost:27017"
         self.proxima_db = ProximaDB(uri=self.local_uri)
         self.proxima_hosted_db = ProximaDB(uri=hosted_uri) if hosted_uri else None
         self.proxima_db.db.db.logs_simulation.delete_many({})  # Clear old logs
 
-        # Get experiment config
+        # Load experiment configuration from DB
         exp_config = self.proxima_db.find_by_id("experiments", "exp_001")
         self.sim_time = exp_config.get("simulation_time_stapes", None)
         self.ws_id = exp_config["world_system_id"]
         self.exp_id = exp_config["_id"]
 
-        # Setup state
+        # Setup logging and simulation state
         self.logger = DataLogger(experiment_id=self.exp_id, db=self.proxima_db, ws_id=self.ws_id)
         self.hosted_logger = DataLogger(experiment_id=self.exp_id, db=self.proxima_hosted_db, ws_id=self.ws_id)
         self.is_running = False
@@ -52,24 +54,26 @@ class ProximaRunner:
         self.host_update_frequency = HOST_UPDATED_FREQUENCY
 
     def run(self, continuous=None):
-        """Main simulation runner."""
+        """Main simulation runner loop."""
         self.continuous = continuous if continuous is not None else (self.sim_time is None)
 
+        # Build world system configuration and initialize WorldSystem
         config = build_world_system_config(self.ws_id, self.exp_id, self.proxima_db)
         self.ws = WorldSystem(config, 100)
         self.is_running = True
         self.is_paused = False
-
-        update_counter = 0
+        update_counter = 0 # Counter to know when to update the hosted server with state of the world system
 
         try:
             while self.is_running and (continuous or self.ws.steps < self.sim_time):
-                self._process_commands()
+                self._process_commands()  # Check for runtime commands (pause, resume, etc.)
 
                 if self.is_paused:
                     time.sleep(0.1)
                     continue
                 if not self.is_running:
+                    #TODO: File logger needs to be more efficient. We need to save to file in chuncks and clear the cache to not hug memory
+                    self.logger.save_to_file()
                     break
 
                 # Step the world system and update the state
@@ -90,7 +94,7 @@ class ProximaRunner:
             self._update_world_system_state()
 
     def _process_commands(self):
-        """Process runtime commands."""
+        """Process runtime commands from the database (pause, resume, stop, set_delay)."""
         try:
             command = self.proxima_db.db["runtime_commands"].find_one_and_delete(
                 {"experiment_id": self.exp_id}, sort=[("timestamp", -1)]
@@ -105,7 +109,7 @@ class ProximaRunner:
             print(f"Command error: {e}")
 
     def _execute_command(self, command):
-        """Execute a single command."""
+        """Execute a single runtime command."""
         action = command.get("action")
         print(f"Processing: {action}")
 
@@ -121,9 +125,9 @@ class ProximaRunner:
             print(f"Applied: {action}")
 
     def _update_world_system_state(self, update_hosted=False):
-        """Update world system state in MongoDB for UI access."""
+        """Update world system state in MongoDB for UI access and logging."""
 
-        # Build current state
+        # Build current state snapshot
         self.current_state = { 
             "step": self.ws.steps,
             "simulation_status": {
@@ -135,7 +139,7 @@ class ProximaRunner:
             },
         }
 
-        # GUIDE: Add per sector
+        # Log metrics and state to local DB
         self.logger.log(
             step= self.ws.steps,
             environment= self.ws.model_metrics["environment"],
@@ -146,7 +150,7 @@ class ProximaRunner:
             latest_state=self.current_state,
         )
 
-        # Optionally update hosted DB
+        # Optionally update hosted DB for remote UI
         if update_hosted:
             self.hosted_logger.log(
                 step=self.ws.steps,
@@ -159,7 +163,7 @@ class ProximaRunner:
             )
 
     def _check_startup_commands(self):
-        """Check for startup commands."""
+        """Check for startup commands in the database and start simulation accordingly."""
 
         command = self.proxima_db.db["startup_commands"].find_one_and_delete(
             {"experiment_id": self.exp_id}, sort=[("timestamp", -1)]
@@ -184,10 +188,11 @@ class ProximaRunner:
 
 
 def main():
+    """Entry point for Proxima simulation runner."""
 
     args = parse_args()
 
-    # Determine MongoDB URI
+    # If Mongo DB Server URL is not provided, the model will not sync its state to the server only to local database.
     if args.mongo_uri:
         mongo_uri = args.mongo_uri
     else:
@@ -200,6 +205,7 @@ def main():
             print("Running Proxima in Headless Mode")
             runner.run(continuous=True)
         else:
+            # UI mode: wait for startup commands to begin simulation
             while True:
                 if not runner.is_running:
                     if runner._check_startup_commands():
