@@ -1,5 +1,6 @@
 from collections import defaultdict
 
+
 class EventBus:
     def __init__(self):
         self._subscribers = defaultdict(list)
@@ -12,6 +13,6 @@ class EventBus:
         """Publish an event, triggering all subscribed callbacks."""
         if event_type not in self._subscribers:
             return
-        
+
         for callback_fn in self._subscribers[event_type]:
             callback_fn(**kwargs)

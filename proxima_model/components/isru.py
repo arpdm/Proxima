@@ -94,9 +94,14 @@ class ISRUGenerator(Agent):
                 self.helium_concenteration_limits = res
 
         # He-3 extraction parameters
-        self.he3_regolith_processing_throughput_kg_per_step = config.get("he3_regolith_processing_throughput_tons_per_step", 100*1e3) # Throughput kg/step
-        self.he3_extraction_power_kWh = config.get("he3_extraction_power_kWh", 50)        
-        self.he3_c_min_ppb, self.he3_c_max_ppb = self.helium_concenteration_limits["density_ppb"][0], self.helium_concenteration_limits["density_ppb"][1]
+        self.he3_regolith_processing_throughput_kg_per_step = config.get(
+            "he3_regolith_processing_throughput_tons_per_step", 100 * 1e3
+        )  # Throughput kg/step
+        self.he3_extraction_power_kWh = config.get("he3_extraction_power_kWh", 50)
+        self.he3_c_min_ppb, self.he3_c_max_ppb = (
+            self.helium_concenteration_limits["density_ppb"][0],
+            self.helium_concenteration_limits["density_ppb"][1],
+        )
         self.he3_c_mode_ppb = (self.he3_c_min_ppb + self.he3_c_max_ppb) / 2
 
         self.efficiency = config.get("efficiency", 0.85)
@@ -114,10 +119,7 @@ class ISRUGenerator(Agent):
 
     def get_power_demand(self):
         """Return current power demand based on operational mode using a mapping."""
-        mode_power_map = {
-            "HE3": self.he3_extraction_power_kWh,
-            "INACTIVE": 0
-        }
+        mode_power_map = {"HE3": self.he3_extraction_power_kWh, "INACTIVE": 0}
         return mode_power_map.get(self.operational_mode, 0)
 
     def generate_he3(self, stocks):
@@ -130,10 +132,7 @@ class ISRUGenerator(Agent):
             self.he3_c_min_ppb, self.he3_c_mode_ppb, self.he3_c_max_ppb
         )
         actual_output = (
-            self.he3_regolith_processing_throughput_kg_per_step
-            * self.helium_concentration_ppb
-            * 1e-9
-            * self.efficiency
+            self.he3_regolith_processing_throughput_kg_per_step * self.helium_concentration_ppb * 1e-9 * self.efficiency
         )
         print("HE3 Generated", actual_output)
         generated_resources["He3_kg"] = actual_output

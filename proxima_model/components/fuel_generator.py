@@ -71,8 +71,4 @@ class FuelGenerator(Agent):
             dict: Status snapshot with operational status
         """
 
-        return {
-            "is_operational": self.is_operational,
-            "type": "fuel_gen",
-            "generated_prop_kg" : self.prop_generated_kg
-        }
+        return {"is_operational": self.is_operational, "type": "fuel_gen", "generated_prop_kg": self.prop_generated_kg}

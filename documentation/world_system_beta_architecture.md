@@ -175,6 +175,10 @@ Mesa Model orchestrator that initializes sectors, computes goal-weighted allocat
 ## Proxima Runner
 Simulation loop controller that builds the config, instantiates World System, runs continuous or limited steps, processes DB-driven commands (startup/runtime), and logs sector metrics plus runner state each step.
 
+## Policy Engine
+Policy Engine is used for managing polcies, activation/deactivating and injecting them to world system spheres.
+
+
 
 ![Proxima Model Operation Flow](resources/Simulation_Flow_CONOPS.jpg)
 

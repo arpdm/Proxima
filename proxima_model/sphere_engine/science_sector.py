@@ -110,9 +110,7 @@ class ScienceSector:
 
         # Only calculate contributions if there are operational rovers
         if self.operational_rovers_count > 0:
-            value = float(
-                self.metric_contributions.get("contribution_value", 0.0)
-            )
+            value = float(self.metric_contributions.get("contribution_value", 0.0))
             metric_id = self.metric_contributions.get("metric_id", "IND-DUST-COV")
             metric_map[metric_id] = self.operational_rovers_count * value
 

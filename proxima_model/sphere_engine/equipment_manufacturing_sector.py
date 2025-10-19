@@ -10,14 +10,18 @@ CORE ALGORITHMS:
 ===============
 
 
+
+
 """
+
 from __future__ import annotations
 from typing import Dict, List, Optional
+
 
 class EquipmentManSector:
     """Manages equipment manufacturing and storage processes."""
 
-    def __init__(self, model, config):
+    def __init__(self, model, config, event_bus):
         """
         Initialize equipment manufacturing sector with agents and resource stocks.
 
@@ -27,27 +31,31 @@ class EquipmentManSector:
         """
         self.model = model
         self.config = config
+        self.event_bus = event_bus
         self.sector_state = "active"
 
         self.pending_stock_flows: List[Dict[str, Dict[str, float]]] = []
         self.equipment: Dict[str, float] = config.get(
             "initial_stocks",
             {
-                "Solar_Array_EQ": 0, 
+                "Solar_Array_EQ": 0,
                 "ISRU_Generator_EQ": 0,
-                "ISRU_Extractor_EQ": 0, 
-                "Assembly_Robot_EQ": 0, 
-                "Printing_Robot_EQ": 0
-            }
+                "ISRU_Extractor_EQ": 0,
+                "Assembly_Robot_EQ": 0,
+                "Printing_Robot_EQ": 0,
+            },
         )
 
     def get_equpment(self):
         """Return current stocks (read-only copy)."""
         return self.equipment.copy()
 
-    def add_stock_flow(self, source_component: str,
-                       consumed: Optional[Dict[str, float]] = None,
-                       generated: Optional[Dict[str, float]] = None) -> None:
+    def add_stock_flow(
+        self,
+        source_component: str,
+        consumed: Optional[Dict[str, float]] = None,
+        generated: Optional[Dict[str, float]] = None,
+    ) -> None:
         """
         Add a stock flow transaction to pending queue.
 
@@ -99,7 +107,6 @@ class EquipmentManSector:
         self.pending_stock_flows = []
         return {"consumed": total_consumed, "generated": total_generated}
 
-
     def step(self, allocated_power):
         """
         Execute a manufacturing of materials based on bffer-based policy
@@ -122,7 +129,4 @@ class EquipmentManSector:
         Returns:
             dict: Manufacturing sector performance metrics
         """
-        return {
-            "sector_state": self.sector_state,
-            **{f"equipment_{k}": v for k, v in self.equipment.items()}
-        }
+        return {"sector_state": self.sector_state, **{f"equipment_{k}": v for k, v in self.equipment.items()}}

@@ -131,6 +131,7 @@ def _configure_manufacturing_sector(manufacturing_components, templates, world_s
             config["isru_generators"].append(base_cfg)
     return config
 
+
 def _configure_equipment_manufacturing_sector(equipment_components, templates):
     """Configure the equipment manufacturing sector."""
 
@@ -176,13 +177,15 @@ def _configure_goals_system(world_system, db):
             # Silently ignore functional goals in this simplified system
             continue
 
-        goals_config["performance_goals"].append({
-            "goal_id": goal_id,
-            "name": goal_doc.get("name", "Unknown Performance Goal"),
-            "metric_id": goal_doc.get("metric_id"),
-            "target_value": float(goal_doc.get("target_value", 0)),
-            "direction": goal_doc.get("direction", "minimize"),
-            "weight": float(goal_doc.get("weight", 1.0)),
-        })
+        goals_config["performance_goals"].append(
+            {
+                "goal_id": goal_id,
+                "name": goal_doc.get("name", "Unknown Performance Goal"),
+                "metric_id": goal_doc.get("metric_id"),
+                "target_value": float(goal_doc.get("target_value", 0)),
+                "direction": goal_doc.get("direction", "minimize"),
+                "weight": float(goal_doc.get("weight", 1.0)),
+            }
+        )
 
     return goals_config

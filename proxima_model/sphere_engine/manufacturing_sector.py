@@ -19,6 +19,7 @@ CORE ALGORITHMS:
 4) If no deficiency > 0, set all agents INACTIVE and return unused power.
 
 """
+
 from __future__ import annotations
 
 from typing import Dict, List, Tuple, Optional, Any
@@ -32,7 +33,7 @@ class ManufacturingSector:
     TASK_TO_MODES: Dict[str, Tuple[Optional[str], Optional[str]]] = {
         "He3": ("HE3", None),
         "Water": (None, "ICE"),
-        "Regolith": (None, "REGOLITH")
+        "Regolith": (None, "REGOLITH"),
     }
 
     # Task → primary output stock key
@@ -59,7 +60,7 @@ class ManufacturingSector:
         self.isru_extractors: List[ISRUExtractor] = []
         self.isru_generators: List[ISRUGenerator] = []
         self.pending_stock_flows: List[Dict[str, Dict[str, float]]] = []
-        
+
         self.extractor_throttle = 1.0
 
         # Initialize metric contribution tracking
@@ -96,19 +97,17 @@ class ManufacturingSector:
         # Stocks
         self.stocks: Dict[str, float] = config.get(
             "initial_stocks",
-            {"H2O_kg": 0.0, "FeTiO3_kg": 0.0,"He3_kg": 0.0},
+            {"H2O_kg": 0.0, "FeTiO3_kg": 0.0, "He3_kg": 0.0},
         )
 
         # Minimal buffer targets (can be overridden via config['buffer_targets'])
         default_targets = {
-            "He3_kg": {"min": 20,  "max": 300},
-            "H2O_kg": {"min": 2.0,  "max": 10.0},
+            "He3_kg": {"min": 20, "max": 300},
+            "H2O_kg": {"min": 2.0, "max": 10.0},
             "FeTiO3_kg": {"min": 20.0, "max": 100.0},
         }
 
-        self.buffer_targets: Dict[str, Dict[str, float]] = {
-            **default_targets, **config.get("buffer_targets", {})
-        }
+        self.buffer_targets: Dict[str, Dict[str, float]] = {**default_targets, **config.get("buffer_targets", {})}
 
     def _set_extractor_modes(self, mode):
         """Set all extractors to specified operational mode."""
@@ -124,9 +123,12 @@ class ManufacturingSector:
         """Return current stocks (read-only copy)."""
         return self.stocks.copy()
 
-    def add_stock_flow(self, source_component: str,
-                       consumed: Optional[Dict[str, float]] = None,
-                       generated: Optional[Dict[str, float]] = None) -> None:
+    def add_stock_flow(
+        self,
+        source_component: str,
+        consumed: Optional[Dict[str, float]] = None,
+        generated: Optional[Dict[str, float]] = None,
+    ) -> None:
         """
         Add a stock flow transaction to pending queue.
 
@@ -269,7 +271,7 @@ class ManufacturingSector:
         self.operational_generators_count = 0
         self.active_operations = 0
         self.step_power_consumed = 0.0
-      
+
         if allocated_power <= 0 or self.sector_state == "inactive":
             self._set_all_agents_inactive()
             return allocated_power
@@ -362,5 +364,5 @@ class ManufacturingSector:
 
     def set_buffer_targets(self, targets: Dict[str, Dict[str, float]]):
         """Hot-update buffer targets; keys are stock names, values have 'min'/'max'."""
-        #TODO: Use dynamic buffer target updates
+        # TODO: Use dynamic buffer target updates
         self.buffer_targets.update(targets or {})
