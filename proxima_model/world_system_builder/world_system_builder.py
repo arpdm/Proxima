@@ -48,10 +48,39 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
             components_dict.get("equipmentManufacturing", []), component_templates
         )
 
+        config["agents_config"]["transportation"] = _configure_transportation_sector(
+            components_dict.get("transportation", []), component_templates
+        )
+
     # Load active goals configuration
     config["goals"] = _configure_goals_system(world_system, db)
     return config
 
+def _configure_transportation_sector(transportation_components, templates):
+    """Configure the transportation sector with rockets and fuel generators."""
+    config = {"rockets": [], "fuel_generators": []}
+
+    for comp in transportation_components:
+        template = templates.get(comp["template_id"])
+        if not template:
+            print(f"Warning: Template {comp['template_id']} not found for transportation sector.")
+            continue
+
+        base_cfg = {
+            "template_id": comp["template_id"],
+            "subtype": comp.get("subtype", template.get("subtype")),
+            "config": {**template.get("config", {}), **comp.get("config", {})},
+            "quantity": int(comp.get("quantity", 1)),
+        }
+
+        comp_type = template.get("type", "").lower()
+        if comp_type == "orbital_rocket":
+            config["rockets"].append(base_cfg)
+        elif comp_type == "fuel_gen":
+            config["fuel_generators"].append(base_cfg)
+
+    print(f"Configured transportation sector: {len(config['rockets'])} rockets, {len(config['fuel_generators'])} fuel generators")
+    return config
 
 def _configure_energy_sector(energy_components, templates):
     """Configure energy sector components."""

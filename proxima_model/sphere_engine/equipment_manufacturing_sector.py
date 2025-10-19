@@ -19,7 +19,7 @@ from typing import Dict, List, Optional
 
 
 class EquipmentManSector:
-    """Manages equipment manufacturing and storage processes."""
+    """Manages equipment manufacturing, storage, and resupply processes."""
 
     def __init__(self, model, config, event_bus):
         """
@@ -28,105 +28,87 @@ class EquipmentManSector:
         Args:
             model: Reference to world system model
             config: Manufacturing configuration from database
+            event_bus: The central event bus for inter-sector communication.
         """
         self.model = model
         self.config = config
         self.event_bus = event_bus
         self.sector_state = "active"
 
-        self.pending_stock_flows: List[Dict[str, Dict[str, float]]] = []
-        self.equipment: Dict[str, float] = config.get(
-            "initial_stocks",
-            {
-                "Solar_Array_EQ": 0,
-                "ISRU_Generator_EQ": 0,
-                "ISRU_Extractor_EQ": 0,
-                "Assembly_Robot_EQ": 0,
-                "Printing_Robot_EQ": 0,
-            },
-        )
+        self.equipment: Dict[str, float] = config.get("initial_stocks", {})
+        
+        # NEW: Track items that have been ordered but have not yet arrived.
+        self.pending_orders: Dict[str, float] = {}
 
-    def get_equpment(self):
+        # Subscribe to events
+        self.event_bus.subscribe("payload_delivered", self.handle_payload_delivery)
+
+    def handle_payload_delivery(self, destination: str, payload: dict):
+        """Handles incoming payloads from transport events."""
+        # This sector only cares about payloads arriving at the Moon
+        if destination == "Moon":
+            print(f"EquipmentManSector receiving payload: {payload}")
+            for item, amount in payload.items():
+                # Add to physical stock
+                self.equipment[item] = self.equipment.get(item, 0) + amount
+                
+                # NEW: Decrement the pending order count for the received item.
+                if item in self.pending_orders:
+                    self.pending_orders[item] = max(0, self.pending_orders.get(item, 0) - amount)
+
+    def _check_and_request_resupply(self):
+        """
+        Checks effective stock (current + pending) and requests resupply if needed.
+        This prevents sending duplicate requests for items already in transit.
+        """
+        desired_minimums = {"Assembly_Robot_EQ": 1, "Printing_Robot_EQ": 1}
+        payload_to_request = {}
+
+        for item, min_level in desired_minimums.items():
+            current_stock = self.equipment.get(item, 0)
+            pending_stock = self.pending_orders.get(item, 0)
+            effective_stock = current_stock + pending_stock
+
+            if effective_stock < min_level:
+                # Calculate how many to order to reach the minimum
+                amount_to_order = min_level - effective_stock
+                payload_to_request[item] = amount_to_order
+                
+                # NEW: Immediately update pending orders to reflect the new request.
+                self.pending_orders[item] = pending_stock + amount_to_order
+
+        if payload_to_request:
+            print(f"EquipmentManSector requesting transport for: {payload_to_request}")
+            self.event_bus.publish(
+                "transport_request",
+                requesting_sector="equipment_manufacturing",
+                payload=payload_to_request,
+                origin="Moon",
+                destination="Earth",
+            )
+
+    def get_power_demand(self):
+        return 1
+
+    def get_equipment(self):
         """Return current stocks (read-only copy)."""
         return self.equipment.copy()
 
-    def add_stock_flow(
-        self,
-        source_component: str,
-        consumed: Optional[Dict[str, float]] = None,
-        generated: Optional[Dict[str, float]] = None,
-    ) -> None:
-        """
-        Add a stock flow transaction to pending queue.
-
-        Stock flows are batched and processed atomically to prevent
-        race conditions and ensure resource conservation.
-
-        Args:
-            source_component: Component generating the flow
-            consumed_resources: Resources consumed (optional)
-            generated_resources: Resources generated (optional)
-        """
-        self.pending_stock_flows.append(
-            {
-                "source": source_component,
-                "consumed": consumed or {},
-                "generated": generated or {},
-            }
-        )
-
-    def process_all_stock_flows(self):
-        """
-        Process all pending stock flows atomically.
-
-        Ensures resource conservation by applying all consumption
-        and generation transactions in a single batch operation.
-
-        Returns:
-            dict: Summary of total consumed and generated resources
-        """
-        if not self.pending_stock_flows:
-            return {}
-
-        total_consumed = {}
-        total_generated = {}
-
-        # Process all flows atomically
-        for flow in self.pending_stock_flows:
-            # Apply consumption
-            for resource, amount in flow["consumed"].items():
-                if resource in self.equipment:
-                    self.equipment[resource] = max(0, self.equipment[resource] - amount)
-                    total_consumed[resource] = total_consumed.get(resource, 0) + amount
-
-            # Apply generation
-            for resource, amount in flow["generated"].items():
-                self.equipment[resource] = self.equipment.get(resource, 0) + amount
-                total_generated[resource] = total_generated.get(resource, 0) + amount
-
-        self.pending_stock_flows = []
-        return {"consumed": total_consumed, "generated": total_generated}
-
     def step(self, allocated_power):
         """
-        Execute a manufacturing of materials based on bffer-based policy
-
-        EXECUTION SEQUENCE:
-        1) Process all stock flows
-
-        Args:
-            allocated_power: Power budget allocated by world system
-
-        Returns:
-            float: Unused power returned to world system
+        Checks for resupply needs at each step.
         """
-        self.process_all_stock_flows()
+        self._check_and_request_resupply()
+        # This sector does not consume power directly in this version
+        return allocated_power
 
     def get_metrics(self):
         """
-        Return comprehensive manufacturing sector metrics including DRR token tracking.
-
-        Returns:
-            dict: Manufacturing sector performance metrics
+        Return comprehensive manufacturing sector metrics.
         """
-        return {"sector_state": self.sector_state, **{f"equipment_{k}": v for k, v in self.equipment.items()}}
+        metrics = {
+            "sector_state": self.sector_state,
+            **{f"equipment_{k}": v for k, v in self.equipment.items()},
+            **{f"pending_{k}": v for k, v in self.pending_orders.items()}
+        }
+        return metrics

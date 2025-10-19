@@ -861,6 +861,7 @@ class ProximaUI:
             "Science": latest.get("science", {}),
             "Manufacturing": latest.get("manufacturing", {}),
             "Equipment Manufacturing": latest.get("equipment_manufacturing", {}),
+            "Transportation": latest.get("transportation", {}),
             "System": latest.get("environment", {}),
         }
 

@@ -147,6 +147,7 @@ class ProximaRunner:
             science= self.ws.model_metrics["science"],
             manufacturing= self.ws.model_metrics["manufacturing"],
             equipment_manufacturing= self.ws.model_metrics["equipment_manufacturing"],
+            transportation = self.ws.model_metrics["transportation"],
             performance= self.ws.model_metrics.get("performance", {}),
             latest_state=self.current_state,
         )
@@ -160,6 +161,7 @@ class ProximaRunner:
                 science=self.ws.model_metrics["science"],
                 manufacturing=self.ws.model_metrics["manufacturing"],
                 equipment_manufacturing= self.ws.model_metrics["equipment_manufacturing"],
+                transportation = self.ws.model_metrics["transportation"],
                 performance=self.ws.model_metrics.get("performance", {}),
                 latest_state=self.current_state,
             )

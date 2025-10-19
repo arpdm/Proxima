@@ -108,6 +108,22 @@ class ManufacturingSector:
         }
 
         self.buffer_targets: Dict[str, Dict[str, float]] = {**default_targets, **config.get("buffer_targets", {})}
+        self.event_bus.subscribe("resource_request", self.fulfill_resource_request)
+
+    def fulfill_resource_request(self, requesting_sector: str, resource: str, amount: float):
+        """Checks stock and fulfills a resource request from another sector."""
+        if self.stocks.get(resource, 0) >= amount:
+            self.stocks[resource] -= amount
+            print(f"Fulfilling request. Remaining {resource}: {self.stocks[resource]:.2f} kg.")
+            self.event_bus.publish(
+                "resource_allocated",
+                recipient_sector=requesting_sector,
+                resource=resource,
+                amount=amount,
+            )
+        else:
+            pass
+            # print(f"Could not fulfill request for {resource}: Insufficient stock.")
 
     def _set_extractor_modes(self, mode):
         """Set all extractors to specified operational mode."""

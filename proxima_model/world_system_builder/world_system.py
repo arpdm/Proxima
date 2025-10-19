@@ -46,6 +46,7 @@ Simulation Step:
 6. Collect and aggregate performance metrics
 
 """
+
 from __future__ import annotations
 from typing import Dict, Tuple
 
@@ -54,8 +55,9 @@ from proxima_model.sphere_engine.energy_sector import EnergySector
 from proxima_model.sphere_engine.science_sector import ScienceSector
 from proxima_model.sphere_engine.manufacturing_sector import ManufacturingSector
 from proxima_model.sphere_engine.equipment_manufacturing_sector import EquipmentManSector
+from proxima_model.sphere_engine.transportation_sector import TransportationSector
 from proxima_model.policy_engine.policy_engine import PolicyEngine
-from proxima_model.core.event_bus import EventBus
+from proxima_model.event_engine.event_bus import EventBus
 
 
 class WorldSystem(Model):
@@ -68,7 +70,7 @@ class WorldSystem(Model):
         # Optional allocation mode: "proportional" (default) or "equal"
         # TODO: This needs to be turned into a policy later on. We dont have power allocation mode added to configuration file yet.
         self.allocation_mode = (self.config.get("allocation_mode") or "proportional").lower()
-        
+
         # Initialize sectors of the world system
         self.sectors: Dict[str, object] = {}
         self.event_bus = EventBus()
@@ -86,15 +88,15 @@ class WorldSystem(Model):
             m.get("id"): m for m in self.metric_definitions if isinstance(m, dict) and m.get("id")
         }
 
-        # Stores the static goal information associated with a metric. 
-        self._goals_by_metric = {
-            pg.get("metric_id"): pg for pg in self.performance_goals if pg.get("metric_id")
-        }
+        # Stores the static goal information associated with a metric.
+        self._goals_by_metric = {pg.get("metric_id"): pg for pg in self.performance_goals if pg.get("metric_id")}
 
         # Stores the current value of each metric. This is the dynamic state that changes every step.
         self.performance_metrics = {
             mdef.get("id"): 0.0 for mdef in self.metric_definitions if isinstance(mdef, dict) and mdef.get("id")
         }
+
+        self.model_metrics = {"environment": {"step": 0}}
 
         # Environment dynamics
         self.dust_decay_per_step = float(self.config.get("dust_decay_per_step", 0.0))
@@ -111,14 +113,17 @@ class WorldSystem(Model):
             "energy": EnergySector,
             "science": ScienceSector,
             "manufacturing": ManufacturingSector,
-            "equipment_manufacturing": EquipmentManSector
+            "equipment_manufacturing": EquipmentManSector,
+            "transportation" : TransportationSector
         }
 
         for name, sector_class in sector_map.items():
             if name in agents_config:
                 self.sectors[name] = sector_class(self, agents_config[name], self.event_bus)
 
-    def _allocate_power_fairly(self, available_power: float, operational_sectors: Dict[str, object]) -> Dict[str, float]:
+    def _allocate_power_fairly(
+        self, available_power: float, operational_sectors: Dict[str, object]
+    ) -> Dict[str, float]:
         """Compute fair allocations for all non-energy sectors.
 
         Policy:
@@ -163,10 +168,9 @@ class WorldSystem(Model):
 
         # Get non-energy sectors that can consume power (do this once)
         power_consumers = {
-            name: s for name, s in self.sectors.items()
-            if name != "energy" and hasattr(s, "get_power_demand")
+            name: s for name, s in self.sectors.items() if name != "energy" and hasattr(s, "get_power_demand")
         }
-        
+
         total_power_demand = sum(float(s.get_power_demand()) for s in power_consumers.values())
 
         # Generate available power from energy sector (if present)
@@ -241,7 +245,7 @@ class WorldSystem(Model):
                 "goal_id": pg.get("goal_id"),
                 "name": pg.get("name"),
             }
-        
+
         return entry
 
     def _build_metric_scores(self, selected_ids=None):
@@ -250,15 +254,12 @@ class WorldSystem(Model):
         """
         # Union of all known metric IDs
         all_ids = set(self._metric_definitions.keys()) | set(self._goals_by_metric.keys())
-        
+
         # Filter by selected_ids if provided
         ids_to_process = all_ids & set(selected_ids) if selected_ids else all_ids
 
         # Use a dictionary comprehension for a more concise loop
-        return {
-            metric_id: self._build_single_metric_score(metric_id)
-            for metric_id in ids_to_process
-        }
+        return {metric_id: self._build_single_metric_score(metric_id) for metric_id in ids_to_process}
 
     def _apply_metric_contributions(self, contributions: dict):
         """Apply aggregated per-step metric contributiins from sectors."""

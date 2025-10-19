@@ -134,7 +134,6 @@ class ISRUGenerator(Agent):
         actual_output = (
             self.he3_regolith_processing_throughput_kg_per_step * self.helium_concentration_ppb * 1e-9 * self.efficiency
         )
-        print("HE3 Generated", actual_output)
         generated_resources["He3_kg"] = actual_output
         return generated_resources, consumed_resources, power_consumed
 
