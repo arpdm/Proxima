@@ -53,6 +53,7 @@ from mesa import Model
 from proxima_model.sphere_engine.energy_sector import EnergySector
 from proxima_model.sphere_engine.science_sector import ScienceSector
 from proxima_model.sphere_engine.manufacturing_sector import ManufacturingSector
+from proxima_model.sphere_engine.equipment_manufacturing_sector import EquipmentManSector
 from proxima_model.policy_engine.policy_engine import PolicyEngine
 
 
@@ -64,17 +65,31 @@ class WorldSystem(Model):
         self.running = True
 
         # Optional allocation mode: "proportional" (default) or "equal"
-        # TODO: This needs to be turned into a policy later on
+        # TODO: This needs to be turned into a policy later on. We dont have power allocation mode added to configuration file yet.
         self.allocation_mode = (self.config.get("allocation_mode") or "proportional").lower()
+        
+        # Initialize sectors of the world system
         self.sectors: Dict[str, object] = {}
         self._initialize_sectors()
 
-        # Get Performance Goals
+        # Get Performance Goals - Defines the goals of the system
         goals_cfg = self.config.get("goals", {}) or {}
         self.performance_goals = goals_cfg.get("performance_goals", []) or []
 
         # Metrics configuration
         self.metric_definitions = self.config.get("metrics", [])
+
+        # Stores the static definition of each metric. This is for looking up properties like
+        self._metric_definitions = {
+            m.get("id"): m for m in self.metric_definitions if isinstance(m, dict) and m.get("id")
+        }
+
+        # Stores the static goal information associated with a metric. 
+        self._goals_by_metric = {
+            pg.get("metric_id"): pg for pg in self.performance_goals if pg.get("metric_id")
+        }
+
+        # Stores the current value of each metric. This is the dynamic state that changes every step.
         self.performance_metrics = {
             mdef.get("id"): 0.0 for mdef in self.metric_definitions if isinstance(mdef, dict) and mdef.get("id")
         }
@@ -82,45 +97,45 @@ class WorldSystem(Model):
         # Environment dynamics
         self.dust_decay_per_step = float(self.config.get("dust_decay_per_step", 0.0))
 
-        # Policy engine
+        # Manages world system policies
         self.policy = PolicyEngine(self)
 
     def _initialize_sectors(self):
         """Initialize all sectors dynamically based on configuration."""
         agents_config = self.config.get("agents_config", {})
 
-        if "energy" in agents_config:
-            self.sectors["energy"] = EnergySector(self, agents_config["energy"])
-        if "science" in agents_config:
-            self.sectors["science"] = ScienceSector(agents_config["science"])
-        if "manufacturing" in agents_config:
-            self.sectors["manufacturing"] = ManufacturingSector(self, agents_config["manufacturing"])
+        # Map sector names to their corresponding classes
+        sector_map = {
+            "energy": EnergySector,
+            "science": ScienceSector,
+            "manufacturing": ManufacturingSector,
+            "equipment_manufacturing": EquipmentManSector
+        }
 
-    def _allocate_power_fairly(self, available_power: float) -> Dict[str, float]:
+        for name, sector_class in sector_map.items():
+            if name in agents_config:
+                self.sectors[name] = sector_class(self, agents_config[name])
+
+    def _allocate_power_fairly(self, available_power: float, operational_sectors: Dict[str, object]) -> Dict[str, float]:
         """Compute fair allocations for all non-energy sectors.
 
         Policy:
           - If Σ demand ≤ available_power, allocate each demand exactly.
           - Else, allocate proportionally to demand.
         """
-        # Collect non-energy sectors that can consume power
-        operational = {
-            name: sector
-            for name, sector in self.sectors.items()
-            if name != "energy" and hasattr(sector, "get_power_demand")
-        }
-        if not operational or available_power <= 0:
-            return {name: 0.0 for name in operational}
+        if not operational_sectors or available_power <= 0:
+            return {name: 0.0 for name in operational_sectors}
 
         # Snapshot demands
         demands: Dict[str, float] = {
-            name: max(0.0, float(sector.get_power_demand())) for name, sector in operational.items()
+            name: max(0.0, float(sector.get_power_demand())) for name, sector in operational_sectors.items()
         }
+
         total_demand = sum(demands.values())
 
         # If nobody needs power, allocate zeros
         if total_demand <= 0.0:
-            return {name: 0.0 for name in operational}
+            return {name: 0.0 for name in operational_sectors}
 
         # Case 1: Sufficient power → satisfy all demands
         if total_demand <= available_power:
@@ -130,13 +145,13 @@ class WorldSystem(Model):
         # TODO: This will be changed based on policy
         if self.allocation_mode == "equal":
             # Equal-share baseline, capped by demand
-            n = len(operational)
+            n = len(operational_sectors)
             per = available_power / n
-            return {name: min(per, demands[name]) for name in operational}
+            return {name: min(per, demands[name]) for name in operational_sectors}
         else:
             # Proportional by demand
             ratio = available_power / total_demand  # < 1.0 here
-            return {name: ratio * demands[name] for name in operational}
+            return {name: ratio * demands[name] for name in operational_sectors}
 
     def step(self):
         """Execute a single simulation step with dynamic sector handling."""
@@ -144,21 +159,23 @@ class WorldSystem(Model):
         # Allow policy engine to apply any external constraints (e.g., throttles)
         self.policy.apply_policies()
 
-        # Get non-energy sectors and compute their *requested* power
-        non_energy = {name: s for name, s in self.sectors.items() if name != "energy"}
-        total_power_demand = sum(
-            float(sector.get_power_demand()) for sector in non_energy.values() if hasattr(sector, "get_power_demand")
-        )
+        # Get non-energy sectors that can consume power (do this once)
+        power_consumers = {
+            name: s for name, s in self.sectors.items()
+            if name != "energy" and hasattr(s, "get_power_demand")
+        }
+        
+        total_power_demand = sum(float(s.get_power_demand()) for s in power_consumers.values())
 
         # Generate available power from energy sector (if present)
         energy_sector = self.sectors.get("energy")
         available_power = energy_sector.step(total_power_demand) if energy_sector else 0.0
 
         # Allocate fairly among non-energy sectors
-        sector_allocations = self._allocate_power_fairly(available_power)
+        sector_allocations = self._allocate_power_fairly(available_power, power_consumers)
 
         # Step each sector with its allocation
-        for name, sector in non_energy.items():
+        for name, sector in power_consumers.items():
             alloc = sector_allocations.get(name, 0.0)
             if hasattr(sector, "step"):
                 sector.step(alloc)
@@ -179,68 +196,70 @@ class WorldSystem(Model):
         self.performance_metrics[metric_id] = float(value)
 
     def _update_environment_dynamics(self):
-        """Apply per-step environment effects like dust decay."""
+        """
+        Apply per-step environment effects like dust decay. Each human operation causes impact on the environment.
+        However, some of those impacts may dessipate over time. As such we run it at every step to update performance
+        metrics after each step based on environmental impacts.
+        """
         if self.dust_decay_per_step > 0:
             current_dust = self.get_performance_metric("IND-DUST-COV")
             self.set_performance_metric("IND-DUST-COV", max(0.0, current_dust - self.dust_decay_per_step))
 
+    def _build_single_metric_score(self, metric_id: str) -> dict:
+        """Build the score report for a single metric."""
+
+        mdef = self._metric_definitions.get(metric_id, {})
+        current = self.get_performance_metric(metric_id)
+        low = float(mdef.get("threshold_low", 0.0))
+        high = float(mdef.get("threshold_high", 1.0))
+
+        # Determine status based on thresholds
+        status = "within" if low <= current <= high else "outside"
+        if not mdef:
+            status = "unknown"
+
+        entry = {
+            "name": mdef.get("name", metric_id),
+            "unit": mdef.get("unit"),
+            "type": mdef.get("type", "positive"),
+            "threshold_low": low,
+            "threshold_high": high,
+            "current": current,
+            "status": status,
+            "score": self.policy.score(metric_id),
+        }
+
+        # Attach performance-goal info if present for this metric
+        if metric_id in self._goals_by_metric:
+            pg = self._goals_by_metric[metric_id]
+            entry["goal"] = {
+                "target": float(pg.get("target_value", 0.0)),
+                "direction": pg.get("direction", "minimize"),
+                "weight": float(pg.get("weight", 1.0)),
+                "goal_id": pg.get("goal_id"),
+                "name": pg.get("name"),
+            }
+        
+        return entry
+
     def _build_metric_scores(self, selected_ids=None):
         """
-        Build a unified score report for metrics (environment + goal-linked).
+        Build a unified score report for metrics by iterating through all relevant IDs.
         """
+        # Union of all known metric IDs
+        all_ids = set(self._metric_definitions.keys()) | set(self._goals_by_metric.keys())
+        
+        # Filter by selected_ids if provided
+        ids_to_process = all_ids & set(selected_ids) if selected_ids else all_ids
 
-        defs_by_id = {m.get("id"): m for m in self.metric_definitions if isinstance(m, dict) and m.get("id")}
-
-        # Map performance goals by metric id (from config.goals.performance_goals)
-        goals_by_metric = {}
-        for pg in self.performance_goals:
-            mid = pg.get("metric_id")
-            if mid:
-                goals_by_metric[mid] = pg
-
-        # Union: all defined metric IDs plus those referenced by performance goals
-        ids = set(defs_by_id.keys()) | set(goals_by_metric.keys())
-        if selected_ids:
-            ids = ids & set(selected_ids)
-
-        report = {}
-        for metric_id in ids:
-            mdef = defs_by_id.get(metric_id, {})
-            current = float(self.performance_metrics.get(metric_id, 0.0))
-            low = float(mdef.get("threshold_low", 0.0)) if mdef else 0.0
-            high = float(mdef.get("threshold_high", 1.0)) if mdef else 1.0
-            mtype = mdef.get("type", "positive") if mdef else "positive"
-            score = self.policy.score(metric_id)
-            status = "within" if mdef and (low <= current <= high) else ("unknown" if not mdef else "outside") #TODO: This can be based on the goal taget value
-
-            entry = {
-                "name": mdef.get("name", metric_id) if mdef else metric_id,
-                "unit": mdef.get("unit"),
-                "type": mtype,
-                "threshold_low": low,
-                "threshold_high": high,
-                "current": current,
-                "status": status,
-                "score": score,
-            }
-
-            # Attach performance-goal info if present for this metric
-            if metric_id in goals_by_metric:
-                pg = goals_by_metric[metric_id]
-                entry["goal"] = {
-                    "target": float(pg.get("target_value", 0.0)),
-                    "direction": pg.get("direction", "minimize"),
-                    "weight": float(pg.get("weight", 1.0)),
-                    "goal_id": pg.get("goal_id"),
-                    "name": pg.get("name"),
-                }
-
-            report[metric_id] = entry
-
-        return report
+        # Use a dictionary comprehension for a more concise loop
+        return {
+            metric_id: self._build_single_metric_score(metric_id)
+            for metric_id in ids_to_process
+        }
 
     def _apply_metric_contributions(self, contributions: dict):
-        """Apply aggregated per-step metric deltas from sectors."""
+        """Apply aggregated per-step metric contributiins from sectors."""
         for metric_id, delta in contributions.items():
             cur = self.get_performance_metric(metric_id)
             self.set_performance_metric(metric_id, cur + float(delta))
