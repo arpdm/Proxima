@@ -87,7 +87,7 @@ class PolicyEngine:
     ----------
     world : object
         The simulation world object, which must provide metric definitions, sector access,
-        and a method for retrieving current metric values.
+        and a method for retrieving current metric values. (WorldSystem Object)
 
     Attributes
     ----------

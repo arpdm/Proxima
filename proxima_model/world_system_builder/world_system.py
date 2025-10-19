@@ -55,6 +55,7 @@ from proxima_model.sphere_engine.science_sector import ScienceSector
 from proxima_model.sphere_engine.manufacturing_sector import ManufacturingSector
 from proxima_model.sphere_engine.equipment_manufacturing_sector import EquipmentManSector
 from proxima_model.policy_engine.policy_engine import PolicyEngine
+from proxima_model.core.event_bus import EventBus
 
 
 class WorldSystem(Model):
@@ -70,6 +71,7 @@ class WorldSystem(Model):
         
         # Initialize sectors of the world system
         self.sectors: Dict[str, object] = {}
+        self.event_bus = EventBus()
         self._initialize_sectors()
 
         # Get Performance Goals - Defines the goals of the system
@@ -114,7 +116,7 @@ class WorldSystem(Model):
 
         for name, sector_class in sector_map.items():
             if name in agents_config:
-                self.sectors[name] = sector_class(self, agents_config[name])
+                self.sectors[name] = sector_class(self, agents_config[name], self.event_bus)
 
     def _allocate_power_fairly(self, available_power: float, operational_sectors: Dict[str, object]) -> Dict[str, float]:
         """Compute fair allocations for all non-energy sectors.

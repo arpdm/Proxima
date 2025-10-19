@@ -44,6 +44,10 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
             components_dict.get("manufacturing", []), component_templates, world_system
         )
 
+        config["agents_config"]["equipment_manufacturing"] = _configure_equipment_manufacturing_sector(
+            components_dict.get("equipmentManufacturing", []), component_templates
+        )
+
     # Load active goals configuration
     config["goals"] = _configure_goals_system(world_system, db)
     return config
@@ -125,6 +129,21 @@ def _configure_manufacturing_sector(manufacturing_components, templates, world_s
             config["isru_extractors"].append(base_cfg)
         elif subtype == "generator":
             config["isru_generators"].append(base_cfg)
+    return config
+
+def _configure_equipment_manufacturing_sector(equipment_components, templates):
+    """Configure the equipment manufacturing sector."""
+
+    config = {"initial_stocks": {}}
+
+    if not equipment_components:
+        return config
+
+    for comp in equipment_components:
+        # Check for the special "equipment_stock" key
+        if "equipment_stock" in comp:
+            config["initial_stocks"].update(comp["equipment_stock"])
+
     return config
 
 

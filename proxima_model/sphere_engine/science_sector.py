@@ -11,7 +11,7 @@ from proxima_model.components.science_rover import ScienceRover
 class ScienceSector:
     """Manages science rovers and research operations."""
 
-    def __init__(self, config):
+    def __init__(self, model, config, event_bus):
         """
         Initialize the science sector.
 
@@ -25,6 +25,7 @@ class ScienceSector:
         self.total_power_demand = 0.0
         self.total_power_used = 0.0
         self.throttle_factor = 1.0  # 0..1, set by WorldSystem
+        self.event_bus = event_bus
 
         self._initialize_rovers()
 

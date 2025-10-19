@@ -44,7 +44,7 @@ class ManufacturingSector:
         "Electrolysis": "O2_kg",  # adjust if you track H2 separately or prioritize H2
     }
 
-    def __init__(self, model, config):
+    def __init__(self, model, config, event_bus):
         """
         Initialize manufacturing sector with agents and resource stocks.
 
@@ -54,6 +54,7 @@ class ManufacturingSector:
         """
         self.model = model
         self.config = config
+        self.event_bus = event_bus
 
         self.isru_extractors: List[ISRUExtractor] = []
         self.isru_generators: List[ISRUGenerator] = []

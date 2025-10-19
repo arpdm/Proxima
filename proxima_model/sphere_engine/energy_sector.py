@@ -10,8 +10,9 @@ from proxima_model.components.energy_microgrid import MicrogridManager
 class EnergySector:
     """Simplified energy sector with single-step processing."""
 
-    def __init__(self, model, config):
+    def __init__(self, model, config, event_bus):
         self.model = model
+        self.event_bus = event_bus
         self.microgrid = MicrogridManager(model, config)
 
     def step(self, power_demand):
