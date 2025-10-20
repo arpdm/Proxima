@@ -11,12 +11,14 @@ from mesa import Agent
 
 class StorageType(Enum):
     """Available storage types for expansion."""
+
     LI_BATTERY = auto()
     # Add more types here as needed (e.g., FLYWHEEL = auto())
 
 
 class GeneratorType(Enum):
     """Available generator types for expansion."""
+
     SOLAR = auto()
     NUCLEAR = auto()
     # Add more types here as needed (e.g., WIND = auto())
@@ -25,6 +27,7 @@ class GeneratorType(Enum):
 @dataclass
 class PowerStorageConfig:
     """Configuration for power storage components."""
+
     max_operational_cap_kwh: float = 100.0
     min_operational_cap_kwh: float = 0.0
     initial_charge_kwh: float = 0.0
@@ -45,6 +48,7 @@ class PowerStorageConfig:
 @dataclass
 class PowerGeneratorConfig:
     """Configuration for power generator components."""
+
     power_capacity_kwh: float = 10.0
     efficiency: float = 1.0
     availability: float = 1.0
@@ -63,14 +67,14 @@ class PowerStorage:
 
     def __init__(self, storage_cfg: Dict[str, Any]):
         config = storage_cfg.get("config", storage_cfg)
-        
+
         # Parse subtype with space handling
         subtype_str = storage_cfg.get("subtype", "LI_BATTERY").upper().replace(" ", "_")
         try:
             self.subtype = StorageType[subtype_str]
         except KeyError:
             self.subtype = StorageType.LI_BATTERY  # Fallback to default
-        
+
         # Initialize using config values (preserve original behavior)
         self.charge_level = config.get("initial_charge_kwh", 0)
         self.capacity = config.get("max_operational_cap_kwh", 100)
@@ -115,14 +119,14 @@ class PowerGenerator:
 
     def __init__(self, gen_cfg: Dict[str, Any]):
         config = gen_cfg.get("config", gen_cfg)
-        
+
         # Parse subtype with space handling
         subtype_str = gen_cfg.get("subtype", "SOLAR").upper().replace(" ", "_")
         try:
             self.subtype = GeneratorType[subtype_str]
         except KeyError:
             self.subtype = GeneratorType.SOLAR  # Fallback to default
-        
+
         # Initialize using config values (preserve original behavior)
         self.capacity = config.get("power_capacity_kwh", 10)
         self.efficiency = config.get("efficiency", 1.0)
@@ -141,7 +145,7 @@ class MicrogridManager(Agent):
 
     def __init__(self, model, config: Dict[str, Any]):
         super().__init__(model)
-        
+
         # Component collections
         self.storages: List[PowerStorage] = []
         self.generators: List[PowerGenerator] = []

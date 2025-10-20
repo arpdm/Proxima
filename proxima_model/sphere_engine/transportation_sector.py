@@ -1,142 +1,309 @@
-from typing import List, Dict
+"""
+Transportation Sector Manager
+
+Manages rocket fleet, fuel generation, and transport requests between Earth and Moon.
+"""
+
+from dataclasses import dataclass, field
+from enum import Enum, auto
+from typing import List, Dict, Optional, Any
 from proxima_model.components.rocket import Rocket
 from proxima_model.components.fuel_generator import FuelGenerator
 
 
+class TransportRequestStatus(Enum):
+    """Status of transport requests."""
+
+    QUEUED = "queued"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class Location(Enum):
+    """Available locations for transport."""
+
+    EARTH = "Earth"
+    MOON = "Moon"
+    # Add more locations as needed (e.g., MARS = "Mars")
+
+
+@dataclass
+class TransportRequest:
+    """Represents a transport request."""
+
+    requesting_sector: str
+    payload: Dict[str, float]
+    origin: str
+    destination: str
+    status: str = "queued"
+
+    def __post_init__(self):
+        """Validate request after initialization."""
+        if not self.payload:
+            raise ValueError("Payload cannot be empty")
+        if self.origin == self.destination:
+            raise ValueError("Origin and destination cannot be the same")
+
+
+@dataclass
+class TransportationConfig:
+    """Configuration for transportation sector."""
+
+    earth_moon_distance_km: float = 384400.0
+    loading_time_steps: int = 24
+    he3_request_threshold_kg: float = 1.0
+
+    def __post_init__(self):
+        """Validate configuration."""
+        if self.earth_moon_distance_km <= 0:
+            raise ValueError("Distance must be positive")
+        if self.loading_time_steps < 0:
+            raise ValueError("Loading time must be non-negative")
+
+
+@dataclass
+class ResourceStocks:
+    """Internal resource stocks for transportation sector."""
+
+    rocket_fuel_kg: float = 0.0
+    he3_kg: float = 0.0
+
+    def __post_init__(self):
+        """Validate stocks."""
+        if self.rocket_fuel_kg < 0 or self.he3_kg < 0:
+            raise ValueError("Stock values cannot be negative")
+
+
 class TransportationSector:
+    """Manages rocket fleet, fuel generation, and transport logistics."""
 
-    # Constants for the simulation
-    # TODO: This can be loaded to enviornment configuration
-    EARTH_MOON_DISTANCE_KM = 384400
-    LOADING_TIME_STEPS = 24  # e.g., 24 hours
+    # Default configuration constants
+    DEFAULT_CONFIG = TransportationConfig()
 
-    def __init__(self, model, config: dict, event_bus):
+    def __init__(self, model, config: Dict[str, Any], event_bus):
         self.model = model
         self.event_bus = event_bus
-        self.transport_queue: List[Dict] = []
 
-        # Internal buffer for resources needed for fuel production
-        self.internal_stocks = {"He3_kg": 0.0}
+        # Load configuration
+        self._config = TransportationConfig(
+            earth_moon_distance_km=config.get("earth_moon_distance_km", self.DEFAULT_CONFIG.earth_moon_distance_km),
+            loading_time_steps=config.get("loading_time_steps", self.DEFAULT_CONFIG.loading_time_steps),
+            he3_request_threshold_kg=config.get(
+                "he3_request_threshold_kg", self.DEFAULT_CONFIG.he3_request_threshold_kg
+            ),
+        )
 
-        self.stocks = {"rocket_fuel_kg": 0.0}
+        # Initialize stocks
+        self._stocks = ResourceStocks()
+
+        # Transport queue
+        self.transport_queue: List[TransportRequest] = []
 
         # Initialize rocket fleet
-        self.rockets: List[Rocket] = []
-        for i, rocket_cfg in enumerate(config.get("rockets", [])):
-            self.rockets.append(Rocket(self.model, rocket_cfg, event_bus))
+        rocket_config = config.get("rockets")
+        for agent_config in rocket_config:
+            rocket_quantity = agent_config.get("quantity", 1)
+            self.rockets: List[Rocket] = []
+            for _ in range(rocket_quantity):
+                self.rockets.append(Rocket(self.model, agent_config, event_bus))
 
         # Initialize fuel generators
-        self.fuel_generators: List[FuelGenerator] = []
-        for gen_cfg in config.get("fuel_generators", []):
-            self.fuel_generators.append(FuelGenerator(gen_cfg))
+        fuel_gen_config = config.get("fuel_generators")
+        for agent_config in fuel_gen_config:
+            fuel_gen_quantity = agent_config.get("quantity", 1)
+            self.fuel_generators: List[FuelGenerator] = []
+            for _ in range(fuel_gen_quantity):
+                self.fuel_generators.append(FuelGenerator(agent_config))
 
         # Subscribe to events
         self.event_bus.subscribe("transport_request", self.handle_transport_request)
         self.event_bus.subscribe("resource_allocated", self.handle_resource_allocation)
 
-    def handle_transport_request(self, requesting_sector: str, payload: dict, origin: str, destination: str):
-        """This method is called automatically by the event bus to queue a new request."""
+    @property
+    def stocks(self) -> Dict[str, float]:
+        """Get current stocks (for backwards compatibility)."""
+        return {"rocket_fuel_kg": self._stocks.rocket_fuel_kg}
 
+    @property
+    def internal_stocks(self) -> Dict[str, float]:
+        """Get internal stocks (for backwards compatibility)."""
+        return {"He3_kg": self._stocks.he3_kg}
+
+    def handle_transport_request(
+        self, requesting_sector: str, payload: Dict[str, float], origin: str, destination: str
+    ) -> None:
+        """
+        Handle incoming transport request from event bus.
+
+        Args:
+            requesting_sector: Sector making the request
+            payload: Dictionary of resources to transport
+            origin: Starting location
+            destination: Target location
+        """
         print(f"Transportation Sector received request from {requesting_sector} for {payload}.")
 
-        self.transport_queue.append(
-            {
-                "requesting_sector": requesting_sector,
-                "payload": payload,
-                "origin": origin,
-                "destination": destination,
-                "status": "queued",
-            }
-        )
+        try:
+            request = TransportRequest(
+                requesting_sector=requesting_sector,
+                payload=payload,
+                origin=origin,
+                destination=destination,
+                status=TransportRequestStatus.QUEUED.value,
+            )
+            self.transport_queue.append(request)
+        except ValueError as e:
+            print(f"Invalid transport request: {e}")
 
-    def handle_resource_allocation(self, recipient_sector: str, resource: str, amount: float):
-        """Receives confirmation that a requested resource has been allocated."""
+    def handle_resource_allocation(self, recipient_sector: str, resource: str, amount: float) -> None:
+        """
+        Receive confirmation of resource allocation from event bus.
+
+        Args:
+            recipient_sector: Sector receiving the resource
+            resource: Resource type
+            amount: Amount allocated
+        """
         if recipient_sector == "transportation":
             print(f"Transportation Sector received allocation of {amount} kg of {resource}.")
-            if resource in self.internal_stocks:
-                self.internal_stocks[resource] += amount
+            if resource == "He3_kg":
+                self._stocks.he3_kg += amount
 
-    def _request_resources_for_fuel(self):
-        """Checks internal He3 stock and requests more if below a threshold."""
-        if self.internal_stocks["He3_kg"] < 1:
-            self.event_bus.publish("resource_request", requesting_sector="transportation", resource="He3_kg", amount=1)
+    def _request_resources_for_fuel(self) -> None:
+        """Request He3 from manufacturing sector if below threshold."""
+        if self._stocks.he3_kg < self._config.he3_request_threshold_kg:
+            self.event_bus.publish(
+                "resource_request",
+                requesting_sector="transportation",
+                resource="He3_kg",
+                amount=self._config.he3_request_threshold_kg,
+            )
 
-    def get_power_demand(self) -> float:
-        """Calculate the total power demand from all fuel generators."""
-        # TODO: This will need to change later
-        return 1
-
-    def step(self, allocated_power):
-        """
-        Executes a single simulation step for the transportation sector.
-
-        Execution Order:
-        1. Generate fuel.
-        2. Process the transport queue and launch available rockets if fuel permits.
-        3. Step each rocket to advance its mission state.
-        """
-
-        # 1. Generate Fuel
-        self._request_resources_for_fuel()
-
+    def _generate_fuel(self) -> None:
+        """Generate rocket fuel from He3 using fuel generators."""
         for generator in self.fuel_generators:
-            if self.internal_stocks["He3_kg"] > 0:
-                he3_consumed, prop_generated = generator.step(self.internal_stocks["He3_kg"])
+            if self._stocks.he3_kg > 0:
+                he3_consumed, prop_generated = generator.step(self._stocks.he3_kg)
                 if prop_generated > 0:
-                    self.stocks["rocket_fuel_kg"] += prop_generated
-                    self.internal_stocks["He3_kg"] -= he3_consumed
+                    self._stocks.rocket_fuel_kg += prop_generated
+                    self._stocks.he3_kg -= he3_consumed
 
-        # 2. Process Transport Queue and Launch Rockets
+    def _process_transport_queue(self) -> None:
+        """Process queued transport requests and launch rockets if fuel permits."""
+        # Process in reverse order (LIFO - most recent first)
         for request in reversed(self.transport_queue):
-            available_rocket = next((r for r in self.rockets if r.is_available), None)
+            # Find available rocket
+            available_rocket = self._find_available_rocket()
 
-            if available_rocket:
-                # This logic now correctly handles Earth -> Moon requests
-                return_payload = request["payload"]
-                return_payload_kg = sum(return_payload.values()) * 20  # Placeholder weight
-                outbound_payload = {}
-                outbound_payload_kg = 0.0
+            if not available_rocket:
+                break  # No more available rockets
 
-                # STEP 1: CALCULATE requirements without changing rocket state
-                propellant_needed, one_way_steps = available_rocket.calculate_round_trip_requirements(
-                    outbound_payload_kg=outbound_payload_kg,
-                    return_payload_kg=return_payload_kg,
-                    flight_distance_km=self.EARTH_MOON_DISTANCE_KM,
-                )
+            # Attempt to launch rocket for this request
+            if self._attempt_launch(available_rocket, request):
+                self.transport_queue.remove(request)
 
-                print("Prop Needed: ", propellant_needed)
+    def _find_available_rocket(self) -> Optional[Rocket]:
+        """Find first available rocket in fleet."""
+        return next((r for r in self.rockets if r.is_available), None)
 
-                # STEP 2: CHECK resources BEFORE committing
-                if propellant_needed > 0 and self.stocks["rocket_fuel_kg"] >= propellant_needed:
-                    print(
-                        f"Launching rocket {available_rocket.unique_id} for request. Fuel used: {propellant_needed:.2f} kg."
-                    )
-                    self.stocks["rocket_fuel_kg"] -= propellant_needed
+    def _attempt_launch(self, rocket: Rocket, request: TransportRequest) -> bool:
+        """
+        Attempt to launch rocket for given request.
 
-                    # STEP 3: COMMIT the launch now that fuel is secured
-                    available_rocket.commit_round_trip(
-                        destination="Earth",
-                        outbound_payload=outbound_payload,
-                        return_payload=return_payload,
-                        one_way_duration=one_way_steps,
-                        loading_time_steps=self.LOADING_TIME_STEPS,
-                    )
+        Args:
+            rocket: Available rocket to launch
+            request: Transport request to fulfill
 
-                    self.transport_queue.remove(request)
-                else:
-                    # This message is now accurate, as the rocket's state has not changed.
-                    print(f"Launch of rocket {available_rocket.unique_id} delayed: Not enough fuel.")
-            else:
-                break
+        Returns:
+            True if launch successful, False otherwise
+        """
+        # Calculate payload weights
+        return_payload = request.payload
+        return_payload_kg = sum(return_payload.values()) * 20  # Placeholder weight
+        outbound_payload = {}
+        outbound_payload_kg = 0.0
 
-        # 3. Step All Rockets
+        # Calculate fuel requirements
+        propellant_needed, one_way_steps = rocket.calculate_round_trip_requirements(
+            outbound_payload_kg=outbound_payload_kg,
+            return_payload_kg=return_payload_kg,
+            flight_distance_km=self._config.earth_moon_distance_km,
+        )
+
+        print(f"Propellant needed: {propellant_needed:.2f} kg")
+
+        # Check if enough fuel available
+        if propellant_needed > 0 and self._stocks.rocket_fuel_kg >= propellant_needed:
+            print(f"Launching rocket {rocket.unique_id} for request. " f"Fuel used: {propellant_needed:.2f} kg.")
+
+            # Deduct fuel
+            self._stocks.rocket_fuel_kg -= propellant_needed
+
+            # Commit the launch
+            rocket.commit_round_trip(
+                destination="Earth",
+                outbound_payload=outbound_payload,
+                return_payload=return_payload,
+                one_way_duration=one_way_steps,
+                loading_time_steps=self._config.loading_time_steps,
+            )
+
+            return True
+        else:
+            print(
+                f"Launch of rocket {rocket.unique_id} delayed: "
+                f"Not enough fuel (need {propellant_needed:.2f} kg, have {self._stocks.rocket_fuel_kg:.2f} kg)."
+            )
+            return False
+
+    def _step_all_rockets(self) -> None:
+        """Advance mission state for all rockets."""
         for rocket in self.rockets:
             rocket.step()
 
-    def get_metrics(self) -> dict:
-        """Returns current metrics for the transportation sector."""
+    def get_power_demand(self) -> float:
+        """
+        Calculate total power demand from all fuel generators.
+
+        Returns:
+            Total power demand in kW
+        """
+        # TODO: Implement proper power demand calculation
+        return 1.0
+
+    def step(self, allocated_power: float) -> None:
+        """
+        Execute single simulation step for transportation sector.
+
+        Execution Order:
+        1. Generate fuel from He3
+        2. Process transport queue and launch rockets
+        3. Advance all rocket mission states
+
+        Args:
+            allocated_power: Power allocated to sector (currently unused)
+        """
+        # 1. Generate Fuel
+        self._request_resources_for_fuel()
+        self._generate_fuel()
+
+        # 2. Process Transport Queue and Launch Rockets
+        self._process_transport_queue()
+
+        # 3. Step All Rockets
+        self._step_all_rockets()
+
+    def get_metrics(self) -> Dict[str, Any]:
+        """
+        Get current metrics for transportation sector.
+
+        Returns:
+            Dictionary containing stocks, rocket states, and queue status
+        """
         return {
-            "stocks": self.stocks.copy(),
-            "rockets": [r.report() for r in self.rockets],
+            "rockets": len(self.rockets),
+            "fuel_generators": len(self.fuel_generators),
             "queued_requests": len(self.transport_queue),
+            "rocket_fuel_kg": self._stocks.rocket_fuel_kg,
         }

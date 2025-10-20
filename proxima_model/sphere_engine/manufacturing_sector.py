@@ -442,5 +442,5 @@ class ManufacturingSector:
                 "operational_generators": self._current_metrics.operational_generators,
                 "sector_state": self.sector_state.name,
                 **{f"stock_{k}": v for k, v in self.stocks.items()},
-                "metric_contributions": self._create_metric_map()
+                "metric_contributions": self._create_metric_map(),
             }

@@ -174,7 +174,7 @@ class ISRUGenerator(Agent):
 
     def _setup_he3_parameters(self, model) -> He3Concentration:
         """Setup He-3 concentration parameters from model configuration."""
-        
+
         # Find helium3 resource configuration
         he3_config = next(
             (res for res in model.config.get("resources", []) if res.get("resource") == "helium3"),
