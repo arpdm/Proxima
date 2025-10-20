@@ -101,14 +101,16 @@ class TransportationSector:
                 propellant_needed, one_way_steps = available_rocket.calculate_round_trip_requirements(
                     outbound_payload_kg=outbound_payload_kg,
                     return_payload_kg=return_payload_kg,
-                    flight_distance_km=self.EARTH_MOON_DISTANCE_KM
+                    flight_distance_km=self.EARTH_MOON_DISTANCE_KM,
                 )
 
                 print("Prop Needed: ", propellant_needed)
 
                 # STEP 2: CHECK resources BEFORE committing
                 if propellant_needed > 0 and self.stocks["rocket_fuel_kg"] >= propellant_needed:
-                    print(f"Launching rocket {available_rocket.unique_id} for request. Fuel used: {propellant_needed:.2f} kg.")
+                    print(
+                        f"Launching rocket {available_rocket.unique_id} for request. Fuel used: {propellant_needed:.2f} kg."
+                    )
                     self.stocks["rocket_fuel_kg"] -= propellant_needed
 
                     # STEP 3: COMMIT the launch now that fuel is secured

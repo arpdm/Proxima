@@ -114,7 +114,7 @@ class WorldSystem(Model):
             "science": ScienceSector,
             "manufacturing": ManufacturingSector,
             "equipment_manufacturing": EquipmentManSector,
-            "transportation" : TransportationSector
+            "transportation": TransportationSector,
         }
 
         for name, sector_class in sector_map.items():

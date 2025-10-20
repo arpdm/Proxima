@@ -95,7 +95,7 @@ class Rocket(Agent):
         # Decrement ETA for the current phase
         self.mission["eta_steps"] -= 1
         print(self.mission["eta_steps"])
-        
+
         # Check for phase completion
         if self.mission["eta_steps"] <= 0:
             # --- OUTBOUND ARRIVAL ---

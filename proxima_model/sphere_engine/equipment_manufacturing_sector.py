@@ -36,7 +36,7 @@ class EquipmentManSector:
         self.sector_state = "active"
 
         self.equipment: Dict[str, float] = config.get("initial_stocks", {})
-        
+
         # NEW: Track items that have been ordered but have not yet arrived.
         self.pending_orders: Dict[str, float] = {}
 
@@ -51,7 +51,7 @@ class EquipmentManSector:
             for item, amount in payload.items():
                 # Add to physical stock
                 self.equipment[item] = self.equipment.get(item, 0) + amount
-                
+
                 # NEW: Decrement the pending order count for the received item.
                 if item in self.pending_orders:
                     self.pending_orders[item] = max(0, self.pending_orders.get(item, 0) - amount)
@@ -73,7 +73,7 @@ class EquipmentManSector:
                 # Calculate how many to order to reach the minimum
                 amount_to_order = min_level - effective_stock
                 payload_to_request[item] = amount_to_order
-                
+
                 # NEW: Immediately update pending orders to reflect the new request.
                 self.pending_orders[item] = pending_stock + amount_to_order
 
@@ -109,6 +109,6 @@ class EquipmentManSector:
         metrics = {
             "sector_state": self.sector_state,
             **{f"equipment_{k}": v for k, v in self.equipment.items()},
-            **{f"pending_{k}": v for k, v in self.pending_orders.items()}
+            **{f"pending_{k}": v for k, v in self.pending_orders.items()},
         }
         return metrics

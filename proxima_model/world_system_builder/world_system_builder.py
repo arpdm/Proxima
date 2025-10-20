@@ -56,6 +56,7 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
     config["goals"] = _configure_goals_system(world_system, db)
     return config
 
+
 def _configure_transportation_sector(transportation_components, templates):
     """Configure the transportation sector with rockets and fuel generators."""
     config = {"rockets": [], "fuel_generators": []}
@@ -79,8 +80,11 @@ def _configure_transportation_sector(transportation_components, templates):
         elif comp_type == "fuel_gen":
             config["fuel_generators"].append(base_cfg)
 
-    print(f"Configured transportation sector: {len(config['rockets'])} rockets, {len(config['fuel_generators'])} fuel generators")
+    print(
+        f"Configured transportation sector: {len(config['rockets'])} rockets, {len(config['fuel_generators'])} fuel generators"
+    )
     return config
+
 
 def _configure_energy_sector(energy_components, templates):
     """Configure energy sector components."""

@@ -5,18 +5,27 @@ ProximaRunner: Simplified simulation runner with UI command support.
 import time
 import traceback
 import argparse
+from dataclasses import dataclass
 
 from data_engine.proxima_db_engine import ProximaDB
 from proxima_model.world_system_builder.world_system_builder import build_world_system_config
 from proxima_model.world_system_builder.world_system import WorldSystem
 from proxima_model.tools.data_logger import DataLogger
 
-# ==== DEF ====
+# ==== CONFIG ====
+@dataclass
+class RunnerConfig:
+    """Configuration for the ProximaRunner."""
 
-HOST_UPDATED_FREQUENCY = 600  # How often to update the hosted DB with simulation state
+    local_uri: str = "mongodb://localhost:27017"
+    hosted_uri: str = None
+    host_update_frequency: int = 600
+    default_step_delay: float = 0.1
+    log_flush_interval: int = 1000  # Flush logs every N steps to manage memory
 
 def parse_args():
     """Parse command-line arguments for runner options."""
+    
     parser = argparse.ArgumentParser(description="Proxima Simulation Runner")
     parser.add_argument("--headless", action="store_true", help="Run in headless mode (no UI commands)")
     parser.add_argument("--mongo-uri", type=str, default=None, help="MongoDB URI (overrides db choice)")
@@ -25,91 +34,117 @@ def parse_args():
 class ProximaRunner:
     """Main simulation runner class for Proxima."""
 
-    def __init__(self, mongo_uri=None):
-        # Setup database connections
+    def __init__(self, mongo_uri=None, config: RunnerConfig = None):
+        self.config = config or RunnerConfig()
         if mongo_uri:
-            hosted_uri = mongo_uri
-        else:  # Local
-            hosted_uri = None
+            self.config.hosted_uri = mongo_uri
         
-        self.local_uri = "mongodb://localhost:27017"
-        self.proxima_db = ProximaDB(uri=self.local_uri)
-        self.proxima_hosted_db = ProximaDB(uri=hosted_uri) if hosted_uri else None
-        self.proxima_db.db.db.logs_simulation.delete_many({})  # Clear old logs
+        # Setup database connections
+        self.local_db = ProximaDB(uri=self.config.local_uri)
+        self.hosted_db = ProximaDB(uri=self.config.hosted_uri) if self.config.hosted_uri else None
+        self.local_db.db.db.logs_simulation.delete_many({})  # Clear old logs
 
         # Load experiment configuration from DB
-        exp_config = self.proxima_db.find_by_id("experiments", "exp_001")
+        exp_config = self.local_db.find_by_id("experiments", "exp_001")
         self.sim_time = exp_config.get("simulation_time_stapes", None)
         self.ws_id = exp_config["world_system_id"]
         self.exp_id = exp_config["_id"]
 
         # Setup logging and simulation state
-        self.logger = DataLogger(experiment_id=self.exp_id, db=self.proxima_db, ws_id=self.ws_id)
-        self.hosted_logger = DataLogger(experiment_id=self.exp_id, db=self.proxima_hosted_db, ws_id=self.ws_id)
+        self.logger = DataLogger(experiment_id=self.exp_id, db=self.local_db, ws_id=self.ws_id)
+        self.hosted_logger = DataLogger(experiment_id=self.exp_id, db=self.hosted_db, ws_id=self.ws_id) if self.hosted_db else None
         self.is_running = False
         self.is_paused = False
         self.continuous = True
         self.ws = None
-        self.step_delay = 0.1
-        self.host_update_frequency = HOST_UPDATED_FREQUENCY
+        self.step_delay = self.config.default_step_delay
+        self.step_counter = 0  # For periodic tasks like log flushing
 
     def run(self, continuous=None):
         """Main simulation runner loop."""
-        self.continuous = continuous if continuous is not None else (self.sim_time is None)
 
-        # Build world system configuration and initialize WorldSystem
-        config = build_world_system_config(self.ws_id, self.exp_id, self.proxima_db)
+        self.continuous = continuous if continuous is not None else (self.sim_time is None)
+        config = build_world_system_config(self.ws_id, self.exp_id, self.local_db)
         self.ws = WorldSystem(config, 100)
         self.is_running = True
         self.is_paused = False
-        update_counter = 0 # Counter to know when to update the hosted server with state of the world system
+        update_counter = 0
 
         try:
-            while self.is_running and (continuous or self.ws.steps < self.sim_time):
-                self._process_commands()  # Check for runtime commands (pause, resume, etc.)
+            while self._should_continue():
+
+                self._process_commands()
 
                 if self.is_paused:
                     time.sleep(0.1)
                     continue
                 if not self.is_running:
-                    #TODO: File logger needs to be more efficient. We need to save to file in chuncks and clear the cache to not hug memory
-                    self.logger.save_to_file()
+                    self._finalize_run()
                     break
 
-                # Step the world system and update the state
-                self.ws.step()
+                # Break into smaller methods ---
+                self._perform_simulation_step()
+                self._handle_post_step_tasks(update_counter)
                 update_counter += 1
-                update_hosted = (self.proxima_hosted_db and (update_counter >= self.host_update_frequency))
-                self._update_world_system_state(update_hosted=update_hosted)
-                if update_hosted:
-                    update_counter = 0
                 time.sleep(self.step_delay)
 
         except Exception as e:
             print(f"Simulation error: {e}")
             traceback.print_exc()
         finally:
-            self.is_running = False
-            self.is_paused = False
-            self._update_world_system_state()
+            self._finalize_run()
+
+    def _should_continue(self):
+        """Check if the simulation should continue."""
+        return self.is_running and (self.continuous or self.ws.steps < self.sim_time)
+
+    def _perform_simulation_step(self):
+        """Perform a single simulation step."""
+
+        self.ws.step()
+        self.step_counter += 1
+
+    def _handle_post_step_tasks(self, update_counter):
+        """Handle tasks after each step, like logging and updates."""
+
+        update_hosted = self.hosted_db and (update_counter >= self.config.host_update_frequency)
+        self._update_world_system_state(update_hosted=update_hosted)
+
+        # Only used for updated the online hosted database
+        if update_hosted:
+            update_counter = 0
+        
+        # Periodic log flushing to manage memory
+        if self.step_counter % self.config.log_flush_interval == 0:
+            self.logger.save_to_file()
+
+    def _finalize_run(self):
+        """Finalize the run by saving logs and resetting state."""
+
+        self.logger.save_to_file()
+
+        if self.hosted_logger:
+            self.hosted_logger.save_to_file()
+
+        self.is_running = False
+        self.is_paused = False
+        self._update_world_system_state()
 
     def _process_commands(self):
         """Process runtime commands from the database (pause, resume, stop, set_delay)."""
+
         try:
-            command = self.proxima_db.db["runtime_commands"].find_one_and_delete(
+            command = self.local_db.db["runtime_commands"].find_one_and_delete(
                 {"experiment_id": self.exp_id}, sort=[("timestamp", -1)]
             )
-
-            if not command:
-                return
-
-            self._execute_command(command)
-
+            if command:
+                self._execute_command(command)
         except Exception as e:
-            print(f"Command error: {e}")
+            print(f"Command processing error: {e}")
 
     def _execute_command(self, command):
         """Execute a single runtime command."""
+
         action = command.get("action")
         print(f"Processing: {action}")
 
@@ -127,8 +162,7 @@ class ProximaRunner:
     def _update_world_system_state(self, update_hosted=False):
         """Update world system state in MongoDB for UI access and logging."""
 
-        # Build current state snapshot
-        self.current_state = { 
+        self.current_state = {
             "step": self.ws.steps,
             "simulation_status": {
                 "is_running": self.is_running,
@@ -139,29 +173,29 @@ class ProximaRunner:
             },
         }
 
-        # Log metrics and state to local DB
+        # Log to local DB
         self.logger.log(
-            step= self.ws.steps,
-            environment= self.ws.model_metrics["environment"],
-            energy= self.ws.model_metrics["energy"],
-            science= self.ws.model_metrics["science"],
-            manufacturing= self.ws.model_metrics["manufacturing"],
-            equipment_manufacturing= self.ws.model_metrics["equipment_manufacturing"],
-            transportation = self.ws.model_metrics["transportation"],
-            performance= self.ws.model_metrics.get("performance", {}),
+            step=self.ws.steps,
+            environment=self.ws.model_metrics["environment"],
+            energy=self.ws.model_metrics["energy"],
+            science=self.ws.model_metrics["science"],
+            manufacturing=self.ws.model_metrics["manufacturing"],
+            equipment_manufacturing=self.ws.model_metrics["equipment_manufacturing"],
+            transportation=self.ws.model_metrics["transportation"],
+            performance=self.ws.model_metrics.get("performance", {}),
             latest_state=self.current_state,
         )
 
-        # Optionally update hosted DB for remote UI
-        if update_hosted:
+        # Optionally update hosted DB
+        if update_hosted and self.hosted_logger:
             self.hosted_logger.log(
                 step=self.ws.steps,
                 environment=self.ws.model_metrics["environment"],
                 energy=self.ws.model_metrics["energy"],
                 science=self.ws.model_metrics["science"],
                 manufacturing=self.ws.model_metrics["manufacturing"],
-                equipment_manufacturing= self.ws.model_metrics["equipment_manufacturing"],
-                transportation = self.ws.model_metrics["transportation"],
+                equipment_manufacturing=self.ws.model_metrics["equipment_manufacturing"],
+                transportation=self.ws.model_metrics["transportation"],
                 performance=self.ws.model_metrics.get("performance", {}),
                 latest_state=self.current_state,
             )
@@ -169,47 +203,42 @@ class ProximaRunner:
     def _check_startup_commands(self):
         """Check for startup commands in the database and start simulation accordingly."""
 
-        command = self.proxima_db.db["startup_commands"].find_one_and_delete(
-            {"experiment_id": self.exp_id}, sort=[("timestamp", -1)]
-        )
+        try:
+            command = self.local_db.db["startup_commands"].find_one_and_delete(
+                {"experiment_id": self.exp_id}, sort=[("timestamp", -1)]
+            )
 
-        if not command:
+            if not command:
+                return False
+
+            action = command.get("action")
+            print(f"Starting: {action}")
+
+            if action == "start_continuous":
+                self.run(continuous=True)
+            elif action == "start_limited":
+                max_steps = command.get("max_steps", self.sim_time)
+                original_sim_time = self.sim_time
+                self.sim_time = max_steps
+                self.run(continuous=False)
+                self.sim_time = original_sim_time
+            return True
+        except Exception as e:
+            print(f"Startup command error: {e}")
             return False
-
-        action = command.get("action")
-        print(f"Starting: {action}")
-
-        if action == "start_continuous":
-            self.run(continuous=True)
-        elif action == "start_limited":
-            max_steps = command.get("max_steps", self.sim_time)
-            original_sim_time = self.sim_time
-            self.sim_time = max_steps
-            self.run(continuous=False)
-            self.sim_time = original_sim_time
-
-        return True
-
 
 def main():
     """Entry point for Proxima simulation runner."""
-
     args = parse_args()
-
-    # If Mongo DB Server URL is not provided, the model will not sync its state to the server only to local database.
-    if args.mongo_uri:
-        mongo_uri = args.mongo_uri
-    else:
-        mongo_uri = None
-
-    runner = ProximaRunner(mongo_uri=mongo_uri)
+    config = RunnerConfig(hosted_uri=args.mongo_uri)
+    runner = ProximaRunner(config=config)
 
     try:
         if args.headless:
             print("Running Proxima in Headless Mode")
             runner.run(continuous=True)
         else:
-            # UI mode: wait for startup commands to begin simulation
+            # UI mode: wait for startup commands
             while True:
                 if not runner.is_running:
                     if runner._check_startup_commands():
@@ -218,7 +247,6 @@ def main():
     except KeyboardInterrupt:
         print("\nShutting down...")
         runner.is_running = False
-
 
 if __name__ == "__main__":
     main()
