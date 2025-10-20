@@ -11,6 +11,7 @@ from mesa import Agent
 
 class ExtractionMode(Enum):
     """Available extraction modes for ISRU operations."""
+
     ICE = "ICE"
     REGOLITH = "REGOLITH"
     INACTIVE = "INACTIVE"
@@ -18,6 +19,7 @@ class ExtractionMode(Enum):
 
 class GenerationMode(Enum):
     """Available generation modes for ISRU operations."""
+
     HE3 = "HE3"
     INACTIVE = "INACTIVE"
 
@@ -25,6 +27,7 @@ class GenerationMode(Enum):
 @dataclass
 class ExtractorConfig:
     """Configuration for ISRU Extractor agents."""
+
     max_power_usage_kWh: float = 15.0
     ice_extraction_power_kWh: float = 5.0
     ice_extraction_output_kg: float = 20.0
@@ -45,6 +48,7 @@ class ExtractorConfig:
 @dataclass
 class GeneratorConfig:
     """Configuration for ISRU Generator agents."""
+
     max_power_usage_kWh: float = 65.0
     he3_extraction_power_kWh: float = 50.0
     he3_regolith_processing_throughput_tons_per_step: float = 100.0
@@ -61,6 +65,7 @@ class GeneratorConfig:
 @dataclass
 class He3Concentration:
     """He-3 concentration parameters."""
+
     min_ppb: float
     max_ppb: float
     mode_ppb: float = field(init=False)
@@ -76,8 +81,7 @@ class ISRUExtractor(Agent):
         super().__init__(model)
 
         # Create configuration dataclass from dict
-        self.config = ExtractorConfig(**{k: v for k, v in config.items() 
-                                       if k in ExtractorConfig.__dataclass_fields__})
+        self.config = ExtractorConfig(**{k: v for k, v in config.items() if k in ExtractorConfig.__dataclass_fields__})
 
         # Agent identification
         self.agent_type = "isru"
@@ -94,7 +98,7 @@ class ISRUExtractor(Agent):
         self._power_demand_cache = {
             ExtractionMode.ICE: self.config.ice_extraction_power_kWh,
             ExtractionMode.REGOLITH: self.config.regolith_extraction_power_kWh,
-            ExtractionMode.INACTIVE: 0.0
+            ExtractionMode.INACTIVE: 0.0,
         }
 
     def set_operational_mode(self, mode: str) -> None:
@@ -113,7 +117,7 @@ class ISRUExtractor(Agent):
         """Perform actual extraction operations with allocated power."""
 
         power_needed = self.get_power_demand()
-        
+
         # Check if we have enough power to operate
         if allocated_power < power_needed:
             return {}, 0.0
@@ -126,7 +130,7 @@ class ISRUExtractor(Agent):
         # Processing complete - generate output and reset timer
         extracted_resources = self._generate_output()
         self._processing_time = self.config.processing_time_t
-        
+
         return extracted_resources, power_needed
 
     def _generate_output(self) -> Dict[str, float]:
@@ -147,8 +151,7 @@ class ISRUGenerator(Agent):
         super().__init__(model)
 
         # Create configuration dataclass from dict
-        self.config = GeneratorConfig(**{k: v for k, v in config.items() 
-                                       if k in GeneratorConfig.__dataclass_fields__})
+        self.config = GeneratorConfig(**{k: v for k, v in config.items() if k in GeneratorConfig.__dataclass_fields__})
 
         # Agent identification
         self.agent_type = "isru"
@@ -166,23 +169,20 @@ class ISRUGenerator(Agent):
         # Cache power demands for efficiency
         self._power_demand_cache = {
             GenerationMode.HE3: self.config.he3_extraction_power_kWh,
-            GenerationMode.INACTIVE: 0.0
+            GenerationMode.INACTIVE: 0.0,
         }
 
     def _setup_he3_parameters(self, model) -> He3Concentration:
         """Setup He-3 concentration parameters from model configuration."""
+        
         # Find helium3 resource configuration
         he3_config = next(
-            (res for res in model.config.get("resources", []) 
-             if res.get("resource") == "helium3"), 
-            {"density_ppb": [3, 8]}  # Default fallback
+            (res for res in model.config.get("resources", []) if res.get("resource") == "helium3"),
+            {"density_ppb": [3, 8]},  # Default fallback
         )
-        
+
         density_range = he3_config.get("density_ppb", [3, 8])
-        return He3Concentration(
-            min_ppb=float(density_range[0]),
-            max_ppb=float(density_range[1])
-        )
+        return He3Concentration(min_ppb=float(density_range[0]), max_ppb=float(density_range[1]))
 
     def set_operational_mode(self, mode: str) -> None:
         """Set the operational mode for this generator."""
@@ -196,52 +196,41 @@ class ISRUGenerator(Agent):
         """Return current power demand based on operational mode."""
         return self._power_demand_cache[self.operational_mode]
 
-    def generate_resources(self, allocated_power: float, stocks: Dict[str, float]) -> Tuple[Dict[str, float], Dict[str, float], float]:
+    def generate_resources(
+        self, allocated_power: float, stocks: Dict[str, float]
+    ) -> Tuple[Dict[str, float], Dict[str, float], float]:
         """Perform generation operations based on operational mode."""
+
         power_needed = self.get_power_demand()
-        
+
         # Check if we have enough power to operate
         if allocated_power < power_needed:
             return {}, {}, 0.0
 
         # Route to appropriate generation method based on mode
         if self.operational_mode == GenerationMode.HE3:
-            return self._generate_he3(stocks)
+            return self._generate_he3()
         elif self.operational_mode == GenerationMode.INACTIVE:
             return self._generate_inactive()
-        
+
         return {}, {}, 0.0
 
-    def _generate_he3(self, stocks: Dict[str, float]) -> Tuple[Dict[str, float], Dict[str, float], float]:
+    def _generate_he3(self) -> Tuple[Dict[str, float], Dict[str, float], float]:
         """Generation logic for HE3 mode with proper regolith consumption."""
-        
-        # Check if we have enough regolith
-        available_regolith = stocks.get("FeTiO3_kg", 0.0)
-        regolith_needed = self.config.regolith_required_per_operation_kg
-        
-        if available_regolith < regolith_needed:
-            return {}, {}, 0.0  # Not enough regolith to process
 
         # Generate He-3 concentration using triangular distribution
         helium_concentration_ppb = np.random.triangular(
-            self.he3_concentration.min_ppb,
-            self.he3_concentration.mode_ppb,
-            self.he3_concentration.max_ppb
+            self.he3_concentration.min_ppb, self.he3_concentration.mode_ppb, self.he3_concentration.max_ppb
         )
-        
+
         # Calculate He-3 output
         throughput_kg = self.config.he3_regolith_processing_throughput_tons_per_step * 1000
-        he3_output = (
-            throughput_kg * 
-            helium_concentration_ppb * 
-            1e-9 * 
-            self.config.efficiency
-        )
-        
+        he3_output = throughput_kg * helium_concentration_ppb * 1e-9 * self.config.efficiency
+
         return (
             {"He3_kg": he3_output},  # Generated resources
-            {"FeTiO3_kg": regolith_needed},  # Consumed resources
-            self.config.he3_extraction_power_kWh  # Power consumed
+            {},  # Consumed resources
+            self.config.he3_extraction_power_kWh,  # Power consumed
         )
 
     def _generate_inactive(self) -> Tuple[Dict[str, float], Dict[str, float], float]:
