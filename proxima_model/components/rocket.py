@@ -29,7 +29,7 @@ class Rocket(Agent):
         # Physical characteristics
         self.prop_usage_kg_per_payload_kg = float(config.get("prop_usage_kg_per_payload_kg", 21.4))
         self.carrying_capacity_kg = float(config.get("carrying_capacity_equipment", 22800))
-        self.max_speed_km_h = float(config.get("max_speed_km_h", 39000))
+        self.max_speed_km_h = float(config.get("max_speed_km_h", 5300))
 
         # State variables
         self.is_available = True
