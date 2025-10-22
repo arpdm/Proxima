@@ -1,3 +1,14 @@
+"""
+proxima_ui_engine.py
+
+PROXIMA LUNAR SIMULATION - DASHBOARD UI ENGINE
+
+PURPOSE:
+========
+Main dashboard application for the Proxima lunar simulation.
+Provides real-time visualization, metrics tracking, and simulation control.
+"""
+
 import dash
 import sys
 import plotly.graph_objs as go
@@ -16,39 +27,55 @@ from dash import dcc, html
 from dash.dependencies import Input, Output, State
 from data_engine.proxima_db_engine import ProximaDB
 
+from visualizer_engine.ui_models import (
+    UIConfig,
+    UIColors,
+    DarkTheme,
+    DataFrameProcessor,
+)
+
 
 class ProximaUI:
-    """ProximaUI: Dashboard for Proxima simulation with time series plotting."""
+    """ProximaUI: Dashboard for Proxima simulation with configurable sectors."""
 
     def __init__(
-        self, db, experiment_id="exp_001", update_rate_ms=1000, update_cycles=1, read_only=True, ts_data_count=200
+        self,
+        db,
+        experiment_id="exp_001",
+        update_rate_ms=1000,
+        update_cycles=1,
+        read_only=True,
+        ts_data_count=200,
+        custom_config: Optional[UIConfig] = None,
     ):
         self.db = db
         self.exp_id = experiment_id
-        self.app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
-        self.update_rate = update_rate_ms
-        self.update_cycles = update_cycles
-        self.ts_data_count = ts_data_count
-        self.read_only = read_only  # If in public server, the simulation control panel is disabled.
+
+        # Initialize Dash app with external stylesheets AND suppress callback exceptions
+        self.app = dash.Dash(
+            __name__, external_stylesheets=[dbc.themes.DARKLY], suppress_callback_exceptions=True  # Add this
+        )
+
+        # Use custom config or create default
+        if custom_config:
+            self.config = custom_config
+        else:
+            self.config = UIConfig(
+                experiment_id=experiment_id,
+                update_rate_ms=update_rate_ms,
+                update_cycles=update_cycles,
+                ts_data_count=ts_data_count,
+                read_only=read_only,
+            )
+
+        self.update_rate = self.config.update_rate_ms
+        self.update_cycles = self.config.update_cycles
+        self.ts_data_count = self.config.ts_data_count
+        self.read_only = self.config.read_only
 
         # Style constants
-        self.COLORS = {
-            "primary": "#0d6efd",
-            "success": "#198754",
-            "warning": "#ffc107",
-            "danger": "#dc3545",
-            "info": "#0dcaf0",
-            "secondary": "#6c757d",
-        }
-
-        self.DARK_THEME = {
-            "bg_primary": "rgb(25,29,33)",
-            "bg_secondary": "rgb(35,39,43)",
-            "bg_tertiary": "rgb(45,49,53)",
-            "border": "#404040",
-            "text": "#e0e0e0",
-            "text_muted": "#9ca3af",
-        }
+        self.colors = UIColors()
+        self.theme = DarkTheme()
 
         self._sector_table_component = self._create_sector_table_component()
         self._setup_layout()
@@ -68,12 +95,10 @@ class ProximaUI:
     def get_world_system_data(self) -> Optional[Dict[str, Any]]:
         """Get world system data with fallback logic"""
         try:
-            # Try experiment-specific first
             ws = self.db.db["world_systems"].find_one({"latest_state.experiment_id": self.exp_id})
             if ws:
                 return ws
 
-            # Fallback to latest by step
             all_ws = list(self.db.db["world_systems"].find({}))
             if not all_ws:
                 return None
@@ -85,71 +110,17 @@ class ProximaUI:
     def fetch_latest_logs(self, limit: int = 200) -> Optional[pd.DataFrame]:
         """Fetch latest logs with sliding window"""
         try:
-
             docs = self.fetch_collection(
                 "logs_simulation",
                 {"experiment_id": self.exp_id},
                 sort=("step", -1),
                 limit=limit,
             )
-
-            docs = list(reversed(docs))  # Now docs[0] is oldest, docs[-1] is newest
-            return self._flatten_logs_to_dataframe(docs)
-
+            docs = list(reversed(docs))
+            return DataFrameProcessor.flatten_logs_to_dataframe(docs)
         except Exception as e:
             print(f"❌ fetch_latest_logs error: {e}")
             return None
-
-    def _flatten_logs_to_dataframe(self, docs: list) -> Optional[pd.DataFrame]:
-        """Convert log documents to flattened DataFrame"""
-        if not docs:
-            return None
-
-        flat_rows = []
-        for d in docs:
-            row = {
-                "experiment_id": d.get("experiment_id"),
-                "step": d.get("step"),
-                "timestamp": d.get("timestamp"),
-            }
-
-            for k, v in d.items():
-                if k in ("experiment_id", "step", "timestamp"):
-                    continue
-
-                if isinstance(v, dict):
-                    if k == "performance":
-                        # Handle performance metrics specially
-                        self._extract_performance_data(v, row)
-                    else:
-                        # Flatten other nested dicts
-                        for sk, sv in v.items():
-                            row[f"{k}_{sk}"] = sv
-                else:
-                    row[k] = v
-
-            flat_rows.append(row)
-
-        try:
-            return pd.DataFrame(flat_rows)
-        except Exception as e:
-            print(f"❌ DataFrame build error: {e}")
-            return None
-
-    def _extract_performance_data(self, perf_data: dict, row: dict):
-        """Extract performance metrics and scores"""
-        metrics = perf_data.get("metrics", {})
-        if isinstance(metrics, dict):
-            for mid, mval in metrics.items():
-                row[f"metric_{mid}"] = mval
-
-        scores = perf_data.get("scores", {})
-        if isinstance(scores, dict):
-            for mid, entry in scores.items():
-                try:
-                    row[f"score_{mid}"] = float(entry.get("score", None))
-                except (TypeError, ValueError):
-                    pass
 
     # ========================= UI COMPONENT BUILDERS ========================
 
@@ -160,32 +131,31 @@ class ProximaUI:
                 dbc.CardHeader(
                     title,
                     style={
-                        "backgroundColor": self.DARK_THEME["bg_tertiary"],
-                        "color": self.DARK_THEME["text"],
+                        "backgroundColor": self.theme.bg_tertiary,
+                        "color": self.theme.text,
                         "padding": "15px",
                     },
                 ),
-                dbc.CardBody(
-                    body_content, style={"backgroundColor": self.DARK_THEME["bg_secondary"], "padding": "20px"}
-                ),
+                dbc.CardBody(body_content, style={"backgroundColor": self.theme.bg_secondary, "padding": "20px"}),
             ],
             className=class_name,
-            style={"border": f"1px solid {self.DARK_THEME['border']}"},
+            style={"border": f"1px solid {self.theme.border}"},
         )
 
     def _create_outline_button(self, text: str, id_: str, color: str) -> dbc.Button:
         """Create standardized outline button"""
+        color_hex = getattr(self.colors, color, self.colors.secondary)
         return dbc.Button(
             text,
             id=id_,
             color=color,
             outline=True,
             className="me-3",
-            style={"borderColor": self.COLORS[color], "color": self.COLORS[color]},
+            style={"borderColor": color_hex, "color": color_hex},
         )
 
     def _create_sector_table_component(self):
-        """Create AG Grid for sector data with Sector column"""
+        """Create AG Grid for sector data with improved settings"""
         col_defs = [
             {
                 "headerName": "Sector",
@@ -193,8 +163,9 @@ class ProximaUI:
                 "sortable": True,
                 "filter": True,
                 "resizable": True,
-                "width": 120,
-                "cellStyle": {"color": "#e0e0e0", "backgroundColor": "transparent"},
+                "width": 180,
+                "pinned": "left",  # Pin sector column for easy reference
+                "cellStyle": {"color": "#e0e0e0", "backgroundColor": "transparent", "fontWeight": "500"},
             },
             {
                 "headerName": "Metric",
@@ -204,6 +175,7 @@ class ProximaUI:
                 "resizable": True,
                 "wrapText": True,
                 "autoHeight": True,
+                "flex": 1,
                 "cellStyle": {
                     "whiteSpace": "normal",
                     "lineHeight": "1.3rem",
@@ -219,6 +191,7 @@ class ProximaUI:
                 "resizable": True,
                 "wrapText": True,
                 "autoHeight": True,
+                "flex": 1,
                 "cellStyle": {
                     "whiteSpace": "normal",
                     "lineHeight": "1.3rem",
@@ -236,36 +209,33 @@ class ProximaUI:
             persistence=True,
             persistence_type="session",
             persisted_props=["filterModel", "sortModel", "columnState"],
-            defaultColDef={"minWidth": 100, "flex": 1},
+            defaultColDef={"minWidth": 100},
             dashGridOptions={
-                "domLayout": "normal",
+                "domLayout": "autoHeight",  # Changed from "normal" to prevent scrolling
                 "suppressScrollOnNewData": True,
                 "deltaRowDataMode": True,
                 "getRowId": "function(params) { return params.data._id; }",
                 "animateRows": False,
                 "suppressCellFocus": True,
-                "sideBar": {
-                    "toolPanels": ["filters", "columns"],
-                    "defaultToolPanel": "filters",
-                    "hiddenByDefault": False,
-                },
+                "maintainColumnOrder": True,  # Maintain column order on updates
+                "suppressColumnVirtualisation": True,  # Better for smaller grids
                 "rowSelection": "multiple",
                 "enableRangeSelection": True,
+                "enableCellTextSelection": True,  # Allow text selection
+                "ensureDomOrder": True,  # Helps with stability
             },
-            style={"width": "100%", "height": "400px", "backgroundColor": "transparent"},
+            style={"width": "100%", "backgroundColor": "transparent"},
         )
 
     def _status_badge(self, status: str, score: float = None) -> dbc.Badge:
         """Create status badge with appropriate color"""
-
         color_map = {"within": "success", "outside": "danger", "unknown": "warning"}
         color = color_map.get((status or "").lower(), "secondary")
         label = status if score is None else f"{status} ({score:.2f})"
         return dbc.Badge(label, color=color, pill=True, className="ms-1")
 
     def build_metric_tracker_table(self) -> html.Table:
-        """Build metric tracker table with improved styling"""
-
+        """Build metric tracker table"""
         ws = self.get_world_system_data()
         if not ws:
             return html.Div("No metric scores yet.", className="text-secondary text-center")
@@ -274,7 +244,6 @@ class ProximaUI:
         if not scores:
             return html.Div("No metric scores yet.", className="text-secondary text-center")
 
-        # Table headers
         headers = ["Metric", "Id", "Score", "Status", "Current", "Range", "Goal"]
         header_style = {
             "backgroundColor": "rgb(30,40,60)",
@@ -284,7 +253,6 @@ class ProximaUI:
         }
         header = html.Thead(html.Tr([html.Th(h, style=header_style) for h in headers]))
 
-        # Table rows
         items = sorted(scores.items(), key=lambda kv: (kv[1].get("score") is None, kv[1].get("score", 0.0)))
         rows = []
 
@@ -353,12 +321,12 @@ class ProximaUI:
                         dbc.Input(
                             id="step-delay",
                             type="number",
-                            value=0.1,
+                            value=self.config.default_step_delay,
                             min=0.01,
                             step=0.01,
                             style={
-                                "backgroundColor": self.DARK_THEME["bg_tertiary"],
-                                "border": f"1px solid {self.DARK_THEME['border']}",
+                                "backgroundColor": self.theme.bg_tertiary,
+                                "border": f"1px solid {self.theme.border}",
                                 "color": "#e0e0e0",
                                 "padding": "10px",
                             },
@@ -372,11 +340,11 @@ class ProximaUI:
                         dbc.Input(
                             id="max-steps",
                             type="number",
-                            value=100,
+                            value=self.config.default_max_steps,
                             min=1,
                             style={
-                                "backgroundColor": self.DARK_THEME["bg_tertiary"],
-                                "border": f"1px solid {self.DARK_THEME['border']}",
+                                "backgroundColor": self.theme.bg_tertiary,
+                                "border": f"1px solid {self.theme.border}",
                                 "color": "#e0e0e0",
                                 "padding": "10px",
                             },
@@ -394,45 +362,183 @@ class ProximaUI:
         return self._create_card("Metric Status & Scores", html.Div(id="metric-tracker"), "mb-5")
 
     def _metric_plots(self):
-        """Metric plots panel"""
-        selector = dbc.Row(
+        """Metric plots panel with advanced filtering"""
+        selector = html.Div(
             [
-                dbc.Col(
+                # Category Filter - Multiple Selection
+                dbc.Row(
                     [
-                        dbc.Label(
-                            "Select Metrics:", style={"color": "#e0e0e0", "marginBottom": "15px", "fontSize": "14px"}
-                        ),
-                        dcc.Checklist(
-                            id="metric-selector",
-                            options=[],
-                            value=[],
-                            inline=False,
-                            style={
-                                "maxHeight": "150px",
-                                "overflowY": "auto",
-                                "marginBottom": "25px",
-                                "color": "#e0e0e0",
-                                "padding": "10px",
-                                "border": f"1px solid {self.DARK_THEME['border']}",
-                                "borderRadius": "4px",
-                            },
-                            inputStyle={"marginRight": "10px"},
-                            labelStyle={
-                                "display": "block",
-                                "marginBottom": "8px",
-                                "color": "#e0e0e0",
-                                "padding": "4px 0",
-                            },
-                        ),
-                    ],
-                    width=12,
-                )
+                        dbc.Col(
+                            [
+                                dbc.Label(
+                                    "Filter by Categories (select multiple):",
+                                    style={
+                                        "color": "#e0e0e0",
+                                        "marginBottom": "12px",
+                                        "fontSize": "14px",
+                                        "fontWeight": "500",
+                                    },
+                                ),
+                                html.Div(id="metric-category-buttons", className="mb-3"),
+                            ],
+                            width=12,
+                        )
+                    ]
+                ),
+                # Metric Selector with dark theme styling
+                dbc.Row(
+                    [
+                        dbc.Col(
+                            [
+                                dbc.Label(
+                                    "Select Metrics (from all selected categories):",
+                                    style={
+                                        "color": "#e0e0e0",
+                                        "marginBottom": "12px",
+                                        "fontSize": "14px",
+                                        "fontWeight": "500",
+                                    },
+                                ),
+                                dcc.Dropdown(
+                                    id="metric-selector",
+                                    options=[],
+                                    value=[],
+                                    multi=True,
+                                    searchable=True,
+                                    placeholder="Search and select metrics from any category...",
+                                    style={
+                                        "marginBottom": "15px",
+                                    },
+                                    className="custom-dropdown",
+                                ),
+                            ],
+                            width=12,
+                        )
+                    ]
+                ),
+                # Quick Actions
+                dbc.Row(
+                    [
+                        dbc.Col(
+                            [
+                                dbc.ButtonGroup(
+                                    [
+                                        dbc.Button(
+                                            "Select All Visible",
+                                            id="btn-select-all-metrics",
+                                            size="sm",
+                                            color="primary",
+                                            outline=True,
+                                            className="me-2",
+                                        ),
+                                        dbc.Button(
+                                            "Clear Selection",
+                                            id="btn-clear-metrics",
+                                            size="sm",
+                                            color="secondary",
+                                            outline=True,
+                                            className="me-2",
+                                        ),
+                                        dbc.Button(
+                                            "Restore Defaults",
+                                            id="btn-default-metrics",
+                                            size="sm",
+                                            color="info",
+                                            outline=True,
+                                        ),
+                                    ],
+                                    className="mb-4",
+                                )
+                            ],
+                            width=12,
+                        )
+                    ]
+                ),
             ]
         )
 
         return self._create_card("Metrics Plots", [selector, html.Div(id="graph-grid")])
 
+    def _sector_filter_buttons(self):
+        """Create sector filter button group"""
+        # Get all table sectors
+        table_sectors = self.config.sector_registry.get_table_sectors()
+
+        # Create "All" button
+        buttons = [
+            dbc.Button(
+                "All Sectors",
+                id={"type": "sector-filter", "sector": "all"},
+                color="primary",
+                outline=False,
+                size="sm",
+                className="me-2 mb-2",
+                style={
+                    "borderRadius": "20px",
+                    "padding": "6px 16px",
+                    "fontSize": "13px",
+                    "fontWeight": "500",
+                },
+            )
+        ]
+
+        # Create button for each sector
+        for sector in table_sectors:
+            buttons.append(
+                dbc.Button(
+                    f"{sector.icon} {sector.display_name}",
+                    id={"type": "sector-filter", "sector": sector.id},
+                    color="secondary",
+                    outline=True,
+                    size="sm",
+                    className="me-2 mb-2",
+                    style={
+                        "borderRadius": "20px",
+                        "padding": "6px 16px",
+                        "fontSize": "13px",
+                        "borderColor": sector.color,
+                        "color": sector.color,
+                    },
+                )
+            )
+
+        return html.Div(
+            [
+                html.Label(
+                    "Filter by Sector:",
+                    style={"color": "#e0e0e0", "marginBottom": "12px", "fontSize": "14px", "fontWeight": "500"},
+                ),
+                html.Div(buttons, className="d-flex flex-wrap"),
+            ],
+            className="mb-4",
+        )
+
     def _status_strip(self):
+        """Build status strip with configurable badges"""
+        # Get badge sectors from registry
+        badge_sectors = self.config.sector_registry.get_badge_sectors()
+
+        # Create badge components
+        badge_components = []
+
+        # Add sector badges
+        for sector in badge_sectors:
+            badge_components.append(
+                dbc.Badge(
+                    id=f"badge-{sector.id}",
+                    pill=True,
+                    className="me-3",
+                    color=None,
+                    style={
+                        "fontSize": "13px",
+                        "padding": "8px 12px",
+                        "border": "1px solid #6c757d",
+                        "backgroundColor": "transparent",
+                        "color": "#ffffff",
+                    },
+                )
+            )
+
         return dbc.Card(
             [
                 dbc.CardBody(
@@ -445,59 +551,7 @@ class ProximaUI:
                         dbc.Row(
                             [
                                 dbc.Col(
-                                    [
-                                        dbc.Badge(
-                                            id="badge-power",
-                                            pill=True,
-                                            className="me-3",
-                                            color=None,
-                                            style={
-                                                "fontSize": "13px",
-                                                "padding": "8px 12px",
-                                                "border": "1px solid #6c757d",
-                                                "backgroundColor": "transparent",
-                                                "color": "#ffffff",
-                                            },
-                                        ),
-                                        dbc.Badge(
-                                            id="badge-science",
-                                            pill=True,
-                                            className="me-3",
-                                            color=None,
-                                            style={
-                                                "fontSize": "13px",
-                                                "padding": "8px 12px",
-                                                "border": "1px solid #6c757d",
-                                                "backgroundColor": "transparent",
-                                                "color": "#ffffff",
-                                            },
-                                        ),
-                                        dbc.Badge(
-                                            id="badge-mfg",
-                                            pill=True,
-                                            className="me-3",
-                                            color=None,
-                                            style={
-                                                "fontSize": "13px",
-                                                "padding": "8px 12px",
-                                                "border": "1px solid #6c757d",
-                                                "backgroundColor": "transparent",
-                                                "color": "#ffffff",
-                                            },
-                                        ),
-                                        dbc.Badge(
-                                            id="badge-dust",
-                                            pill=True,
-                                            color=None,
-                                            style={
-                                                "fontSize": "13px",
-                                                "padding": "8px 12px",
-                                                "border": "1px solid #6c757d",
-                                                "backgroundColor": "transparent",
-                                                "color": "#ffffff",
-                                            },
-                                        ),
-                                    ],
+                                    badge_components,
                                     width=12,
                                     className="d-flex align-items-center justify-content-center",
                                 )
@@ -514,9 +568,8 @@ class ProximaUI:
     def _setup_layout(self):
         """Setup main application layout"""
 
-        # Tab styles
         tab_style = {
-            "backgroundColor": self.DARK_THEME["bg_secondary"],
+            "backgroundColor": self.theme.bg_secondary,
             "color": "#e0e0e0",
             "borderColor": "#404040",
             "borderBottomColor": "transparent",
@@ -532,11 +585,17 @@ class ProximaUI:
             "padding": "20px 20px",
         }
 
-        # Main layout
         self.app.layout = dbc.Container(
             [
+                # Inject custom CSS using html.Link or dcc.Store
+                html.Div(
+                    [
+                        dcc.Store(id="selected-sector", data="all"),
+                        dcc.Store(id="selected-category", data="all"),
+                    ],
+                    style={"display": "none"},
+                ),
                 dcc.Interval(id="interval-component", interval=self.update_rate, n_intervals=self.update_cycles),
-                # Header
                 html.Div(
                     [
                         html.H1(
@@ -579,7 +638,6 @@ class ProximaUI:
                         "border": "1px solid #404854",
                     },
                 ),
-                # Tabs
                 dcc.Tabs(
                     id="main-tabs",
                     value="tab-analysis",
@@ -608,10 +666,9 @@ class ProximaUI:
                                 html.Div(
                                     [
                                         self._create_card(
-                                            "📊 All Sector Data ",
+                                            "📊 All Sector Data",
                                             html.Div(
-                                                [self._sector_table_component],
-                                                style={"height": "420px", "overflow": "hidden"},
+                                                [self._sector_filter_buttons(), self._sector_table_component],
                                             ),
                                         )
                                     ]
@@ -636,6 +693,120 @@ class ProximaUI:
             },
         )
 
+        # Inject custom CSS after layout is created
+        self.app.index_string = """
+        <!DOCTYPE html>
+        <html>
+            <head>
+                {%metas%}
+                <title>{%title%}</title>
+                {%favicon%}
+                {%css%}
+                <style>
+                    /* Dark theme for dropdown */
+                    .Select-control {
+                        background-color: rgb(45,49,53) !important;
+                        border: 1px solid #404040 !important;
+                        color: #e0e0e0 !important;
+                    }
+                    .Select-menu-outer {
+                        background-color: rgb(35,39,43) !important;
+                        border: 1px solid #404040 !important;
+                        z-index: 9999 !important;
+                    }
+                    .Select-option {
+                        background-color: rgb(35,39,43) !important;
+                        color: #e0e0e0 !important;
+                        padding: 8px 12px !important;
+                    }
+                    .Select-option:hover {
+                        background-color: rgb(50,54,58) !important;
+                        color: #ffffff !important;
+                    }
+                    .Select-option.is-selected {
+                        background-color: #0d6efd !important;
+                        color: #ffffff !important;
+                    }
+                    .Select-option.is-focused {
+                        background-color: rgb(50,54,58) !important;
+                        color: #ffffff !important;
+                    }
+                    .Select-value-label {
+                        color: #e0e0e0 !important;
+                    }
+                    .Select-placeholder {
+                        color: #9ca3af !important;
+                    }
+                    .Select-input > input {
+                        color: #e0e0e0 !important;
+                    }
+                    .Select-multi-value-wrapper {
+                        color: #e0e0e0 !important;
+                    }
+                    .Select-value {
+                        background-color: #0d6efd !important;
+                        border: 1px solid #0d6efd !important;
+                        color: #ffffff !important;
+                        border-radius: 4px !important;
+                        padding: 2px 8px !important;
+                    }
+                    .Select-value-icon {
+                        border-right: 1px solid rgba(255,255,255,0.3) !important;
+                        padding: 0 5px !important;
+                    }
+                    .Select-value-icon:hover {
+                        background-color: rgba(0,0,0,0.2) !important;
+                        color: #ffffff !important;
+                    }
+                    .Select-clear-zone {
+                        color: #e0e0e0 !important;
+                    }
+                    .Select-clear-zone:hover {
+                        color: #dc3545 !important;
+                    }
+                    .Select-arrow-zone {
+                        color: #e0e0e0 !important;
+                    }
+                    .Select-arrow {
+                        border-color: #e0e0e0 transparent transparent !important;
+                    }
+                    .is-open .Select-arrow {
+                        border-color: transparent transparent #e0e0e0 !important;
+                    }
+                    
+                    /* Additional dropdown improvements */
+                    .Select.is-focused:not(.is-open) > .Select-control {
+                        border-color: #0d6efd !important;
+                        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25) !important;
+                    }
+                    
+                    /* Scrollbar styling for dropdown */
+                    .Select-menu::-webkit-scrollbar {
+                        width: 8px;
+                    }
+                    .Select-menu::-webkit-scrollbar-track {
+                        background: rgb(25,29,33);
+                    }
+                    .Select-menu::-webkit-scrollbar-thumb {
+                        background: rgb(60,64,68);
+                        border-radius: 4px;
+                    }
+                    .Select-menu::-webkit-scrollbar-thumb:hover {
+                        background: rgb(80,84,88);
+                    }
+                </style>
+            </head>
+            <body>
+                {%app_entry%}
+                <footer>
+                    {%config%}
+                    {%scripts%}
+                    {%renderer%}
+                </footer>
+            </body>
+        </html>
+        """
+
     # ========================= CALLBACKS ========================
 
     def _register_callbacks(self):
@@ -645,64 +816,198 @@ class ProximaUI:
         def update_metric_tracker(n):
             return self.build_metric_tracker_table()
 
+        # Dynamic badge callback based on configuration
+        badge_sectors = self.config.sector_registry.get_badge_sectors()
+        all_badge_ids = [s.id for s in badge_sectors]
+
         @self.app.callback(
             [Output("status-display", "children")]
-            + [Output(f"badge-{sector}", "children") for sector in ["power", "science", "mfg", "dust"]]
-            + [Output(f"badge-{sector}", "style") for sector in ["power", "science", "mfg", "dust"]],
+            + [Output(f"badge-{bid}", "children") for bid in all_badge_ids]
+            + [Output(f"badge-{bid}", "style") for bid in all_badge_ids],
             [Input("interval-component", "n_intervals")],
         )
         def update_dashboard(n):
             return self._get_dashboard_status()
 
-        @self.app.callback(
-            [Output("metric-selector", "options"), Output("metric-selector", "value")],
-            [Input("interval-component", "n_intervals")],
-            [State("metric-selector", "value")],
-        )
-        def update_metric_options_and_selection(n, current_value):
-            if n > 3:  # Only update options in first few cycles
-                return dash.no_update, dash.no_update
+        # Add store for selected categories (multiple selection)
+        # Update the layout setup to include this store
 
-            df = self.fetch_latest_logs(limit=self.ts_data_count)
-            if df is None or df.empty:
-                return [], []
+        # Category button builder
+        @self.app.callback(Output("metric-category-buttons", "children"), [Input("interval-component", "n_intervals")])
+        def build_category_buttons(n):
+            if n > 3:
+                return dash.no_update
 
-            # Get numeric columns excluding system columns
-            numeric_cols = [
-                col
-                for col in df.columns
-                if col not in ["step", "timestamp", "experiment_id"]
-                and not col.startswith(("metric_", "score_"))
-                and pd.api.types.is_numeric_dtype(df[col])
+            categories = self.config.metric_filter_config.categories
+
+            buttons = [
+                dbc.Button(
+                    "All Categories",
+                    id={"type": "metric-category", "category": "all"},
+                    color="primary",
+                    outline=False,
+                    size="sm",
+                    className="me-2 mb-2",
+                    style={"borderRadius": "20px", "padding": "6px 16px", "fontSize": "13px", "fontWeight": "500"},
+                )
             ]
 
-            options = [{"label": col.replace("_", " ").title(), "value": col} for col in numeric_cols]
+            for cat_id, category in categories.items():
+                buttons.append(
+                    dbc.Button(
+                        f"{category.icon} {category.display_name}",
+                        id={"type": "metric-category", "category": cat_id},
+                        color="secondary",
+                        outline=True,
+                        size="sm",
+                        className="me-2 mb-2",
+                        style={
+                            "borderRadius": "20px",
+                            "padding": "6px 16px",
+                            "fontSize": "13px",
+                            "borderColor": category.color,
+                            "color": category.color,
+                        },
+                    )
+                )
 
-            # Initialize selection if empty
-            if not current_value and options:
-                preferred = [
-                    "energy_total_power_supply_kw",
-                    "energy_total_charge_level_kwh",
-                    "science_science_generated",
-                    "science_operational_rovers",
-                ]
-                available = {opt["value"] for opt in options}
-                chosen = [m for m in preferred if m in available][:4]
+            return html.Div(buttons, className="d-flex flex-wrap")
 
-                # Fill remaining slots
-                for opt in options:
-                    if len(chosen) >= 4:
+        # Multi-category filter handler
+        @self.app.callback(
+            [
+                Output("selected-category", "data"),
+                Output("metric-selector", "options"),
+                Output({"type": "metric-category", "category": dash.dependencies.ALL}, "outline"),
+                Output({"type": "metric-category", "category": dash.dependencies.ALL}, "color"),
+            ],
+            [Input({"type": "metric-category", "category": dash.dependencies.ALL}, "n_clicks")],
+            [
+                State({"type": "metric-category", "category": dash.dependencies.ALL}, "id"),
+                State("selected-category", "data"),
+            ],
+        )
+        def filter_metrics_by_categories(n_clicks, button_ids, current_categories):
+            ctx = dash.callback_context
+            df = self.fetch_latest_logs(limit=self.ts_data_count)
+            if df is None or df.empty:
+                return ["all"], [], [True] * len(button_ids), ["secondary"] * len(button_ids)
+
+            numeric_cols = DataFrameProcessor.get_numeric_columns(df)
+
+            # Initialize selected categories
+            if isinstance(current_categories, str):
+                selected_categories = [current_categories] if current_categories else ["all"]
+            else:
+                selected_categories = current_categories or ["all"]
+
+            # Handle button clicks - toggle selection
+            if ctx.triggered and ctx.triggered[0]["value"]:
+                prop_id = ctx.triggered[0]["prop_id"]
+                if "metric-category" in prop_id:
+                    try:
+                        clicked_category = json.loads(prop_id.split(".")[0])["category"]
+
+                        if clicked_category == "all":
+                            # If "All" is clicked, select only "all"
+                            selected_categories = ["all"]
+                        else:
+                            # Remove "all" if it's there
+                            if "all" in selected_categories:
+                                selected_categories = []
+
+                            # Toggle the clicked category
+                            if clicked_category in selected_categories:
+                                selected_categories.remove(clicked_category)
+                            else:
+                                selected_categories.append(clicked_category)
+
+                            # If no categories selected, fall back to "all"
+                            if not selected_categories:
+                                selected_categories = ["all"]
+
+                    except (json.JSONDecodeError, KeyError):
+                        pass
+
+            # Filter metrics based on selected categories
+            if "all" in selected_categories:
+                filtered_metrics = numeric_cols
+            else:
+                filtered_metrics = []
+                for category_id in selected_categories:
+                    category = self.config.metric_filter_config.categories.get(category_id)
+                    if category:
+                        category_metrics = [
+                            m
+                            for m in numeric_cols
+                            if any(m.startswith(pattern) for pattern in category.metric_patterns)
+                        ]
+                        filtered_metrics.extend(category_metrics)
+
+                # Remove duplicates while preserving order
+                filtered_metrics = list(dict.fromkeys(filtered_metrics))
+
+            # Create options with category prefixes for clarity
+            options = []
+            for col in filtered_metrics:
+                # Determine which category this metric belongs to
+                category_name = "Other"
+                for cat_id, category in self.config.metric_filter_config.categories.items():
+                    if any(col.startswith(pattern) for pattern in category.metric_patterns):
+                        category_name = f"{category.icon} {category.display_name.split()[0]}"  # Just first word
                         break
-                    if opt["value"] not in chosen:
-                        chosen.append(opt["value"])
 
-                return options, chosen[:4]
+                label = f"[{category_name}] {col.replace('_', ' ').title()}"
+                options.append({"label": label, "value": col})
 
-            return options, current_value or []
+            # Update button states - show which categories are selected
+            outlines = []
+            colors = []
+
+            for btn_id in button_ids:
+                cat_id = btn_id["category"]
+                if cat_id in selected_categories:
+                    outlines.append(False)  # Solid button
+                    colors.append("primary" if cat_id == "all" else "info")
+                else:
+                    outlines.append(True)  # Outline button
+                    colors.append("secondary")
+
+            return selected_categories, options, outlines, colors
+
+        # Metric selector value handler (for quick actions)
+        @self.app.callback(
+            Output("metric-selector", "value"),
+            [
+                Input("btn-select-all-metrics", "n_clicks"),
+                Input("btn-clear-metrics", "n_clicks"),
+                Input("btn-default-metrics", "n_clicks"),
+            ],
+            [State("metric-selector", "options"), State("metric-selector", "value")],
+            prevent_initial_call=True,
+        )
+        def handle_metric_actions(select_all, clear, defaults, options, current_value):
+            ctx = dash.callback_context
+            if not ctx.triggered:
+                return dash.no_update
+
+            prop_id = ctx.triggered[0]["prop_id"].split(".")[0]
+
+            if prop_id == "btn-select-all-metrics":
+                return [opt["value"] for opt in (options or [])]
+            elif prop_id == "btn-clear-metrics":
+                return []
+            elif prop_id == "btn-default-metrics":
+                # Get a sensible default from each selected category
+                all_metrics = [opt["value"] for opt in (options or [])]
+                return DataFrameProcessor.get_default_metrics(all_metrics)
+
+            return dash.no_update
 
         @self.app.callback(
             Output("graph-grid", "children"),
-            [Input("metric-selector", "value"), Input("interval-component", "n_intervals")],
+            [Input("metric-selector", "value")],
+            [State("interval-component", "n_intervals")],
         )
         def update_graph_grid(selected_metrics, n):
             if not selected_metrics:
@@ -714,11 +1019,42 @@ class ProximaUI:
 
             return self.build_graph_grid(df, selected_metrics)
 
-        @self.app.callback(Output("sector-data-grid", "rowData"), [Input("interval-component", "n_intervals")])
-        def update_sector_data(n):
-            return self._build_sector_data()
+        # Sector filter callback (this only affects the table, not the plots)
+        @self.app.callback(
+            [
+                Output("selected-sector", "data"),
+                Output({"type": "sector-filter", "sector": dash.dependencies.ALL}, "outline"),
+                Output({"type": "sector-filter", "sector": dash.dependencies.ALL}, "color"),
+            ],
+            [Input({"type": "sector-filter", "sector": dash.dependencies.ALL}, "n_clicks")],
+            [State({"type": "sector-filter", "sector": dash.dependencies.ALL}, "id")],
+            prevent_initial_call=True,
+        )
+        def handle_sector_filter(n_clicks, button_ids):
+            ctx = dash.callback_context
+            if not ctx.triggered or not ctx.triggered[0]["value"]:
+                return dash.no_update, dash.no_update, dash.no_update
 
-        # Simulation control is only allowed when UI is running on local servers
+            triggered_id_str = ctx.triggered[0]["prop_id"].split(".")[0]
+            if not triggered_id_str:
+                return dash.no_update, dash.no_update, dash.no_update
+
+            triggered_button = json.loads(triggered_id_str)
+            selected_sector = triggered_button["sector"]
+
+            outlines = [btn["sector"] != selected_sector for btn in button_ids]
+            colors = ["primary" if btn["sector"] == selected_sector else "secondary" for btn in button_ids]
+
+            return selected_sector, outlines, colors
+
+        # Update sector data with filtering (this only affects the table)
+        @self.app.callback(
+            Output("sector-data-grid", "rowData"),
+            [Input("interval-component", "n_intervals"), Input("selected-sector", "data")],
+        )
+        def update_sector_data(n, selected_sector):
+            return self._build_sector_data(selected_sector)
+
         if not self.read_only:
 
             @self.app.callback(
@@ -731,8 +1067,6 @@ class ProximaUI:
                 prevent_initial_call=False,
             )
             def handle_controls(*args):
-                import dash
-
                 ctx = dash.callback_context
                 if not ctx.triggered:
                     return dash.no_update
@@ -751,17 +1085,19 @@ class ProximaUI:
                     action = commands[button_id]
                     kwargs = {}
                     if action == "set_delay":
-                        kwargs["delay"] = args[-2]  # step-delay value
+                        kwargs["delay"] = args[-2]
                     elif action == "start_limited":
-                        kwargs["max_steps"] = args[-1]  # max-steps value
+                        kwargs["max_steps"] = args[-1]
 
                     self.send_command(action, **kwargs)
 
                 return dash.no_update
 
     def _get_dashboard_status(self) -> tuple:
-        """Get dashboard status and badge information"""
+        """Get dashboard status and badge information using sector registry"""
         ws = self.get_world_system_data()
+
+        # Determine main status
         if not ws:
             status = "🔴 OFFLINE - Sol 0"
         else:
@@ -778,77 +1114,59 @@ class ProximaUI:
             else:
                 status = f"🔴 OFFLINE - Sol {step}"
 
-        # Base style using dark background color
         base_style = {"fontSize": "13px", "padding": "8px 12px", "backgroundColor": "transparent"}
 
-        ws = self.get_world_system_data()
-        latest_state = ws.get("latest_state", {}) if ws else {}
-        sectors = latest_state.get("sectors", {}) if latest_state else {}
-
-        energy = sectors.get("energy", {}) or {}
-        science = sectors.get("science", {}) or {}
-        mfg = sectors.get("manufacturing", {}) or {}
-        perf = sectors.get("performance", {}) or {}
-
-        if not ws or not latest_state:
+        # If no world system, return defaults
+        if not ws:
+            badge_sectors = self.config.sector_registry.get_badge_sectors()
+            custom_badges = list(self.config.badge_registry.badges.keys())
             default_style = {**base_style, "border": "1px solid #6c757d", "color": "#6c757d"}
-            return (
-                status,  # status-display children
-                "⚡ PWR: -",  # badge-power children
-                "🔬 SCI: -",  # badge-science children
-                "⚙️ MFG: -",  # badge-mfg children
-                "🌪️ DUST: -",  # badge-dust children
-                default_style,  # badge-power style
-                default_style,  # badge-science style
-                default_style,  # badge-mfg style
-                default_style,  # badge-dust style
-            )
 
-        # Power badge
-        sup = energy.get("total_power_supply_kW", 0)
-        need = energy.get("total_power_need_kW", 0)
-        power_txt = f"⚡ PWR: {round(sup,1)}/{round(need,1)} kW"
-        power_color = (
-            "#00FF88" if isinstance(sup, (int, float)) and isinstance(need, (int, float)) and sup >= need else "#ffc107"
-        )
-        power_style = {**base_style, "border": f"1px solid {power_color}", "color": power_color}
+            results = [status]
+            # Add default text for each badge
+            for sector in badge_sectors:
+                results.append(f"{sector.icon} -")
+            for badge_id in custom_badges:
+                badge_cfg = self.config.badge_registry.get_badge(badge_id)
+                results.append(f"{badge_cfg.display_name}: -" if badge_cfg else "-")
+            # Add default styles
+            for _ in range(len(badge_sectors) + len(custom_badges)):
+                results.append(default_style)
 
-        # Science badge
-        s_ops = science.get("operational_rovers", 0)
-        s_gen = science.get("science_generated", 0)
-        sci_txt = f"🔬 SCI: {s_ops} rovers | {round(s_gen,2)}"
-        sci_style = {**base_style, "border": "1px solid #0dcaf0", "color": "#0dcaf0"}
+            return tuple(results)
 
-        # Manufacturing badge
-        m_ops = mfg.get("active_operations", 0)
-        sector_state = mfg.get("sector_state", "")
-        mfg_txt = f"⚙️ MFG: {m_ops} ops | {sector_state}"
-        mfg_color = "#0dcaf0" if m_ops > 0 else "#6c757d"
-        mfg_style = {**base_style, "border": f"1px solid {mfg_color}", "color": mfg_color}
+        # Extract sector data
+        latest_state = ws.get("latest_state", {})
+        sectors_data = latest_state.get("sectors", {}) if latest_state else {}
 
-        # Dust badge
-        dust_score = (perf.get("scores", {}) or {}).get("IND-DUST-COV", {}) or {}
-        d_score = dust_score.get("score")
-        d_status = dust_score.get("status", "unknown")
-        dust_txt = f"🌪️ DUST: {round(d_score,2) if isinstance(d_score,(int,float)) else '-'}"
-        dust_color = {"within": "#00FF88", "outside": "#dc3545"}.get(d_status, "#ffbf00")
-        dust_style = {**base_style, "border": f"1px solid {dust_color}", "color": dust_color}
+        results = [status]
+        styles = []
 
-        # Return in the correct order: status, all badge texts, then all badge styles
-        return (
-            status,  # status-display children
-            power_txt,  # badge-power children
-            sci_txt,  # badge-science children
-            mfg_txt,  # badge-mfg children
-            dust_txt,  # badge-dust children
-            power_style,  # badge-power style
-            sci_style,  # badge-science style
-            mfg_style,  # badge-mfg style
-            dust_style,  # badge-dust style
-        )
+        # Build sector badges
+        for sector_config in self.config.sector_registry.get_badge_sectors():
+            sector_data = sectors_data.get(sector_config.id, {}) or {}
 
-    def _build_sector_data(self) -> List[Dict]:
-        """Build sector data for the table with Sector column"""
+            try:
+                badge_text = sector_config.badge_format.format(**sector_data)
+                badge_color = sector_config.color
+            except (KeyError, ValueError, TypeError):
+                # Fallback if formatting fails
+                badge_text = f"{sector_config.icon} {sector_config.display_name}: -"
+                badge_color = "#6c757d"
+
+            results.append(badge_text)
+            styles.append({**base_style, "border": f"1px solid {badge_color}", "color": badge_color})
+
+        for badge_id, badge_config in self.config.badge_registry.badges.items():
+            badge_text = f"{badge_config.display_name}: -"
+            badge_color = badge_config.default_color
+            results.append(badge_text)
+            styles.append({**base_style, "border": f"1px solid {badge_color}", "color": badge_color})
+
+        return tuple(results + styles)
+
+    def _build_sector_data(self, selected_sector: str = "all") -> List[Dict]:
+        """Build sector data for the table using sector registry with optional filtering"""
         ws = self.get_world_system_data()
         if not ws:
             return [{"Sector": "No Data", "Metric": "No Data", "Value": "N/A", "_id": "no_data"}]
@@ -856,35 +1174,46 @@ class ProximaUI:
         latest = ws.get("latest_state", {}).get("sectors", {})
         all_rows = []
 
-        sectors = {
-            "Energy": latest.get("energy", {}),
-            "Science": latest.get("science", {}),
-            "Manufacturing": latest.get("manufacturing", {}),
-            "Equipment Manufacturing": latest.get("equipment_manufacturing", {}),
-            "Transportation": latest.get("transportation", {}),
-            "System": latest.get("environment", {}),
-        }
+        # Get table sectors
+        table_sectors = self.config.sector_registry.get_table_sectors()
 
-        for sector_name, sector_data in sectors.items():
+        # Filter by selected sector if not "all"
+        if selected_sector != "all":
+            table_sectors = [s for s in table_sectors if s.id == selected_sector]
+
+        # Use sector registry to determine which sectors to display
+        for sector_config in table_sectors:
+            sector_data = latest.get(sector_config.id, {})
             if not isinstance(sector_data, dict):
                 continue
+
             for k, v in sector_data.items():
+                # Skip dictionaries and lists - only show raw string and numerical data
                 if isinstance(v, (dict, list)):
-                    v = json.dumps(v)
-                elif isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+                    continue
+
+                # Handle special float values (NaN, Inf)
+                if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
                     v = str(v)
-                all_rows.append(
-                    {"Sector": sector_name, "Metric": k, "Value": str(v), "_id": f"{sector_name.lower()}_{k}"}
-                )
+
+                # Only add if value is string, number, or boolean
+                if isinstance(v, (str, int, float, bool, type(None))):
+                    all_rows.append(
+                        {
+                            "Sector": sector_config.display_name,
+                            "Metric": k,
+                            "Value": str(v),
+                            "_id": f"{sector_config.id}_{k}",
+                        }
+                    )
 
         return all_rows if all_rows else [{"Sector": "No Data", "Metric": "No Data", "Value": "N/A", "_id": "no_data"}]
 
     def build_graph_grid(self, df: pd.DataFrame, selected_metrics: List[str]) -> html.Div:
-        """Build responsive graph grid with improved performance"""
+        """Build responsive graph grid"""
         if df is None or df.empty or not selected_metrics:
             return html.Div("No data available for plotting.", className="text-secondary text-center")
 
-        palette = ["#00d4aa", "#8b5cf6", "#06b6d4", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#f97316"]
         x = df.get("step", pd.Series(range(len(df))))
         cols = []
 
@@ -892,7 +1221,8 @@ class ProximaUI:
             if col not in df.columns or not pd.api.types.is_numeric_dtype(df[col]):
                 continue
 
-            y, color = df[col], palette[i % len(palette)]
+            y = df[col]
+            color = self.colors.chart_colors[i % len(self.colors.chart_colors)]
             pretty_name = col.replace("_", " ").title()
             if col.startswith("metric_"):
                 pretty_name = f"Metric {col[7:].replace('_',' ').title()}"
@@ -912,7 +1242,6 @@ class ProximaUI:
                 )
             )
 
-            # Layout styling
             fig.update_layout(
                 title={
                     "text": f"<b>{pretty_name}</b>",
@@ -974,7 +1303,6 @@ class ProximaUI:
         if not cols:
             return html.Div("No selectable numeric series.", className="text-secondary text-center")
 
-        # Create responsive grid (2 columns per row)
         rows = [dbc.Row(cols[i : i + 2], className="g-3") for i in range(0, len(cols), 2)]
         return html.Div(rows, style={"padding": "15px 0", "backgroundColor": "transparent"})
 
@@ -989,19 +1317,15 @@ class ProximaUI:
 
     def run(self):
         """Run the dashboard application"""
-        # Check if running in production (Cloud Run)
         if os.environ.get("PORT"):
-            # Production mode - don't run here, let gunicorn handle it
-            print("running in read only cloud runner mode")
+            print("🌐 Running in read-only cloud runner mode")
             return self.app
         else:
-            # Development mode
-            print("running in development mode")
+            print("🔧 Running in development mode")
             self.app.run(debug=True, host="0.0.0.0", port=8050)
 
 
 if __name__ == "__main__":
-    # This code is only executed when running in local server
     exp_id = sys.argv[1] if len(sys.argv) > 1 else "exp_001"
     db = ProximaDB(uri="mongodb://localhost:27017", local=True)
     ProximaUI(db, experiment_id=exp_id, update_rate_ms=1000, update_cycles=1, read_only=False).run()

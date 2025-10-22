@@ -111,5 +111,4 @@ class ScienceSector:
             "operational_rovers": operational_rovers,
             "total_power_demand": self.get_power_demand(),
             "metric_contributions": self._create_metric_map(),
-            "rovers": [r.report() for r in self.science_rovers],
         }

@@ -63,12 +63,14 @@ from proxima_model.event_engine.event_bus import EventBus
 
 class AllocationMode(Enum):
     """Power allocation strategies."""
+
     PROPORTIONAL = "proportional"
     EQUAL = "equal"
 
 
 class MetricStatus(Enum):
     """Metric threshold status."""
+
     WITHIN = "within"
     OUTSIDE = "outside"
     UNKNOWN = "unknown"
@@ -76,6 +78,7 @@ class MetricStatus(Enum):
 
 class GoalDirection(Enum):
     """Goal optimization direction."""
+
     MINIMIZE = "minimize"
     MAXIMIZE = "maximize"
 
@@ -83,18 +86,19 @@ class GoalDirection(Enum):
 @dataclass
 class MetricDefinition:
     """Definition of a performance metric."""
+
     id: str
     name: str
     unit: Optional[str] = None
     type: str = "positive"
     threshold_low: float = 0.0
     threshold_high: float = 1.0
-    
+
     def __post_init__(self):
         """Validate metric definition."""
         if self.threshold_low > self.threshold_high:
             raise ValueError("threshold_low cannot exceed threshold_high")
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "MetricDefinition":
         """Create from dictionary."""
@@ -104,27 +108,28 @@ class MetricDefinition:
             unit=data.get("unit"),
             type=data.get("type", "positive"),
             threshold_low=float(data.get("threshold_low", 0.0)),
-            threshold_high=float(data.get("threshold_high", 1.0))
+            threshold_high=float(data.get("threshold_high", 1.0)),
         )
 
 
 @dataclass
 class PerformanceGoal:
     """Performance goal configuration."""
+
     goal_id: str
     name: str
     metric_id: str
     target_value: float
     direction: str = "minimize"
     weight: float = 1.0
-    
+
     def __post_init__(self):
         """Validate goal configuration."""
         if self.weight < 0:
             raise ValueError("Weight must be non-negative")
         if self.direction not in [GoalDirection.MINIMIZE.value, GoalDirection.MAXIMIZE.value]:
             raise ValueError(f"Invalid direction: {self.direction}")
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "PerformanceGoal":
         """Create from dictionary."""
@@ -134,9 +139,9 @@ class PerformanceGoal:
             metric_id=data.get("metric_id"),
             target_value=float(data.get("target_value", 0.0)),
             direction=data.get("direction", "minimize"),
-            weight=float(data.get("weight", 1.0))
+            weight=float(data.get("weight", 1.0)),
         )
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary format."""
         return {
@@ -151,6 +156,7 @@ class PerformanceGoal:
 @dataclass
 class MetricScore:
     """Score report for a single metric."""
+
     name: str
     unit: Optional[str]
     type: str
@@ -160,7 +166,7 @@ class MetricScore:
     status: str
     score: float
     goal: Optional[Dict[str, Any]] = None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary format."""
         data = {
@@ -180,7 +186,7 @@ class MetricScore:
 
 class WorldSystem(Model):
     """Central orchestrator for the Proxima lunar base simulation."""
-    
+
     # Sector registry for dynamic initialization
     SECTOR_REGISTRY = {
         "energy": EnergySector,
@@ -193,7 +199,7 @@ class WorldSystem(Model):
     def __init__(self, config: Dict[str, Any], seed: Optional[int] = None):
         """
         Initialize world system with configuration.
-        
+
         Args:
             config: World system configuration dictionary
             seed: Random seed for Mesa model
@@ -236,9 +242,7 @@ class WorldSystem(Model):
         }
 
         # Initialize performance metrics (current values)
-        self.performance_metrics: Dict[str, float] = {
-            metric_id: 0.0 for metric_id in self._metric_definitions.keys()
-        }
+        self.performance_metrics: Dict[str, float] = {metric_id: 0.0 for metric_id in self._metric_definitions.keys()}
 
         # Model-wide metrics collection
         self.model_metrics: Dict[str, Any] = {"environment": {"step": 0}}
@@ -283,20 +287,18 @@ class WorldSystem(Model):
             if name != "energy" and hasattr(sector, "get_power_demand")
         }
 
-    def _allocate_power_fairly(
-        self, available_power: float, operational_sectors: Dict[str, Any]
-    ) -> Dict[str, float]:
+    def _allocate_power_fairly(self, available_power: float, operational_sectors: Dict[str, Any]) -> Dict[str, float]:
         """
         Compute fair power allocations for all non-energy sectors.
 
         Policy:
           - If Σ demand ≤ available_power, allocate each demand exactly.
           - Else, allocate proportionally to demand (or equally if equal mode).
-        
+
         Args:
             available_power: Total power available for allocation
             operational_sectors: Dictionary of sectors to allocate power to
-            
+
         Returns:
             Dictionary of sector names to allocated power amounts
         """
@@ -305,8 +307,7 @@ class WorldSystem(Model):
 
         # Snapshot demands
         demands: Dict[str, float] = {
-            name: max(0.0, float(sector.get_power_demand()))
-            for name, sector in operational_sectors.items()
+            name: max(0.0, float(sector.get_power_demand())) for name, sector in operational_sectors.items()
         }
 
         total_demand = sum(demands.values())
@@ -366,10 +367,10 @@ class WorldSystem(Model):
     def get_performance_metric(self, metric_id: str) -> float:
         """
         Get the current value of a performance metric.
-        
+
         Args:
             metric_id: Metric identifier
-            
+
         Returns:
             Current metric value (0.0 if not found)
         """
@@ -378,7 +379,7 @@ class WorldSystem(Model):
     def set_performance_metric(self, metric_id: str, value: float) -> None:
         """
         Set the value of a performance metric.
-        
+
         Args:
             metric_id: Metric identifier
             value: New metric value
@@ -388,7 +389,7 @@ class WorldSystem(Model):
     def _update_environment_dynamics(self) -> None:
         """
         Apply per-step environment effects like dust decay.
-        
+
         Environmental impacts may dissipate over time, so this runs at every step
         to update performance metrics after operations.
         """
@@ -396,18 +397,16 @@ class WorldSystem(Model):
             current_dust = self.get_performance_metric("IND-DUST-COV")
             self.set_performance_metric("IND-DUST-COV", max(0.0, current_dust - self.dust_decay_per_step))
 
-    def _determine_metric_status(
-        self, current: float, low: float, high: float, has_definition: bool
-    ) -> str:
+    def _determine_metric_status(self, current: float, low: float, high: float, has_definition: bool) -> str:
         """
         Determine metric status based on thresholds.
-        
+
         Args:
             current: Current metric value
             low: Lower threshold
             high: Upper threshold
             has_definition: Whether metric definition exists
-            
+
         Returns:
             Status string (within/outside/unknown)
         """
@@ -418,16 +417,16 @@ class WorldSystem(Model):
     def _build_single_metric_score(self, metric_id: str) -> Dict[str, Any]:
         """
         Build the score report for a single metric.
-        
+
         Args:
             metric_id: Metric identifier
-            
+
         Returns:
             Dictionary containing metric score information
         """
         mdef = self._metric_definitions.get(metric_id)
         current = self.get_performance_metric(metric_id)
-        
+
         # Use metric definition values or defaults
         if mdef:
             low = mdef.threshold_low
@@ -467,10 +466,10 @@ class WorldSystem(Model):
     def _build_metric_scores(self, selected_ids: Optional[Set[str]] = None) -> Dict[str, Dict[str, Any]]:
         """
         Build a unified score report for metrics.
-        
+
         Args:
             selected_ids: Optional set of metric IDs to include (None = all)
-            
+
         Returns:
             Dictionary of metric IDs to score information
         """
@@ -486,7 +485,7 @@ class WorldSystem(Model):
     def _apply_metric_contributions(self, contributions: Dict[str, float]) -> None:
         """
         Apply aggregated per-step metric contributions from sectors.
-        
+
         Args:
             contributions: Dictionary of metric IDs to delta values
         """
@@ -500,14 +499,14 @@ class WorldSystem(Model):
 
         # 1) Gather sector metrics and accumulate metric contributions
         aggregated_contrib: Dict[str, float] = {}
-        
+
         for sector_name, sector in self.sectors.items():
             if not hasattr(sector, "get_metrics"):
                 continue
-            
+
             metrics = sector.get_metrics()
             self.model_metrics[sector_name] = metrics
-            
+
             # Accumulate contributions
             contributions = (metrics or {}).get("metric_contributions", {})
             for metric_id, delta in contributions.items():

@@ -29,6 +29,7 @@ from data_engine.proxima_db_engine import ProximaDB
 
 class LogLevel(Enum):
     """Log verbosity levels."""
+
     DEBUG = auto()
     INFO = auto()
     WARNING = auto()
@@ -37,6 +38,7 @@ class LogLevel(Enum):
 
 class LogDestination(Enum):
     """Available logging destinations."""
+
     CSV = "csv"
     DATABASE = "database"
     BOTH = "both"
@@ -45,20 +47,21 @@ class LogDestination(Enum):
 @dataclass
 class LoggerConfig:
     """Configuration for data logger."""
+
     experiment_id: str
     ws_id: str
     log_dir: str = "log_files"
     log_to_csv: bool = True
     log_to_db: bool = True
     base_time: Optional[datetime] = None
-    
+
     def __post_init__(self):
         """Validate configuration."""
         if not self.experiment_id:
             raise ValueError("experiment_id cannot be empty")
         if not self.ws_id:
             raise ValueError("ws_id cannot be empty")
-        
+
         # Set default base time if not provided
         if self.base_time is None:
             self.base_time = datetime.now(timezone.utc)
@@ -67,12 +70,13 @@ class LoggerConfig:
 @dataclass
 class LogEntry:
     """Represents a single log entry."""
+
     experiment_id: str
     step: int
     timestamp: datetime
     sector_data: Dict[str, Any] = field(default_factory=dict)
     latest_state: Optional[Dict[str, Any]] = None
-    
+
     def to_db_document(self) -> Dict[str, Any]:
         """Convert to MongoDB document format."""
         doc = {
@@ -83,7 +87,7 @@ class LogEntry:
         # Add all sector data directly
         doc.update(self.sector_data)
         return doc
-    
+
     def to_flat_record(self) -> Dict[str, Any]:
         """Convert to flat dictionary for CSV."""
         flat_record = {
@@ -91,7 +95,7 @@ class LogEntry:
             "step": self.step,
             "timestamp": self.timestamp,
         }
-        
+
         # Flatten nested dictionaries
         for sector_name, sector_values in self.sector_data.items():
             if isinstance(sector_values, dict):
@@ -104,14 +108,14 @@ class LogEntry:
                         flat_record[f"{sector_name}_{key}"] = value
             else:
                 flat_record[sector_name] = sector_values
-        
+
         return flat_record
 
 
 class DataLogger:
     """
     Manages simulation data logging to CSV and MongoDB.
-    
+
     Features:
     - Dual logging: CSV files and MongoDB time-series collection
     - Automatic timestamp generation based on simulation steps
@@ -125,17 +129,17 @@ class DataLogger:
     COLLECTION_WORLD_SYSTEMS = "world_systems"
 
     def __init__(
-        self, 
-        experiment_id: str, 
-        db: ProximaDB, 
-        ws_id: str, 
-        log_dir: str = "log_files", 
-        log_to_csv: bool = True, 
-        log_to_db: bool = True
+        self,
+        experiment_id: str,
+        db: ProximaDB,
+        ws_id: str,
+        log_dir: str = "log_files",
+        log_to_csv: bool = True,
+        log_to_db: bool = True,
     ):
         """
         Initialize data logger with configuration.
-        
+
         Args:
             experiment_id: Unique identifier for the experiment
             db: ProximaDB database instance
@@ -152,18 +156,18 @@ class DataLogger:
             log_to_csv=log_to_csv,
             log_to_db=log_to_db,
         )
-        
+
         self.db = db
         self._records: List[Dict[str, Any]] = []
-        
+
         # Setup logging directory
         self._log_path = Path(self._config.log_dir)
         self._log_path.mkdir(parents=True, exist_ok=True)
-        
+
         # Generate CSV filename with timestamp
         timestamp = datetime.now(timezone.utc).timestamp()
         self._csv_path = self._log_path / f"simlog_{experiment_id}_{timestamp}.csv"
-        
+
         # Clear existing logs for this experiment
         self._clear_existing_logs()
 
@@ -171,11 +175,9 @@ class DataLogger:
         """Clear existing logs for this experiment from database."""
         if not self._config.log_to_db:
             return
-        
+
         try:
-            result = self.db.db[self.COLLECTION_LOGS].delete_many({
-                "experiment_id": self._config.experiment_id
-            })
+            result = self.db.db[self.COLLECTION_LOGS].delete_many({"experiment_id": self._config.experiment_id})
             print(f"🗑️  Cleared {result.deleted_count} existing logs for experiment: {self._config.experiment_id}")
         except Exception as e:
             print(f"⚠️  Could not clear existing logs: {e}")
@@ -183,10 +185,10 @@ class DataLogger:
     def _generate_timestamp(self, step: int) -> datetime:
         """
         Generate timestamp for a given step.
-        
+
         Args:
             step: Simulation step number
-            
+
         Returns:
             Datetime representing the step (base_time + step hours)
         """
@@ -195,23 +197,20 @@ class DataLogger:
     def _log_to_database(self, entry: LogEntry) -> None:
         """
         Log entry to MongoDB database.
-        
+
         Args:
             entry: LogEntry to persist
         """
         if not self._config.log_to_db:
             return
-        
+
         try:
             # Insert log document
             self.db.db[self.COLLECTION_LOGS].insert_one(entry.to_db_document())
-            
+
             # Update world system state if provided
             if entry.latest_state:
-                complete_state = {
-                    **entry.latest_state, 
-                    "sectors": entry.sector_data
-                }
+                complete_state = {**entry.latest_state, "sectors": entry.sector_data}
                 self.db.db[self.COLLECTION_WORLD_SYSTEMS].update_one(
                     {"_id": self._config.ws_id},
                     {"$set": {"latest_state": complete_state}},
@@ -222,26 +221,26 @@ class DataLogger:
     def _log_to_csv(self, entry: LogEntry) -> None:
         """
         Add entry to CSV buffer.
-        
+
         Args:
             entry: LogEntry to buffer for CSV
         """
         if not self._config.log_to_csv:
             return
-        
+
         self._records.append(entry.to_flat_record())
 
     def log(self, step: int, **kwargs) -> None:
         """
         Log simulation data with sector organization.
-        
+
         Args:
             step: Current simulation step
             **kwargs: Sector data and optional latest_state
         """
         # Extract latest_state if present
         latest_state = kwargs.pop("latest_state", None)
-        
+
         # Create log entry
         entry = LogEntry(
             experiment_id=self._config.experiment_id,
@@ -250,7 +249,7 @@ class DataLogger:
             sector_data=kwargs,
             latest_state=latest_state,
         )
-        
+
         # Log to configured destinations
         self._log_to_database(entry)
         self._log_to_csv(entry)
@@ -259,7 +258,7 @@ class DataLogger:
         """Save buffered CSV records to file."""
         if not self._config.log_to_csv or not self._records:
             return
-        
+
         try:
             df = pd.DataFrame(self._records)
             df.to_csv(self._csv_path, index=False)
@@ -270,18 +269,15 @@ class DataLogger:
     def create_unique_index(self) -> None:
         """
         Create unique index on logs collection to prevent duplicates.
-        
+
         Should be run once during setup. Safe to call multiple times
         (will report if index already exists).
         """
         if not self._config.log_to_db:
             return
-        
+
         try:
-            self.db.db[self.COLLECTION_LOGS].create_index(
-                [("experiment_id", 1), ("step", 1)], 
-                unique=True
-            )
+            self.db.db[self.COLLECTION_LOGS].create_index([("experiment_id", 1), ("step", 1)], unique=True)
             print("✅ Created unique index on logs_simulation collection")
         except Exception as e:
             print(f"ℹ️  Index may already exist: {e}")
