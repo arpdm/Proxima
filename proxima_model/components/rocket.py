@@ -58,10 +58,12 @@ class Rocket(Agent):
     def commit_round_trip(
         self,
         destination: str,
+        origin: str,
         outbound_payload: Dict,
         return_payload: Dict,
         one_way_duration: int,
         loading_time_steps: int,
+        requesting_sector: str
     ):
         """
         Commits the rocket to a pre-calculated round trip mission, changing its state.
@@ -71,9 +73,8 @@ class Rocket(Agent):
             return  # Should not happen if logic is correct
 
         self.is_available = False
-        self.location = "In-Transit (Outbound)"
         self.mission = {
-            "origin": self.location,
+            "origin": origin,
             "destination": destination,
             "phase": "outbound",  # Phases: outbound, loading, inbound
             "outbound_payload": outbound_payload,
@@ -81,6 +82,7 @@ class Rocket(Agent):
             "eta_steps": one_way_duration,
             "one_way_duration": one_way_duration,
             "loading_duration": loading_time_steps,
+            "requesting_sector": requesting_sector
         }
 
     def step(self) -> tuple:
@@ -94,8 +96,7 @@ class Rocket(Agent):
 
         # Decrement ETA for the current phase
         self.mission["eta_steps"] -= 1
-        print(self.mission["eta_steps"])
-
+        
         # Check for phase completion
         if self.mission["eta_steps"] <= 0:
             # --- OUTBOUND ARRIVAL ---
@@ -108,7 +109,7 @@ class Rocket(Agent):
                 # Publish event for payload delivery
                 self.event_bus.publish(
                     "payload_delivered",
-                    destination=self.mission["destination"],
+                    to_sector=self.mission["requesting_sector"],
                     payload=self.mission["outbound_payload"],
                 )
 
@@ -127,7 +128,7 @@ class Rocket(Agent):
                 # Publish event for return payload delivery
                 self.event_bus.publish(
                     "payload_delivered",
-                    destination=self.mission["origin"],
+                    to_sector=self.mission["requesting_sector"],
                     payload=self.mission["return_payload"],
                 )
                 self.mission = None  # Clear mission, rocket is now idle

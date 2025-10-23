@@ -124,8 +124,18 @@ class ProximaUI:
 
     # ========================= UI COMPONENT BUILDERS ========================
 
-    def _create_card(self, title: str, body_content, class_name: str = "mb-4") -> dbc.Card:
+    def _create_card(self, title: str, body_content, class_name: str = "mb-4", min_height: str = None) -> dbc.Card:
         """Create standardized card component"""
+        
+        card_body_style = {
+            "backgroundColor": self.theme.bg_secondary, 
+            "padding": "20px"
+        }
+        
+        # Add minimum height if specified
+        if min_height:
+            card_body_style["minHeight"] = min_height
+            
         return dbc.Card(
             [
                 dbc.CardHeader(
@@ -136,7 +146,7 @@ class ProximaUI:
                         "padding": "15px",
                     },
                 ),
-                dbc.CardBody(body_content, style={"backgroundColor": self.theme.bg_secondary, "padding": "20px"}),
+                dbc.CardBody(body_content, style=card_body_style),
             ],
             className=class_name,
             style={"border": f"1px solid {self.theme.border}"},
@@ -454,10 +464,19 @@ class ProximaUI:
                         )
                     ]
                 ),
+                # Graph area with minimum height to prevent dropdown overflow
+                html.Div(
+                    id="graph-grid",
+                    style={
+                        "minHeight": "400px",  # Ensure enough space for dropdown
+                        "marginTop": "20px",
+                        "padding": "20px 0",
+                    }
+                )
             ]
         )
 
-        return self._create_card("Metrics Plots", [selector, html.Div(id="graph-grid")])
+        return self._create_card("Metrics Plots", selector)
 
     def _sector_filter_buttons(self):
         """Create sector filter button group"""
@@ -1006,8 +1025,10 @@ class ProximaUI:
 
         @self.app.callback(
             Output("graph-grid", "children"),
-            [Input("metric-selector", "value")],
-            [State("interval-component", "n_intervals")],
+            [
+                Input("metric-selector", "value"),
+                Input("interval-component", "n_intervals")  # Add this as Input, not State
+            ],
         )
         def update_graph_grid(selected_metrics, n):
             if not selected_metrics:

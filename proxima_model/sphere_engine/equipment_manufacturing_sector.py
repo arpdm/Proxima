@@ -129,7 +129,7 @@ class EquipmentManSector:
         """Get pending orders (for backwards compatibility)."""
         return self._inventory.pending_orders.copy()
 
-    def handle_payload_delivery(self, destination: str, payload: Dict[str, float]):
+    def handle_payload_delivery(self, to_sector: str, payload: Dict[str, float]):
         """
         Handle incoming payloads from transport events.
 
@@ -137,15 +137,16 @@ class EquipmentManSector:
             destination: Delivery destination (only processes "Moon" deliveries)
             payload: Dictionary of equipment items and quantities delivered
         """
-        # Only process payloads arriving at the Moon
-        print(f"EquipmentManSector receiving payload: {payload}, {destination}")
+        if to_sector == self.config.get("sector_name"):
+            print("Equipment Manufacturing Sector Received Payload")
+            
+            # Only process payloads arriving at the Moon
+            for item, amount in payload.items():
+                # Add to physical stock
+                self._inventory.add_physical(item, amount)
 
-        for item, amount in payload.items():
-            # Add to physical stock
-            self._inventory.add_physical(item, amount)
-
-            # Decrement pending orders
-            self._inventory.reduce_pending(item, amount)
+                # Decrement pending orders
+                self._inventory.reduce_pending(item, amount)
 
     def _check_and_request_resupply(self):
         """
@@ -173,8 +174,8 @@ class EquipmentManSector:
                 "transport_request",
                 requesting_sector="equipment_manufacturing",
                 payload=payload_to_request,
-                origin="Moon",
-                destination="Earth",
+                origin="Moon", #TODO: Get from Environment Configuration
+                destination="Earth", # TODO: Get from Environment Configuration
             )
 
     def get_power_demand(self) -> float:

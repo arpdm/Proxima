@@ -190,7 +190,11 @@ class EnergySectorBuilder(ComponentBuilder):
         Returns:
             Dictionary with 'generators' and 'storages' lists
         """
-        config = {"generators": [], "storages": []}
+        config = {
+            "sector_name": "energy",
+            "generators": [], 
+            "storages": []
+        }
 
         for comp in components:
             template = self._get_template(comp["template_id"])
@@ -230,7 +234,10 @@ class ScienceSectorBuilder(ComponentBuilder):
         Returns:
             Dictionary with 'science_rovers' list
         """
-        config = {"science_rovers": []}
+        config = {
+            "sector_name": "science",
+            "science_rovers": []
+        }
 
         for comp in components:
             template = self._get_template(comp["template_id"])
@@ -268,7 +275,12 @@ class ManufacturingSectorBuilder(ComponentBuilder):
         Returns:
             Dictionary with 'isru_extractors', 'isru_generators', and 'initial_stocks'
         """
-        config = {"isru_extractors": [], "isru_generators": [], "initial_stocks": initial_stocks}
+        config = {
+            "sector_name": "manufacturing",
+            "isru_extractors": [], 
+            "isru_generators": [], 
+            "initial_stocks": initial_stocks
+        }
 
         for comp in components:
             template = self._get_template(comp["template_id"])
@@ -301,19 +313,44 @@ class ManufacturingSectorBuilder(ComponentBuilder):
 class TransportationSectorBuilder(ComponentBuilder):
     """Builds transportation sector configuration."""
 
-    def build(self, components: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    def build(self, components: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Build transportation sector configuration.
 
         Args:
-            components: List of transportation component instances
+            components: List of transportation component instances and configuration
 
         Returns:
-            Dictionary with 'rockets' and 'fuel_generators' lists
+            Dictionary with sector config, rockets, and fuel_generators
         """
-        config = {"rockets": [], "fuel_generators": []}
+        # Import the config class to get default values
+        from proxima_model.sphere_engine.transportation_sector import TransportationConfig
+
+        # Start with defaults from the dataclass
+        default_config = TransportationConfig()
+
+        config = {
+            "sector_name": "transportation",
+            "rockets": [],
+            "fuel_generators": [],
+        }
+
+
+        # Add all fields from TransportationConfig with their default values
+        for field_name in default_config.__dataclass_fields__.keys():
+            config[field_name] = getattr(default_config, field_name)
 
         for comp in components:
+            # Check if this is a sector configuration (no template_id)
+            if "template_id" not in comp:
+                # Dynamically update any field that exists in the config
+                for key, value in comp.items():
+                    if key in config:  # Only update if key exists in our config
+                        config[key] = value
+                        print(f"✅ Updated transportation config: {key} = {value}")
+                continue
+
+            # This is a component instance - existing logic unchanged
             template = self._get_template(comp["template_id"])
             if not template:
                 continue
@@ -351,7 +388,10 @@ class EquipmentManufacturingSectorBuilder(ComponentBuilder):
         Returns:
             Dictionary with 'initial_stocks'
         """
-        config = {"initial_stocks": {}}
+        config = {
+            "sector_name": "equipment_manufacturing",
+            "initial_stocks": {}
+        }
 
         for comp in components:
             # Check for special "equipment_stock" key

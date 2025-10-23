@@ -18,34 +18,6 @@ Throughout the development of World System Beta, the following objectives are to
 ## Constraints
 The initial world system Beta is constrained to plans and operations defined as part of Artemis program. This is to provide a controlled environment that has some realistic odds of success.
 
-# Case Studies
-
-This section covers case studies based on real events and historical records on Earth. The goal is to identify major success and failure cases, analyze them, form patterns, and use the results to define a set of goals and policies for World System Beta.  
-
-### Grid Fragility and Cascading Failures
-- **2003 Northeast Blackout (USA/Canada):** A single transmission line sag + alarm failure → cascade → 50M people lost power.
-- **2021 Texas Winter Storm (ERCOT):** Weather stress + poor infrastructure + no grid interconnection → statewide outage.
-
-### Weather and Climate Vulnerability
-- **Hurricane Maria (2017, Puerto Rico):** Centralized infrastructure destroyed → weeks without power.
-- **Wildfires in California:** Sparked by grid lines; rolling blackouts implemented to reduce risk.
-
-### Centralization and Monopolization
-- Many nations (e.g., South Africa’s **Eskom**) struggle due to centralized, politicized, monopolistic utilities.
-- High dependency leads to fragile socio-political links.
-
-### Underinvestment in Storage and Buffering
-- Most grids (even advanced ones) underinvest in storage: Germany, USA, Japan.
-- Over-reliance on real-time generation leads to waste or shortages.
-
-### Technology Lock-In & Transition Delay
-- Fossil fuel investment inertia → slow clean energy adoption despite cost parity.
-- Nuclear stagnation due to regulation & public distrust.
-
-### Equity and Access Disparities
-- Energy poverty in rural India and sub-Saharan Africa: over 800 million people lack electricity.
-- Urban slums often lack reliable energy despite proximity to infrastructure.
-
 # Functional Description
 ## Simulation Functions and Capabilities
 
@@ -175,14 +147,14 @@ Mesa Model orchestrator that initializes sectors, computes goal-weighted allocat
 ## Proxima Runner
 Simulation loop controller that builds the config, instantiates World System, runs continuous or limited steps, processes DB-driven commands (startup/runtime), and logs sector metrics plus runner state each step.
 
-## Policy Engine
-Policy Engine is used for managing polcies, activation/deactivating and injecting them to world system spheres.
-
-
 
 ![Proxima Model Operation Flow](resources/Simulation_Flow_CONOPS.jpg)
 
 Figure 3 Proxima Model Operation Flow
+
+## Policy Engine
+Policy Engine is used for managing polcies, activation/deactivating and injecting them to world system spheres.
+
 
 # Dynamical Architecture
 
@@ -296,15 +268,16 @@ E^{(\mathrm{Lunar})}_t = \gamma_1 E^{(\mathrm{Lunar})}_{t-1} + \gamma_2 \left( E
 ---
 
 
-## Policies
+# Policies
 
-### Dust Coverage Index - Throttling
-[x] TBD
-
-### Manufacturing Sector Priority Management Policy
-[x] TBD
-
-### Growth and Expansion Policies
+## Dust Coverage Index - Throttling
+### Problem Background
+### Solution Background
+### Case Studies
+### Functional Definition
+### Equation
+### Algorithm
+### Side Effects
 [x] TBD
 
 
@@ -455,9 +428,9 @@ With each phase/component, the world system will have:
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
 | World System Can Expand - | Phase 2 | 🚧 |
-| World System Can Import From World System Alpha | Phase 2 | 🚧 |
-| World System Has Nuclear Power | Phase 2 | 🚧 |
-| World System Has Rockets for transortation of cargo | Phase 2 | 🚧 |
+| World System Can Import From World System Alpha | Phase 2 | ✅ |
+| World System Has Nuclear Power | Phase 3 | 🚧 |
+| World System Has Rockets for transortation of cargo | Phase 2 | ✅ |
 | World System Has Assembly Robots and 3D Printing Robots | Phase 2 | 🚧 |
 | Calculate contribution of each metric to sector | Phase 2 | 🚧 |
 

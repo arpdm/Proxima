@@ -53,6 +53,7 @@ class TransportationConfig:
     earth_moon_distance_km: float = 384400.0
     loading_time_steps: int = 24
     he3_request_threshold_kg: float = 1.0
+    minimum_fuel_k_sp:int = 5000
 
     def __post_init__(self):
         """Validate configuration."""
@@ -85,14 +86,13 @@ class TransportationSector:
         self.model = model
         self.event_bus = event_bus
 
-        # Load configuration
-        self._config = TransportationConfig(
-            earth_moon_distance_km=config.get("earth_moon_distance_km", self.DEFAULT_CONFIG.earth_moon_distance_km),
-            loading_time_steps=config.get("loading_time_steps", self.DEFAULT_CONFIG.loading_time_steps),
-            he3_request_threshold_kg=config.get(
-                "he3_request_threshold_kg", self.DEFAULT_CONFIG.he3_request_threshold_kg
-            ),
-        )
+        # Load configuration dynamically from config dict
+        config_kwargs = {}
+        for field_name in self.DEFAULT_CONFIG.__dataclass_fields__.keys():
+            if field_name in config:
+                config_kwargs[field_name] = config[field_name]
+        
+        self._config = TransportationConfig(**config_kwargs)
 
         # Initialize stocks
         self._stocks = ResourceStocks()
@@ -100,25 +100,33 @@ class TransportationSector:
         # Transport queue
         self.transport_queue: List[TransportRequest] = []
 
-        # Initialize rocket fleet
-        rocket_config = config.get("rockets")
-        for agent_config in rocket_config:
-            rocket_quantity = agent_config.get("quantity", 1)
-            self.rockets: List[Rocket] = []
+        # Initialize rocket fleet from config
+        self.rockets: List[Rocket] = []
+        rocket_configs = config.get("rockets", [])
+        for rocket_config in rocket_configs:
+            rocket_quantity = rocket_config.get("quantity", 1)
             for _ in range(rocket_quantity):
-                self.rockets.append(Rocket(self.model, agent_config, event_bus))
+                self.rockets.append(Rocket(self.model, rocket_config, event_bus))
 
-        # Initialize fuel generators
-        fuel_gen_config = config.get("fuel_generators")
-        for agent_config in fuel_gen_config:
-            fuel_gen_quantity = agent_config.get("quantity", 1)
-            self.fuel_generators: List[FuelGenerator] = []
+        # Initialize fuel generators from config
+        self.fuel_generators: List[FuelGenerator] = []
+        fuel_gen_configs = config.get("fuel_generators", [])
+        for fuel_gen_config in fuel_gen_configs:
+            fuel_gen_quantity = fuel_gen_config.get("quantity", 1)
             for _ in range(fuel_gen_quantity):
-                self.fuel_generators.append(FuelGenerator(agent_config))
+                self.fuel_generators.append(FuelGenerator(fuel_gen_config))
 
         # Subscribe to events
         self.event_bus.subscribe("transport_request", self.handle_transport_request)
         self.event_bus.subscribe("resource_allocated", self.handle_resource_allocation)
+
+        print(f"✅ Transportation Sector initialized:")
+        print(f"   - Distance to Earth: {self._config.earth_moon_distance_km:,.0f} km")
+        print(f"   - Loading time: {self._config.loading_time_steps} steps")
+        print(f"   - He3 threshold: {self._config.he3_request_threshold_kg} kg")
+        print(f"   - Min fuel: {self._config.minimum_fuel_k_sp:,.0f} kg")
+        print(f"   - Rockets: {len(self.rockets)}")
+        print(f"   - Fuel generators: {len(self.fuel_generators)}")
 
     @property
     def stocks(self) -> Dict[str, float]:
@@ -172,7 +180,7 @@ class TransportationSector:
 
     def _request_resources_for_fuel(self) -> None:
         """Request He3 from manufacturing sector if below threshold."""
-        if self._stocks.he3_kg < self._config.he3_request_threshold_kg:
+        if self._stocks.he3_kg < self._config.he3_request_threshold_kg and self._stocks.rocket_fuel_kg < self._config.minimum_fuel_k_sp:
             self.event_bus.publish(
                 "resource_request",
                 requesting_sector="transportation",
@@ -242,11 +250,13 @@ class TransportationSector:
 
             # Commit the launch
             rocket.commit_round_trip(
-                destination="Earth",
+                destination= request.destination,
+                origin=request.origin,
                 outbound_payload=outbound_payload,
                 return_payload=return_payload,
                 one_way_duration=one_way_steps,
                 loading_time_steps=self._config.loading_time_steps,
+                requesting_sector = request.requesting_sector
             )
 
             return True
