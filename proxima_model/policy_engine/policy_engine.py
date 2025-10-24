@@ -19,10 +19,7 @@ ARCHITECTURE:
 from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Dict, Any, List, Optional, Protocol, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from typing import Any as WorldSystem  # Avoid circular import
+from typing import Dict, Any, List, Optional, Protocol
 
 
 class MetricType(Enum):
@@ -62,7 +59,7 @@ class PolicyEffect:
     policy_id: str
     metric_id: Optional[str] = None
     score: Optional[float] = None
-    throttle: Optional[float] = None
+    throttle: Optional[bool] = None
     applied_to: List[str] = field(default_factory=list)
     error: Optional[str] = None
 
@@ -96,6 +93,9 @@ class DustCoverageThrottlePolicy:
     a minimum throttle floor, ensuring that operations continue at a reduced rate even under
     adverse environmental conditions.
 
+    The throttling is probability based: This creates a probabilisting throttling where if
+    thottling factor is lets say 20%, 20% of steps are used to pause operations.
+
     Attributes
     ----------
     id : str
@@ -106,18 +106,14 @@ class DustCoverageThrottlePolicy:
         Whether the policy is active
     metric_id : str
         The metric ID to monitor for dust coverage
-    min_throttle : float
-        The minimum allowed throttle factor (0.0 to 1.0)
     sectors : List[str]
         List of sector names to apply throttling to
 
     Notes
     -----
-    - Sectors must implement a `set_throttle_factor(float)` method for throttling to take effect.
+    - Sectors must implement a `set_throttle_factor(throttle:float)` method for throttling to take effect.
     - The policy is robust to metric fluctuations and avoids complete operational shutdowns
       by maintaining a baseline level of activity.
-    - TODO: Throttling policy needs to be adjusted for realism
-    - TODO: Performance goal target is not used but should be integrated
     """
 
     id = "PLCY-DUST-THROTTLE"
@@ -126,13 +122,11 @@ class DustCoverageThrottlePolicy:
 
     # Default configuration
     DEFAULT_METRIC_ID = "IND-DUST-COV"
-    DEFAULT_MIN_THROTTLE = 0.2
     DEFAULT_SECTORS = ["science", "manufacturing"]
 
     def __init__(
         self,
         metric_id: str = DEFAULT_METRIC_ID,
-        min_throttle: float = DEFAULT_MIN_THROTTLE,
         sectors: Optional[List[str]] = None,
     ):
         """
@@ -140,20 +134,10 @@ class DustCoverageThrottlePolicy:
 
         Args:
             metric_id: The metric ID to monitor (default: "IND-DUST-COV")
-            min_throttle: Minimum throttle factor (default: 0.2, range: 0.0-1.0)
             sectors: Sectors to throttle (default: ["science", "manufacturing"])
         """
         self.metric_id = metric_id
-        self.min_throttle = self._validate_throttle(min_throttle)
         self.sectors = sectors if sectors is not None else self.DEFAULT_SECTORS.copy()
-
-    @staticmethod
-    def _validate_throttle(value: float) -> float:
-        """Validate throttle value is in valid range."""
-        throttle = float(value)
-        if not 0.0 <= throttle <= 1.0:
-            raise ValueError(f"Throttle must be between 0.0 and 1.0, got {throttle}")
-        return throttle
 
     def apply(self, engine: "PolicyEngine") -> Dict[str, Any]:
         """
@@ -165,11 +149,9 @@ class DustCoverageThrottlePolicy:
         Returns:
             Dictionary containing policy effects
         """
-        # TODO: Throttling policy needs to be adjusted for realism
-        # TODO: Performance goal target is not used but should be integrated
 
         score = engine.score(self.metric_id)
-        throttle = max(self.min_throttle, score)
+        throttle = abs(1 - score) * 0.75
 
         effects = PolicyEffect(
             policy_id=self.id, metric_id=self.metric_id, score=score, throttle=throttle, applied_to=[]
@@ -195,30 +177,6 @@ class DustCoverageThrottlePolicy:
 class PolicyEngine:
     """
     Extensible policy engine that centralizes scoring and applies policies.
-
-    The PolicyEngine manages a registry of operational policies, computes normalized scores
-    for world system metrics, and applies enabled policies to the simulation world. It supports
-    dynamic addition, enabling/disabling, and listing of policies.
-
-    Attributes
-    ----------
-    world : WorldSystem
-        The simulation world object providing metric definitions and sector access
-    _policies : List[Policy]
-        List of registered policy objects
-
-    Methods
-    -------
-    score(metric_id: str) -> float
-        Returns a normalized score (0..1) for the given metric
-    add_policy(policy: Policy) -> None
-        Registers a new policy with the engine
-    enable_policy(policy_id: str, enabled: bool = True) -> bool
-        Enables or disables a policy by its ID
-    list_policies() -> List[Dict[str, Any]]
-        Returns a summary of all registered policies and their status
-    apply_policies() -> Dict[str, Any]
-        Applies all enabled policies and returns their aggregated effects
     """
 
     def __init__(self, world):
@@ -233,12 +191,9 @@ class PolicyEngine:
             DustCoverageThrottlePolicy(),  # Default policy
         ]
 
-        # Cache for metric definitions (optimization)
-        self._metric_cache: Dict[str, Dict[str, Any]] = {}
-
     def _get_metric_definition(self, metric_id: str) -> Optional[Dict[str, Any]]:
         """
-        Get metric definition with caching for performance.
+        Get metric definition.
 
         Args:
             metric_id: The metric ID to retrieve
@@ -246,11 +201,7 @@ class PolicyEngine:
         Returns:
             Metric definition dictionary or None if not found
         """
-        if metric_id not in self._metric_cache:
-            self._metric_cache[metric_id] = next(
-                (m for m in self.world.metric_definitions if m.get("id") == metric_id), None
-            )
-        return self._metric_cache[metric_id]
+        return next((m for m in self.world.metric_definitions if m.get("id") == metric_id), None)
 
     def score(self, metric_id: str) -> float:
         """
@@ -389,5 +340,5 @@ class PolicyEngine:
         return effects
 
     def clear_metric_cache(self):
-        """Clear the metric definition cache (useful after metric updates)."""
-        self._metric_cache.clear()
+        """Clear the metric definition cache (no longer needed)."""
+        pass  # Cache removed, method kept for API compatibility
