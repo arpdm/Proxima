@@ -21,6 +21,10 @@ from enum import Enum, auto
 from typing import Dict, List, Any, Optional
 from data_engine.proxima_db_engine import ProximaDB
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class ComponentType(Enum):
     """Available component types."""
@@ -139,7 +143,7 @@ class ComponentBuilder:
         """
         template = self._templates.get(template_id)
         if not template:
-            print(f"⚠️  Warning: Template {template_id} not found")
+            logger.warning(f"⚠️  Warning: Template {template_id} not found")
         return template
 
     def _merge_config(self, component: Dict[str, Any], template: Dict[str, Any]) -> ComponentConfig:
@@ -190,11 +194,7 @@ class EnergySectorBuilder(ComponentBuilder):
         Returns:
             Dictionary with 'generators' and 'storages' lists
         """
-        config = {
-            "sector_name": "energy",
-            "generators": [], 
-            "storages": []
-        }
+        config = {"sector_name": "energy", "generators": [], "storages": []}
 
         for comp in components:
             template = self._get_template(comp["template_id"])
@@ -215,7 +215,7 @@ class EnergySectorBuilder(ComponentBuilder):
             elif comp_type == ComponentType.POWER_STORAGE.value:
                 config["storages"].append(component_data)
 
-        print(
+        logger.info(
             f"✅ Configured energy sector: {len(config['generators'])} generators, {len(config['storages'])} storages"
         )
         return config
@@ -234,10 +234,7 @@ class ScienceSectorBuilder(ComponentBuilder):
         Returns:
             Dictionary with 'science_rovers' list
         """
-        config = {
-            "sector_name": "science",
-            "science_rovers": []
-        }
+        config = {"sector_name": "science", "science_rovers": []}
 
         for comp in components:
             template = self._get_template(comp["template_id"])
@@ -257,7 +254,7 @@ class ScienceSectorBuilder(ComponentBuilder):
 
             config["science_rovers"].append(rover_cfg)
 
-        print(f"✅ Configured science sector: {len(config['science_rovers'])} rovers")
+        logger.info(f"✅ Configured science sector: {len(config['science_rovers'])} rovers")
         return config
 
 
@@ -277,9 +274,9 @@ class ManufacturingSectorBuilder(ComponentBuilder):
         """
         config = {
             "sector_name": "manufacturing",
-            "isru_extractors": [], 
-            "isru_generators": [], 
-            "initial_stocks": initial_stocks
+            "isru_extractors": [],
+            "isru_generators": [],
+            "initial_stocks": initial_stocks,
         }
 
         for comp in components:
@@ -304,7 +301,7 @@ class ManufacturingSectorBuilder(ComponentBuilder):
             elif subtype == ComponentType.ISRU_GENERATOR.value:
                 config["isru_generators"].append(base_cfg)
 
-        print(
+        logger.info(
             f"✅ Configured manufacturing sector: {len(config['isru_extractors'])} extractors, {len(config['isru_generators'])} generators"
         )
         return config
@@ -335,7 +332,6 @@ class TransportationSectorBuilder(ComponentBuilder):
             "fuel_generators": [],
         }
 
-
         # Add all fields from TransportationConfig with their default values
         for field_name in default_config.__dataclass_fields__.keys():
             config[field_name] = getattr(default_config, field_name)
@@ -347,7 +343,7 @@ class TransportationSectorBuilder(ComponentBuilder):
                 for key, value in comp.items():
                     if key in config:  # Only update if key exists in our config
                         config[key] = value
-                        print(f"✅ Updated transportation config: {key} = {value}")
+                        logger.info(f"✅ Updated transportation config: {key} = {value}")
                 continue
 
             # This is a component instance - existing logic unchanged
@@ -369,7 +365,7 @@ class TransportationSectorBuilder(ComponentBuilder):
             elif comp_type == ComponentType.FUEL_GEN.value:
                 config["fuel_generators"].append(base_cfg)
 
-        print(
+        logger.info(
             f"✅ Configured transportation sector: {len(config['rockets'])} rockets, {len(config['fuel_generators'])} fuel generators"
         )
         return config
@@ -388,17 +384,14 @@ class EquipmentManufacturingSectorBuilder(ComponentBuilder):
         Returns:
             Dictionary with 'initial_stocks'
         """
-        config = {
-            "sector_name": "equipment_manufacturing",
-            "initial_stocks": {}
-        }
+        config = {"sector_name": "equipment_manufacturing", "initial_stocks": {}}
 
         for comp in components:
             # Check for special "equipment_stock" key
             if "equipment_stock" in comp:
                 config["initial_stocks"].update(comp["equipment_stock"])
 
-        print(f"✅ Configured equipment manufacturing sector: {len(config['initial_stocks'])} equipment types")
+        logger.info(f"✅ Configured equipment manufacturing sector: {len(config['initial_stocks'])} equipment types")
         return config
 
 
@@ -427,7 +420,7 @@ class GoalsSystemBuilder:
         config = {"performance_goals": []}
 
         if not active_goal_ids:
-            print("ℹ️  No active goals found in world system")
+            logger.info("ℹ️  No active goals found in world system")
             return config
 
         for goal_ref in active_goal_ids:
@@ -438,13 +431,13 @@ class GoalsSystemBuilder:
                 goal_id = goal_ref.get("goal_id")
 
             if not goal_id:
-                print(f"⚠️  Warning: Invalid goal reference: {goal_ref}")
+                logger.warning(f"⚠️  Warning: Invalid goal reference: {goal_ref}")
                 continue
 
             # Load goal document
             goal_doc = self._db.find_by_id("goals", goal_id)
             if not goal_doc:
-                print(f"⚠️  Warning: Goal {goal_id} not found in database")
+                logger.warning(f"⚠️  Warning: Goal {goal_id} not found in database")
                 continue
 
             # Only process performance goals
@@ -463,9 +456,9 @@ class GoalsSystemBuilder:
                 )
                 config["performance_goals"].append(goal.to_dict())
             except (ValueError, TypeError) as e:
-                print(f"⚠️  Warning: Invalid goal configuration for {goal_id}: {e}")
+                logger.warning(f"⚠️  Warning: Invalid goal configuration for {goal_id}: {e}")
 
-        print(f"✅ Configured goals system: {len(config['performance_goals'])} performance goals")
+        logger.info(f"✅ Configured goals system: {len(config['performance_goals'])} performance goals")
         return config
 
 
@@ -501,7 +494,7 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
     # Extract component groups
     active_components = world_system.get("active_components", [])
     if not active_components:
-        print("ℹ️  No active components found in world system")
+        logger.info("ℹ️  No active components found in world system")
         return config
 
     components_dict = active_components[0]  # Assuming single component dict
@@ -531,18 +524,3 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
     config["goals"] = goals_builder.build(world_system.get("active_goal_ids", []))
 
     return config
-
-
-# Legacy function aliases for backwards compatibility
-_configure_energy_sector = lambda components, templates: EnergySectorBuilder(templates).build(components)
-_configure_science_sector = lambda components, templates: ScienceSectorBuilder(templates).build(components)
-_configure_manufacturing_sector = lambda components, templates, world_system: ManufacturingSectorBuilder(
-    templates
-).build(components, world_system.get("initial_stocks", {}))
-_configure_equipment_manufacturing_sector = lambda components, templates: EquipmentManufacturingSectorBuilder(
-    templates
-).build(components)
-_configure_transportation_sector = lambda components, templates: TransportationSectorBuilder(templates).build(
-    components
-)
-_configure_goals_system = lambda world_system, db: GoalsSystemBuilder(db).build(world_system.get("active_goal_ids", []))

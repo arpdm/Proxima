@@ -3,10 +3,14 @@ ISRU (In-Situ Resource Utilization) Agents for lunar resource extraction and gen
 """
 
 import numpy as np
+import logging
+
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, List, Tuple
 from mesa import Agent
+
+logger = logging.getLogger(__name__)
 
 
 class ExtractionMode(Enum):
@@ -107,7 +111,7 @@ class ISRUExtractor(Agent):
             self.operational_mode = ExtractionMode(mode)
         except ValueError:
             available_modes = [mode.value for mode in ExtractionMode]
-            print(f"Invalid mode {mode}. Available modes: {available_modes}")
+            logger.error(f"Invalid mode {mode}. Available modes: {available_modes}")
 
     def get_power_demand(self) -> float:
         """Return current power demand based on operational mode."""
@@ -190,7 +194,7 @@ class ISRUGenerator(Agent):
             self.operational_mode = GenerationMode(mode)
         except ValueError:
             available_modes = [mode.value for mode in GenerationMode]
-            print(f"Invalid mode {mode}. Available modes: {available_modes}")
+            logger.error(f"Invalid mode {mode}. Available modes: {available_modes}")
 
     def get_power_demand(self) -> float:
         """Return current power demand based on operational mode."""

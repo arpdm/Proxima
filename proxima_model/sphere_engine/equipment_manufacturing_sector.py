@@ -21,6 +21,10 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, List, Optional
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class SectorState(Enum):
     """Equipment manufacturing sector operational states."""
@@ -109,6 +113,9 @@ class EquipmentManSector:
         self.event_bus = event_bus
         self.sector_state = SectorState.ACTIVE
 
+        # Buffer for incoming events (process next step)
+        self._event_buffer = []
+
         # Initialize inventory
         initial_stocks = config.get("initial_stocks", {})
         self._inventory = EquipmentInventory(physical_stock=initial_stocks.copy(), pending_orders={})
@@ -130,23 +137,20 @@ class EquipmentManSector:
         return self._inventory.pending_orders.copy()
 
     def handle_payload_delivery(self, to_sector: str, payload: Dict[str, float]):
-        """
-        Handle incoming payloads from transport events.
-
-        Args:
-            destination: Delivery destination (only processes "Moon" deliveries)
-            payload: Dictionary of equipment items and quantities delivered
-        """
+        """Buffer payload delivery events to process next step."""
         if to_sector == self.config.get("sector_name"):
-            print("Equipment Manufacturing Sector Received Payload")
-            
-            # Only process payloads arriving at the Moon
-            for item, amount in payload.items():
-                # Add to physical stock
-                self._inventory.add_physical(item, amount)
+            # Buffer the event instead of processing immediately
+            self._event_buffer.append(("payload_delivered", payload))
 
-                # Decrement pending orders
-                self._inventory.reduce_pending(item, amount)
+    def _process_buffered_events(self):
+        # Process in reverse order (LIFO - most recent first)
+        for event_type, payload in reversed(self._event_buffer):
+            if event_type == "payload_delivered":
+                logger.info(f"Equipment Manufacturing Sector Processing Buffered Payload: {payload}")
+                for item, amount in payload.items():
+                    self._inventory.add_physical(item, amount)
+                    self._inventory.reduce_pending(item, amount)
+                self._event_buffer.clear()
 
     def _check_and_request_resupply(self):
         """
@@ -169,13 +173,13 @@ class EquipmentManSector:
                 self._inventory.add_pending(item, amount_to_order)
 
         if payload_to_request:
-            print(f"EquipmentManSector requesting transport for: {payload_to_request}")
+            logger.info(f"EquipmentManSector requesting transport for: {payload_to_request}")
             self.event_bus.publish(
                 "transport_request",
                 requesting_sector="equipment_manufacturing",
                 payload=payload_to_request,
-                origin="Moon", #TODO: Get from Environment Configuration
-                destination="Earth", # TODO: Get from Environment Configuration
+                origin="Moon",  # TODO: Get from Environment Configuration
+                destination="Earth",  # TODO: Get from Environment Configuration
             )
 
     def get_power_demand(self) -> float:
@@ -208,6 +212,8 @@ class EquipmentManSector:
         Returns:
             Remaining power (unchanged as sector doesn't consume power yet)
         """
+
+        self._process_buffered_events()
         self._check_and_request_resupply()
         # This sector does not consume power directly in this version
         return allocated_power

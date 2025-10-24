@@ -6,6 +6,10 @@ Handles science rovers, research operations, and power management.
 """
 
 from proxima_model.components.science_rover import ScienceRover
+import random
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ScienceSector:
@@ -25,7 +29,7 @@ class ScienceSector:
         self.event_bus = event_bus
         self.science_rovers = []
         self.total_science_cumulative = 0.0
-        self.throttle_factor = 1.0  # 0..1, set by Policy Engine
+        self.throttle_factor = 0.0  # 0.0 = no throttling, 1.0 = always throttled
 
         self._initialize_rovers()
 
@@ -42,9 +46,10 @@ class ScienceSector:
                 self.science_rovers.append(rover)
                 rover_id_counter += 1
 
-    def set_throttle_factor(self, factor: float):
-        """WorldSystem hook to throttle science operations."""
-        self.throttle_factor = max(0.0, min(1.0, float(factor)))
+    def set_throttle_factor(self, throttle_value: float):
+        """Set throttle factor for probabilistic rover operation (0.0 to 1.0)."""
+        self.throttle_factor = max(0.0, min(1.0, throttle_value))  # Clamp to 0-1
+        logger.info(f"Science sector throttle factor set to: {self.throttle_factor}")
 
     def get_power_demand(self) -> float:
         """
@@ -56,7 +61,7 @@ class ScienceSector:
             if rover.current_battery_kWh < rover.power_usage_kWh:
                 power_demand += rover.battery_capacity_kWh - rover.current_battery_kWh
 
-        return power_demand * self.throttle_factor
+        return power_demand
 
     def step(self, available_power: float):
         """
@@ -65,13 +70,28 @@ class ScienceSector:
         """
         self.step_science_generated = 0.0
         total_power_used = 0.0
-        remaining_power = available_power * self.throttle_factor
+        remaining_power = available_power
 
-        # Update each rover, providing it with a slice of the available power
-        for rover in self.science_rovers:
-            # Pass the remaining power to the rover and let it decide what to do.
-            power_used, science_generated = rover.step(remaining_power)
-            remaining_power = max(0.0, remaining_power - power_used)
+        # Calculate power per rover (optional: distribute evenly)
+        power_per_rover = remaining_power / len(self.science_rovers) if self.science_rovers else 0.0
+
+        # Update each rover
+        for i, rover in enumerate(self.science_rovers):
+            # Probabilistic throttling: skip rover with probability = throttle_factor
+            if random.random() < self.throttle_factor:
+                # Rover is throttled - skip its step
+                power_used = 0.0
+                science_generated = 0.0
+                logger.info(f"Rover {i}: THROTTLED (skipped this step)")
+            else:
+                # Rover operates normally - give it its share of power
+                rover_power = min(power_per_rover, remaining_power)
+                power_used, science_generated = rover.step(rover_power)
+                remaining_power = max(0.0, remaining_power - power_used)
+                logger.info(
+                    f"Rover {i}: OPERATIONAL - used {power_used:.2f} kW, generated {science_generated:.2f} science"
+                )
+
             total_power_used += power_used
             self.step_science_generated += science_generated
 

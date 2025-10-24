@@ -1,6 +1,10 @@
 from mesa import Agent
 from typing import Dict, Optional, Tuple
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class Rocket(Agent):
     """
@@ -63,7 +67,7 @@ class Rocket(Agent):
         return_payload: Dict,
         one_way_duration: int,
         loading_time_steps: int,
-        requesting_sector: str
+        requesting_sector: str,
     ):
         """
         Commits the rocket to a pre-calculated round trip mission, changing its state.
@@ -82,7 +86,7 @@ class Rocket(Agent):
             "eta_steps": one_way_duration,
             "one_way_duration": one_way_duration,
             "loading_duration": loading_time_steps,
-            "requesting_sector": requesting_sector
+            "requesting_sector": requesting_sector,
         }
 
     def step(self) -> tuple:
@@ -96,12 +100,12 @@ class Rocket(Agent):
 
         # Decrement ETA for the current phase
         self.mission["eta_steps"] -= 1
-        
+
         # Check for phase completion
         if self.mission["eta_steps"] <= 0:
             # --- OUTBOUND ARRIVAL ---
             if self.mission["phase"] == "outbound":
-                print(f"Rocket arrived at {self.mission['destination']}. Unloading payload.")
+                logger.info(f"Rocket arrived at {self.mission['destination']}. Unloading payload.")
                 self.location = self.mission["destination"]
                 self.mission["phase"] = "loading"
                 self.mission["eta_steps"] = self.mission["loading_duration"]
@@ -115,14 +119,14 @@ class Rocket(Agent):
 
             # --- LOADING COMPLETE ---
             elif self.mission["phase"] == "loading":
-                print(f"Rocket finished loading at {self.mission['destination']}. Launching return trip.")
+                logger.info(f"Rocket finished loading at {self.mission['destination']}. Launching return trip.")
                 self.location = "In-Transit (Inbound)"
                 self.mission["phase"] = "inbound"
                 self.mission["eta_steps"] = self.mission["one_way_duration"]
 
             # --- INBOUND ARRIVAL (Round Trip Complete) ---
             elif self.mission["phase"] == "inbound":
-                print(f"Rocket has returned to {self.mission['origin']}. Mission complete.")
+                logger.info(f"Rocket has returned to {self.mission['origin']}. Mission complete.")
                 self.location = self.mission["origin"]
                 self.is_available = True
                 # Publish event for return payload delivery

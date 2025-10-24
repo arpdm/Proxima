@@ -19,12 +19,15 @@ FEATURES:
 
 from __future__ import annotations
 import pandas as pd
+import logging
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, List, Any, Optional
 from data_engine.proxima_db_engine import ProximaDB
+
+logger = logging.getLogger(__name__)
 
 
 class LogLevel(Enum):
@@ -178,9 +181,9 @@ class DataLogger:
 
         try:
             result = self.db.db[self.COLLECTION_LOGS].delete_many({"experiment_id": self._config.experiment_id})
-            print(f"🗑️  Cleared {result.deleted_count} existing logs for experiment: {self._config.experiment_id}")
+            logger.info(f"🗑️  Cleared {result.deleted_count} existing logs for experiment: {self._config.experiment_id}")
         except Exception as e:
-            print(f"⚠️  Could not clear existing logs: {e}")
+            logger.warning(f"⚠️  Could not clear existing logs: {e}")
 
     def _generate_timestamp(self, step: int) -> datetime:
         """
@@ -216,7 +219,7 @@ class DataLogger:
                     {"$set": {"latest_state": complete_state}},
                 )
         except Exception as e:
-            print(f"⚠️  Warning: Could not insert log entry for step {entry.step}: {e}")
+            logger.warning(f"⚠️  Warning: Could not insert log entry for step {entry.step}: {e}")
 
     def _log_to_csv(self, entry: LogEntry) -> None:
         """
@@ -262,9 +265,9 @@ class DataLogger:
         try:
             df = pd.DataFrame(self._records)
             df.to_csv(self._csv_path, index=False)
-            print(f"📄 Log saved to {self._csv_path}")
+            logger.info(f"📄 Log saved to {self._csv_path}")
         except Exception as e:
-            print(f"⚠️  Could not save CSV log: {e}")
+            logger.error(f"⚠️  Could not save CSV log: {e}")
 
     def create_unique_index(self) -> None:
         """
@@ -278,9 +281,9 @@ class DataLogger:
 
         try:
             self.db.db[self.COLLECTION_LOGS].create_index([("experiment_id", 1), ("step", 1)], unique=True)
-            print("✅ Created unique index on logs_simulation collection")
+            logger.info("✅ Created unique index on logs_simulation collection")
         except Exception as e:
-            print(f"ℹ️  Index may already exist: {e}")
+            logger.error(f"ℹ️  Index may already exist: {e}")
 
     def get_config(self) -> LoggerConfig:
         """Get current logger configuration (read-only copy)."""

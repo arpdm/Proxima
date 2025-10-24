@@ -10,6 +10,10 @@ from typing import List, Dict, Optional, Any
 from proxima_model.components.rocket import Rocket
 from proxima_model.components.fuel_generator import FuelGenerator
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class TransportRequestStatus(Enum):
     """Status of transport requests."""
@@ -53,7 +57,7 @@ class TransportationConfig:
     earth_moon_distance_km: float = 384400.0
     loading_time_steps: int = 24
     he3_request_threshold_kg: float = 1.0
-    minimum_fuel_k_sp:int = 5000
+    minimum_fuel_k_sp: int = 5000
 
     def __post_init__(self):
         """Validate configuration."""
@@ -83,15 +87,17 @@ class TransportationSector:
     DEFAULT_CONFIG = TransportationConfig()
 
     def __init__(self, model, config: Dict[str, Any], event_bus):
+
         self.model = model
         self.event_bus = event_bus
+        self._fuel_request_pending = False
 
         # Load configuration dynamically from config dict
         config_kwargs = {}
         for field_name in self.DEFAULT_CONFIG.__dataclass_fields__.keys():
             if field_name in config:
                 config_kwargs[field_name] = config[field_name]
-        
+
         self._config = TransportationConfig(**config_kwargs)
 
         # Initialize stocks
@@ -111,6 +117,7 @@ class TransportationSector:
         # Initialize fuel generators from config
         self.fuel_generators: List[FuelGenerator] = []
         fuel_gen_configs = config.get("fuel_generators", [])
+
         for fuel_gen_config in fuel_gen_configs:
             fuel_gen_quantity = fuel_gen_config.get("quantity", 1)
             for _ in range(fuel_gen_quantity):
@@ -119,14 +126,6 @@ class TransportationSector:
         # Subscribe to events
         self.event_bus.subscribe("transport_request", self.handle_transport_request)
         self.event_bus.subscribe("resource_allocated", self.handle_resource_allocation)
-
-        print(f"✅ Transportation Sector initialized:")
-        print(f"   - Distance to Earth: {self._config.earth_moon_distance_km:,.0f} km")
-        print(f"   - Loading time: {self._config.loading_time_steps} steps")
-        print(f"   - He3 threshold: {self._config.he3_request_threshold_kg} kg")
-        print(f"   - Min fuel: {self._config.minimum_fuel_k_sp:,.0f} kg")
-        print(f"   - Rockets: {len(self.rockets)}")
-        print(f"   - Fuel generators: {len(self.fuel_generators)}")
 
     @property
     def stocks(self) -> Dict[str, float]:
@@ -150,7 +149,7 @@ class TransportationSector:
             origin: Starting location
             destination: Target location
         """
-        print(f"Transportation Sector received request from {requesting_sector} for {payload}.")
+        logger.info(f"Transportation Sector received request from {requesting_sector} for {payload}.")
 
         try:
             request = TransportRequest(
@@ -162,7 +161,7 @@ class TransportationSector:
             )
             self.transport_queue.append(request)
         except ValueError as e:
-            print(f"Invalid transport request: {e}")
+            logger.error(f"Invalid transport request: {e}")
 
     def handle_resource_allocation(self, recipient_sector: str, resource: str, amount: float) -> None:
         """
@@ -174,19 +173,24 @@ class TransportationSector:
             amount: Amount allocated
         """
         if recipient_sector == "transportation":
-            print(f"Transportation Sector received allocation of {amount} kg of {resource}.")
             if resource == "He3_kg":
                 self._stocks.he3_kg += amount
+                self._fuel_request_pending = False
 
     def _request_resources_for_fuel(self) -> None:
         """Request He3 from manufacturing sector if below threshold."""
-        if self._stocks.he3_kg < self._config.he3_request_threshold_kg and self._stocks.rocket_fuel_kg < self._config.minimum_fuel_k_sp:
+        if (
+            not self._fuel_request_pending  # Only request if no pending request
+            and self._stocks.he3_kg < self._config.he3_request_threshold_kg
+            and self._stocks.rocket_fuel_kg < self._config.minimum_fuel_k_sp
+        ):
             self.event_bus.publish(
                 "resource_request",
                 requesting_sector="transportation",
                 resource="He3_kg",
                 amount=self._config.he3_request_threshold_kg,
             )
+            self._fuel_request_pending = True
 
     def _generate_fuel(self) -> None:
         """Generate rocket fuel from He3 using fuel generators."""
@@ -239,29 +243,27 @@ class TransportationSector:
             flight_distance_km=self._config.earth_moon_distance_km,
         )
 
-        print(f"Propellant needed: {propellant_needed:.2f} kg")
-
         # Check if enough fuel available
         if propellant_needed > 0 and self._stocks.rocket_fuel_kg >= propellant_needed:
-            print(f"Launching rocket {rocket.unique_id} for request. " f"Fuel used: {propellant_needed:.2f} kg.")
+            logger.info(f"Launching rocket {rocket.unique_id} for request. " f"Fuel used: {propellant_needed:.2f} kg.")
 
             # Deduct fuel
             self._stocks.rocket_fuel_kg -= propellant_needed
 
             # Commit the launch
             rocket.commit_round_trip(
-                destination= request.destination,
+                destination=request.destination,
                 origin=request.origin,
                 outbound_payload=outbound_payload,
                 return_payload=return_payload,
                 one_way_duration=one_way_steps,
                 loading_time_steps=self._config.loading_time_steps,
-                requesting_sector = request.requesting_sector
+                requesting_sector=request.requesting_sector,
             )
 
             return True
         else:
-            print(
+            logger.warning(
                 f"Launch of rocket {rocket.unique_id} delayed: "
                 f"Not enough fuel (need {propellant_needed:.2f} kg, have {self._stocks.rocket_fuel_kg:.2f} kg)."
             )

@@ -60,6 +60,10 @@ from proxima_model.sphere_engine.transportation_sector import TransportationSect
 from proxima_model.policy_engine.policy_engine import PolicyEngine
 from proxima_model.event_engine.event_bus import EventBus
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class AllocationMode(Enum):
     """Power allocation strategies."""
@@ -234,7 +238,7 @@ class WorldSystem(Model):
                     metric = MetricDefinition.from_dict(mdef)
                     self._metric_definitions[metric.id] = metric
                 except (ValueError, TypeError) as e:
-                    print(f"⚠️  Invalid metric definition: {e}")
+                    logger.warning(f"⚠️  Invalid metric definition: {e}")
 
         # Build goals lookup by metric ID
         self._goals_by_metric: Dict[str, PerformanceGoal] = {
@@ -277,7 +281,7 @@ class WorldSystem(Model):
                 try:
                     self.sectors[name] = sector_class(self, agents_config[name], self.event_bus)
                 except Exception as e:
-                    print(f"⚠️  Failed to initialize {name} sector: {e}")
+                    logger.error(f"⚠️  Failed to initialize {name} sector: {e}")
 
     def _get_power_consumers(self) -> Dict[str, Any]:
         """Get sectors that can consume power (cached for performance)."""
@@ -340,7 +344,7 @@ class WorldSystem(Model):
         # Get power-consuming sectors (do this once per step)
         power_consumers = self._get_power_consumers()
 
-        # Calculate total power demand
+        # Calculate total power demand BEFORE throttling effects
         total_power_demand = sum(float(s.get_power_demand()) for s in power_consumers.values())
 
         # Generate available power from energy sector (if present)

@@ -5,6 +5,8 @@ ProximaRunner: Simplified simulation runner with UI command support.
 import time
 import traceback
 import argparse
+import logging
+
 from dataclasses import dataclass
 
 from data_engine.proxima_db_engine import ProximaDB
@@ -249,4 +251,16 @@ def main():
         runner.is_running = False
 
 if __name__ == "__main__":
+    
+    # Configure Logging
+    logging.basicConfig(level=logging.INFO)
+    logging.getLogger('proxima_model.components.rocket').setLevel(logging.INFO)
+    logging.getLogger('proxima_model.components.isru').setLevel(logging.ERROR)
+    logging.getLogger('proxima_model.sphere_engine.equipment_manufacturing_sector').setLevel(logging.ERROR)
+    logging.getLogger('proxima_model.sphere_engine.manufacturing_sector').setLevel(logging.ERROR)
+    logging.getLogger('proxima_model.sphere_engine.science_sector').setLevel(logging.ERROR)
+    logging.getLogger('proxima_model.sphere_engine.transportation_sector').setLevel(logging.ERROR)
+    logging.getLogger('proxima_model.world_system_builder.world_system_builder').setLevel(logging.ERROR)
+    logging.getLogger('proxima_model.world_system_builder.world_system').setLevel(logging.ERROR)
+    logging.getLogger('proxima_model.tools.data_logger').setLevel(logging.ERROR)
     main()
