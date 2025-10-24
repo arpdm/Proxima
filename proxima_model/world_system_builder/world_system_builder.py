@@ -34,8 +34,7 @@ class ComponentType(Enum):
     ORBITAL_ROCKET = "orbital_rocket"
     FUEL_GEN = "fuel_gen"
     SCIENCE_ROVER = "science_rover"
-    ISRU_EXTRACTOR = "extractor"
-    ISRU_GENERATOR = "generator"
+    ISRU_ROBOT = "isru_robot"
 
 
 class GoalType(Enum):
@@ -270,12 +269,11 @@ class ManufacturingSectorBuilder(ComponentBuilder):
             initial_stocks: Initial resource stocks from world system
 
         Returns:
-            Dictionary with 'isru_extractors', 'isru_generators', and 'initial_stocks'
+            Dictionary with 'isru_robots' and 'initial_stocks'
         """
         config = {
             "sector_name": "manufacturing",
-            "isru_extractors": [],
-            "isru_generators": [],
+            "isru_robots": [],
             "initial_stocks": initial_stocks,
         }
 
@@ -285,7 +283,7 @@ class ManufacturingSectorBuilder(ComponentBuilder):
                 continue
 
             merged = self._merge_config(comp, template)
-            base_cfg = {
+            robot_cfg = {
                 "template_id": merged.template_id,
                 "subtype": merged.subtype,
                 "config": merged.config,
@@ -293,17 +291,12 @@ class ManufacturingSectorBuilder(ComponentBuilder):
             }
 
             if merged.metric_contribution:
-                base_cfg["metric_contribution"] = merged.metric_contribution
+                robot_cfg["metric_contribution"] = merged.metric_contribution
 
-            subtype = merged.subtype.lower() if merged.subtype else ""
-            if subtype == ComponentType.ISRU_EXTRACTOR.value:
-                config["isru_extractors"].append(base_cfg)
-            elif subtype == ComponentType.ISRU_GENERATOR.value:
-                config["isru_generators"].append(base_cfg)
+            # All ISRU components are now robots
+            config["isru_robots"].append(robot_cfg)
 
-        logger.info(
-            f"✅ Configured manufacturing sector: {len(config['isru_extractors'])} extractors, {len(config['isru_generators'])} generators"
-        )
+        logger.info(f"✅ Configured manufacturing sector: {len(config['isru_robots'])} ISRU robots")
         return config
 
 

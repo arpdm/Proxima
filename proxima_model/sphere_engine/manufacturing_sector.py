@@ -6,7 +6,7 @@ PROXIMA LUNAR SIMULATION - MANUFACTURING SECTOR MANAGER
 PURPOSE:
 ========
 The ManufacturingSector manages all In-Situ Resource Utilization (ISRU) operations on the lunar base.
-It orchestrates extraction and generation agents to produce essential resources (He3, metals, water, etc.)
+It orchestrates unified ISRU robots to produce essential resources (He3, metals, water, etc.)
 based on dynamic priority systems and available power budgets.
 
 CORE ALGORITHMS:
@@ -14,17 +14,21 @@ CORE ALGORITHMS:
 1) Each managed stock has a target band [min, max] from config.
 2) At each step, compute deficiency = max(0, min_target - current_stock).
 3) Choose tasks whose primary output stocks have the largest deficiencies.
-4) Assign agents to tasks based on priority and availability.
+4) Assign robots to tasks based on priority and availability.
 5) Execute operations and process stock flows atomically.
 """
 
 from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Dict, List, Tuple, Optional, Any
-import threading
+from typing import Dict, List, Tuple, Optional
+from proxima_model.components.isru import ISRUAgent, ISRUMode
 
-from proxima_model.components.isru import ISRUExtractor, ISRUGenerator
+import random  # Added for probabilistic throttling
+import threading
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class TaskType(Enum):
@@ -82,6 +86,7 @@ class StockFlow:
     source_component: str
     consumed: Dict[str, float] = field(default_factory=dict)
     generated: Dict[str, float] = field(default_factory=dict)
+    allocated: Dict[str, Tuple[str, float]] = field(default_factory=dict)  # resource -> (recipient_sector, amount)
 
 
 @dataclass
@@ -91,11 +96,26 @@ class ManufacturingMetrics:
     power_demand: float = 0.0
     power_consumed: float = 0.0
     active_operations: int = 0
-    operational_extractors: int = 0
-    operational_generators: int = 0
+    operational_robots: int = 0
     sector_state: SectorState = SectorState.ACTIVE
     stocks: Dict[str, float] = field(default_factory=dict)
     metric_contributions: Dict[str, float] = field(default_factory=dict)
+
+
+@dataclass
+class ResourceRequest:
+    """Represents a resource request from another sector."""
+
+    requesting_sector: str
+    resource: str
+    amount: float
+
+    def __post_init__(self):
+        """Validate request after initialization."""
+        if self.amount <= 0:
+            raise ValueError("Request amount must be positive")
+        if not self.resource:
+            raise ValueError("Resource cannot be empty")
 
 
 class ManufacturingSector:
@@ -103,9 +123,9 @@ class ManufacturingSector:
 
     # Default task definitions for easy expansion
     DEFAULT_TASKS = {
-        TaskType.HE3: TaskDefinition(TaskType.HE3, "HE3", None, "He3_kg"),
-        TaskType.WATER: TaskDefinition(TaskType.WATER, None, "ICE", "H2O_kg"),
-        TaskType.REGOLITH: TaskDefinition(TaskType.REGOLITH, None, "REGOLITH", "FeTiO3_kg"),
+        TaskType.HE3: TaskDefinition(TaskType.HE3, "HE3_GENERATION", None, "He3_kg"),  # Updated mode names
+        TaskType.WATER: TaskDefinition(TaskType.WATER, None, "ICE_EXTRACTION", "H2O_kg"),
+        TaskType.REGOLITH: TaskDefinition(TaskType.REGOLITH, None, "REGOLITH_EXTRACTION", "FeTiO3_kg"),
     }
 
     # Default buffer targets
@@ -126,20 +146,19 @@ class ManufacturingSector:
         self._lock = threading.Lock()
 
         # Agent collections
-        self.isru_extractors: List[ISRUExtractor] = []
-        self.isru_generators: List[ISRUGenerator] = []
+        self.isru_robots: List[ISRUAgent] = []  # Unified ISRU robots list
 
         # Operation state
         self.sector_state = SectorState.ACTIVE
-        self.extractor_throttle = 1.0
+        self.robot_throttle = 0.0  # Renamed from extractor_throttle
         self.pending_stock_flows: List[StockFlow] = []
 
         # Metrics tracking
         self._current_metrics = ManufacturingMetrics()
         self.total_power_consumed = 0.0
 
-        # Metric contributions from config
-        self.extractor_metric_contributions = config.get("extractor_metric_contributions", {"value": 1.0})
+        # Metric contributions from config (now for robots)
+        self.robot_metric_contributions = config.get("robot_metric_contributions", {"value": 1.0})  # Renamed
 
         # Initialize resource stocks
         self.stocks: Dict[str, float] = {
@@ -160,8 +179,11 @@ class ManufacturingSector:
 
         self._initialize_agents(config)
 
+        # Change buffer to list of ResourceRequest objects
+        self._resource_request_buffer: List[ResourceRequest] = []
+
         # Subscribe to events
-        self.event_bus.subscribe("resource_request", self.fulfill_resource_request)
+        self.event_bus.subscribe("resource_request", self.handle_resource_request)
 
     def _initialize_buffer_targets(self, config: dict) -> Dict[str, BufferTarget]:
         """Initialize buffer targets from configuration."""
@@ -193,61 +215,82 @@ class ManufacturingSector:
 
     def _initialize_agents(self, config: dict):
         """Initialize ISRU agents from configuration."""
-        # Initialize extractors
-        for agent_cfg in config.get("isru_extractors", []):
+        # Initialize ISRU robots (unified type)
+        for agent_cfg in config.get("isru_robots", []):
             quantity = agent_cfg.get("quantity", 1)
             agent_config = agent_cfg.get("config", {})
 
             for _ in range(quantity):
-                extractor = ISRUExtractor(self.model, agent_config)
-                self.isru_extractors.append(extractor)
+                robot = ISRUAgent(self.model, agent_config)
+                self.isru_robots.append(robot)
 
-        # Initialize generators
-        for agent_cfg in config.get("isru_generators", []):
-            quantity = agent_cfg.get("quantity", 1)
-            agent_config = agent_cfg.get("config", {})
-
-            for _ in range(quantity):
-                generator = ISRUGenerator(self.model, agent_config)
-                self.isru_generators.append(generator)
-
-    def fulfill_resource_request(self, requesting_sector: str, resource: str, amount: float):
-        """Handle resource requests from other sectors."""
+    def handle_resource_request(self, requesting_sector: str, resource: str, amount: float):
+        """Buffer resource request events to process with stock flows."""
         with self._lock:
-            available_amount = self.stocks.get(resource, 0.0)
+            try:
+                request = ResourceRequest(requesting_sector=requesting_sector, resource=resource, amount=amount)
+                self._resource_request_buffer.append(request)
+                logger.info(f"Buffered resource request: {requesting_sector} requesting {amount:.2f} kg of {resource}")
+            except ValueError as e:
+                logger.error(f"Invalid resource request: {e}")
 
-            if available_amount >= amount:
-                self.stocks[resource] = available_amount - amount
-                print(f"Fulfilling request. Remaining {resource}: {self.stocks[resource]:.2f} kg.")
+    def _process_buffered_resource_requests(self):
+        """Process buffered resource requests and integrate with stock flows."""
+        with self._lock:
+            i = 0
+            while i < len(self._resource_request_buffer):
+                request = self._resource_request_buffer[i]
+                available_amount = self.stocks.get(request.resource, 0.0)
 
-                self.event_bus.publish(
-                    "resource_allocated",
-                    recipient_sector=requesting_sector,
-                    resource=resource,
-                    amount=amount,
-                )
+                if available_amount >= request.amount:
+                    # Create a stock flow for the resource allocation
+                    allocated_resources = {request.resource: (request.requesting_sector, request.amount)}
+                    self.add_stock_flow(
+                        source_component="Resource_Allocation",
+                        consumed={request.resource: request.amount},
+                        allocated=allocated_resources,
+                    )
+                    logger.info(
+                        f"Queued resource allocation: {request.amount:.2f} kg of {request.resource} to {request.requesting_sector}"
+                    )
+
+                    # Remove fulfilled request directly from buffer
+                    del self._resource_request_buffer[i]
+                    # Don't increment i since we removed an element
+                else:
+                    logger.info(
+                        f"Insufficient {request.resource}: requested {request.amount:.2f} kg, available {available_amount:.2f} kg"
+                    )
+                    i += 1  # Move to next request
 
     def add_stock_flow(
         self,
         source_component: str,
         consumed: Optional[Dict[str, float]] = None,
         generated: Optional[Dict[str, float]] = None,
+        allocated: Optional[Dict[str, Tuple[str, float]]] = None,
     ) -> None:
         """Add a stock flow transaction to pending queue."""
 
-        flow = StockFlow(source_component=source_component, consumed=consumed or {}, generated=generated or {})
-        with self._lock:
-            self.pending_stock_flows.append(flow)
+        flow = StockFlow(
+            source_component=source_component,
+            consumed=consumed or {},
+            generated=generated or {},
+            allocated=allocated or {},
+        )
+
+        self.pending_stock_flows.append(flow)
 
     def process_all_stock_flows(self) -> Dict[str, Dict[str, float]]:
         """Process all pending stock flows atomically."""
 
         with self._lock:
             if not self.pending_stock_flows:
-                return {"consumed": {}, "generated": {}}
+                return {"consumed": {}, "generated": {}, "allocated": {}}
 
             total_consumed = {}
             total_generated = {}
+            total_allocated = {}
 
             # Process all flows atomically
             for flow in self.pending_stock_flows:
@@ -262,10 +305,25 @@ class ManufacturingSector:
                     self.stocks[resource] = self.stocks.get(resource, 0.0) + amount
                     total_generated[resource] = total_generated.get(resource, 0.0) + amount
 
+                # Process resource allocations and publish events
+                for resource, (recipient_sector, amount) in flow.allocated.items():
+                    total_allocated[resource] = total_allocated.get(resource, 0.0) + amount
+
+                    # Publish the allocation event
+                    self.event_bus.publish(
+                        "resource_allocated",
+                        recipient_sector=recipient_sector,
+                        resource=resource,
+                        amount=amount,
+                    )
+                    logger.info(
+                        f"Allocated {amount:.2f} kg of {resource} to {recipient_sector}. Remaining: {self.stocks[resource]:.2f} kg"
+                    )
+
             # Clear processed flows
             self.pending_stock_flows.clear()
 
-            return {"consumed": total_consumed, "generated": total_generated}
+            return {"consumed": total_consumed, "generated": total_generated, "allocated": total_allocated}
 
     def _calculate_task_priorities(self) -> List[TaskType]:
         """Calculate task priorities based on resource deficiencies."""
@@ -290,34 +348,33 @@ class ManufacturingSector:
         return [task for task, _ in sorted(deficiencies, key=lambda x: -x[1])]
 
     def _assign_agents_to_tasks(self, priority_tasks: List[TaskType]):
-        """Assign agents to tasks based on priority."""
+        """Assign ISRU robots to tasks based on priority."""
 
-        # Set all agents to inactive first
-        for extractor in self.isru_extractors:
-            extractor.set_operational_mode("INACTIVE")
-        for generator in self.isru_generators:
-            generator.set_operational_mode("INACTIVE")
+        # Set all robots to inactive first
+        for robot in self.isru_robots:
+            robot.set_operational_mode("INACTIVE")
 
-        # Assign extractors to priority tasks
-        extractor_index = 0
+        # Assign robots to priority tasks
+        robot_index = 0
         for task_type in priority_tasks:
             task_def = self.task_definitions[task_type]
-            if task_def.extractor_mode and extractor_index < len(self.isru_extractors):
-                self.isru_extractors[extractor_index].set_operational_mode(task_def.extractor_mode)
-                extractor_index += 1
 
-        # Assign generators to priority tasks
-        generator_index = 0
-        for task_type in priority_tasks:
-            task_def = self.task_definitions[task_type]
-            if task_def.generator_mode and generator_index < len(self.isru_generators):
-                self.isru_generators[generator_index].set_operational_mode(task_def.generator_mode)
-                generator_index += 1
+            # Map task types to ISRU modes
+            mode_mapping = {
+                TaskType.HE3: "HE3_GENERATION",
+                TaskType.WATER: "ICE_EXTRACTION",
+                TaskType.REGOLITH: "REGOLITH_EXTRACTION",
+            }
 
-    def set_throttle_factor(self, factor: float):
-        """Set throttle factor for extractor operations."""
+            if task_def.task_type in mode_mapping and robot_index < len(self.isru_robots):
+                mode = mode_mapping[task_def.task_type]
+                self.isru_robots[robot_index].set_operational_mode(mode)
+                robot_index += 1
 
-        self.extractor_throttle = max(0.0, min(1.0, float(factor)))
+    def set_throttle_factor(self, throttle_value: float):
+        """Set throttle factor for robot operations (0.0 to 1.0)."""
+        self.robot_throttle = max(0.0, min(1.0, throttle_value))  # Clamp to 0-1
+        logger.info(f"Manufacturing sector throttle factor set to: {self.robot_throttle}")
 
     def get_power_demand(self) -> float:
         """Calculate total power demand from all ISRU operations."""
@@ -325,13 +382,13 @@ class ManufacturingSector:
         if self.sector_state == SectorState.INACTIVE:
             return 0.0
 
-        extractor_demand = sum(agent.get_power_demand() for agent in self.isru_extractors)
-        generator_demand = sum(agent.get_power_demand() for agent in self.isru_generators)
-
-        return extractor_demand + generator_demand
+        return sum(robot.get_power_demand() for robot in self.isru_robots)
 
     def step(self, allocated_power: float) -> float:
         """Execute manufacturing operations for one simulation step."""
+
+        # Process buffered resource requests first
+        self._process_buffered_resource_requests()
 
         # Reset metrics
         self._current_metrics = ManufacturingMetrics()
@@ -346,56 +403,40 @@ class ManufacturingSector:
 
         remaining_power = allocated_power
 
-        # Execute generator operations first
-        for generator in self.isru_generators:
-            power_demand = generator.get_power_demand()
+        # Execute ISRU robot operations with probabilistic throttling
+        for robot in self.isru_robots:
+            # Probabilistic throttling: skip robot with probability = robot_throttle
+            if random.random() < self.robot_throttle:
+                logger.debug(f"Robot: THROTTLED (skipped this step)")
+                continue
+
+            power_demand = robot.get_power_demand()
             if power_demand > 0 and remaining_power >= power_demand:
-                generated, consumed, used_power = generator.generate_resources(power_demand, self.stocks)
+                generated, consumed, used_power = robot.perform_operation(power_demand, self.stocks)
 
                 if generated or consumed:
-                    self.add_stock_flow("ISRU_Generator", consumed, generated)
+                    self.add_stock_flow("ISRU_Robot", consumed, generated)
 
                 remaining_power -= used_power
                 self._current_metrics.power_consumed += used_power
 
                 if used_power > 0:
-                    self._current_metrics.operational_generators += 1
-
-        # Execute extractor operations with throttling
-        max_extractors = max(0, int(len(self.isru_extractors) * self.extractor_throttle))
-
-        for i, extractor in enumerate(self.isru_extractors[:max_extractors]):
-            power_demand = extractor.get_power_demand()
-            if power_demand > 0 and remaining_power >= power_demand:
-                extracted, used_power = extractor.extract_resources(power_demand)
-
-                if extracted:
-                    self.add_stock_flow("ISRU_Extractor", None, extracted)
-
-                remaining_power -= used_power
-                self._current_metrics.power_consumed += used_power
-
-                if used_power > 0:
-                    self._current_metrics.operational_extractors += 1
+                    self._current_metrics.operational_robots += 1
+                    logger.debug(f"Robot: OPERATIONAL - used {used_power:.2f} kW")
 
         # Process all stock flows atomically
         self.process_all_stock_flows()
 
         # Update total metrics
         self.total_power_consumed += self._current_metrics.power_consumed
-        self._current_metrics.active_operations = (
-            self._current_metrics.operational_extractors + self._current_metrics.operational_generators
-        )
+        self._current_metrics.active_operations = self._current_metrics.operational_robots
 
         return remaining_power
 
     def _set_all_agents_inactive(self):
         """Set all agents to inactive mode."""
-
-        for generator in self.isru_generators:
-            generator.set_operational_mode("INACTIVE")
-        for extractor in self.isru_extractors:
-            extractor.set_operational_mode("INACTIVE")
+        for robot in self.isru_robots:
+            robot.set_operational_mode("INACTIVE")
 
     def get_stocks(self) -> Dict[str, float]:
         """Return current resource stocks (read-only copy)."""
@@ -415,7 +456,7 @@ class ManufacturingSector:
     def _create_metric_map(self):
         """
         Create a map of metric IDs and their corresponding values.
-        Only contributes metrics if agents actually operated in this step.
+        Only contributes metrics if robots actually operated in this step.
 
         Returns:
             dict: A dictionary where keys are metric IDs and values are their contributions.
@@ -423,11 +464,13 @@ class ManufacturingSector:
 
         metric_map = {}
         value = float(
-            self.extractor_metric_contributions.get(
-                "value", self.extractor_metric_contributions.get("contribution_value", 0.0)
+            self.robot_metric_contributions.get(  # Updated to use robot_metric_contributions
+                "value", self.robot_metric_contributions.get("contribution_value", 0.0)
             )
         )
-        metric_map["IND-DUST-COV"] = self._current_metrics.operational_extractors * value
+        metric_map["IND-DUST-COV"] = (
+            self._current_metrics.operational_robots * value
+        )  # Updated to use operational_robots
         return metric_map
 
     def get_metrics(self) -> Dict:
@@ -438,8 +481,7 @@ class ManufacturingSector:
                 "power_demand": self.get_power_demand(),
                 "power_consumed": self._current_metrics.power_consumed,
                 "active_operations": self._current_metrics.active_operations,
-                "operational_extractors": self._current_metrics.operational_extractors,
-                "operational_generators": self._current_metrics.operational_generators,
+                "operational_robots": self._current_metrics.operational_robots,  # Updated field
                 "sector_state": self.sector_state.name,
                 **{f"stock_{k}": v for k, v in self.stocks.items()},
                 "metric_contributions": self._create_metric_map(),
