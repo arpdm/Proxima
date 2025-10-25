@@ -254,7 +254,7 @@ class ProximaUI:
         if not scores:
             return html.Div("No metric scores yet.", className="text-secondary text-center")
 
-        headers = ["Metric", "Id", "Score", "Status", "Current", "Range", "Goal"]
+        headers = ["Metric", "Id", "Score", "Status", "Current", "Goal"]
         header_style = {
             "backgroundColor": "rgb(30,40,60)",
             "color": "#e0e0e0",
@@ -289,7 +289,6 @@ class ProximaUI:
                     entry.get("status", "unknown"), float(score) if isinstance(score, (int, float)) else None
                 ),
                 str(entry.get("current", "")),
-                f"[{entry.get('threshold_low', '')}, {entry.get('threshold_high', '')}]",
                 goal_txt,
             ]
 

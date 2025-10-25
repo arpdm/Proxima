@@ -18,50 +18,18 @@ ARCHITECTURE:
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from enum import Enum, auto
 from typing import Dict, Any, List, Optional, Protocol
+import logging
 
+from proxima_model.policy_engine.metrics import (
+    MetricType,
+    GoalDirection,
+    PerformanceGoal,
+    MetricDefinition,
+    MetricScore,
+)
 
-class MetricType(Enum):
-    """Type of metric for scoring normalization."""
-
-    POSITIVE = "positive"  # Higher values are better
-    NEGATIVE = "negative"  # Lower values are better
-
-
-class PolicyStatus(Enum):
-    """Status of a policy."""
-
-    ENABLED = auto()
-    DISABLED = auto()
-
-
-@dataclass
-class MetricDefinition:
-    """Definition of a performance metric."""
-
-    id: str
-    name: str
-    type: MetricType = MetricType.POSITIVE
-    threshold_low: float = 0.0
-    threshold_high: float = 1.0
-
-    def __post_init__(self):
-        """Validate metric definition."""
-        if self.threshold_low > self.threshold_high:
-            raise ValueError("threshold_low cannot exceed threshold_high")
-
-
-@dataclass
-class PolicyEffect:
-    """Result of applying a policy."""
-
-    policy_id: str
-    metric_id: Optional[str] = None
-    score: Optional[float] = None
-    throttle: Optional[bool] = None
-    applied_to: List[str] = field(default_factory=list)
-    error: Optional[str] = None
+logger = logging.getLogger(__name__)
 
 
 class Policy(Protocol):
@@ -84,37 +52,8 @@ class Policy(Protocol):
         ...
 
 
-class DustCoverageThrottlePolicy:
-    """
-    Policy: Dust Coverage Throttling
-
-    Dynamically throttles activity in specified sectors (default: science and manufacturing)
-    based on the current Dust Coverage metric. This policy prevents total shutdown by enforcing
-    a minimum throttle floor, ensuring that operations continue at a reduced rate even under
-    adverse environmental conditions.
-
-    The throttling is probability based: This creates a probabilisting throttling where if
-    thottling factor is lets say 20%, 20% of steps are used to pause operations.
-
-    Attributes
-    ----------
-    id : str
-        Unique policy identifier
-    name : str
-        Human-readable policy name
-    enabled : bool
-        Whether the policy is active
-    metric_id : str
-        The metric ID to monitor for dust coverage
-    sectors : List[str]
-        List of sector names to apply throttling to
-
-    Notes
-    -----
-    - Sectors must implement a `set_throttle_factor(throttle:float)` method for throttling to take effect.
-    - The policy is robust to metric fluctuations and avoids complete operational shutdowns
-      by maintaining a baseline level of activity.
-    """
+class DustCoverageThrottlePolicy(Policy):
+    """Policy that throttles sectors based on dust coverage levels."""
 
     id = "PLCY-DUST-THROTTLE"
     name = "Dust Coverage Throttling"
@@ -123,11 +62,13 @@ class DustCoverageThrottlePolicy:
     # Default configuration
     DEFAULT_METRIC_ID = "IND-DUST-COV"
     DEFAULT_SECTORS = ["science", "manufacturing"]
+    DEFAULT_THROTTLE_FACTOR = 0.2  # Maximum throttle when score = 0
 
     def __init__(
         self,
         metric_id: str = DEFAULT_METRIC_ID,
         sectors: Optional[List[str]] = None,
+        throttle_factor: float = DEFAULT_THROTTLE_FACTOR,
     ):
         """
         Initialize dust coverage throttle policy.
@@ -135,43 +76,46 @@ class DustCoverageThrottlePolicy:
         Args:
             metric_id: The metric ID to monitor (default: "IND-DUST-COV")
             sectors: Sectors to throttle (default: ["science", "manufacturing"])
+            throttle_factor: Maximum throttle factor when performance is worst (default: 0.75)
         """
         self.metric_id = metric_id
         self.sectors = sectors if sectors is not None else self.DEFAULT_SECTORS.copy()
+        self.throttle_factor = throttle_factor
 
-    def apply(self, engine: "PolicyEngine") -> Dict[str, Any]:
-        """
-        Apply dust coverage throttling policy.
+    def apply(self, engine) -> Dict[str, Any]:
+        """Apply dust coverage throttling policy using the scoring mechanism."""
 
-        Args:
-            engine: The policy engine instance
-
-        Returns:
-            Dictionary containing policy effects
-        """
-
+        # Get normalized score (0.0 = worst, 1.0 = best performance)
         score = engine.score(self.metric_id)
-        throttle = abs(1 - score) * 0.75
 
-        effects = PolicyEffect(
-            policy_id=self.id, metric_id=self.metric_id, score=score, throttle=throttle, applied_to=[]
-        )
+        if score is None:
+            print(f"⚠️ No score available for {self.metric_id}")
+            return {"error": f"No score available for {self.metric_id}"}
 
-        # Apply throttle to each configured sector
+        # Calculate throttle factor
+        current_throttle = (1.0 - score) * self.throttle_factor
+        current_dust = engine.world.get_performance_metric(self.metric_id)
+
+        print(f"🌪️ DUST POLICY: dust={current_dust:.2f}, score={score:.3f}, throttle={current_throttle:.3f}")
+
+        # Apply throttling to configured sectors
+        effects = {
+            "metric_id": self.metric_id,
+            "score": score,
+            "throttle_factor": current_throttle,
+            "applied_to": [],
+        }
+
         for sector_name in self.sectors:
             sector = engine.world.sectors.get(sector_name)
             if sector and hasattr(sector, "set_throttle_factor"):
-                sector.set_throttle_factor(throttle)
-                effects.applied_to.append(sector_name)
+                sector.set_throttle_factor(current_throttle)
+                effects["applied_to"].append(sector_name)
+                print(f"🔧 Set {sector_name} throttle to {current_throttle:.3f}")
+            else:
+                print(f"⚠️ Sector {sector_name} not found or doesn't support throttling")
 
-        return {
-            self.id: {
-                "metric_id": effects.metric_id,
-                "score": effects.score,
-                "throttle": effects.throttle,
-                "applied_to": effects.applied_to,
-            }
-        }
+        return effects
 
 
 class PolicyEngine:
@@ -191,55 +135,92 @@ class PolicyEngine:
             DustCoverageThrottlePolicy(),  # Default policy
         ]
 
-    def _get_metric_definition(self, metric_id: str) -> Optional[Dict[str, Any]]:
+        self._metric_scores: Dict[str, Optional[float]] = {}
+        self._goals_by_metric: Dict[str, PerformanceGoal] = {}
+        self._rebuild_goal_cache()
+
+    def _rebuild_goal_cache(self) -> None:
+        """Rebuild the goals-by-metric lookup cache."""
+        self._goals_by_metric = {goal.metric_id: goal for goal in self.world.performance_goals if goal.metric_id}
+
+    def update_scores(self) -> None:
         """
-        Get metric definition.
+        Update all metric scores based on current performance goals.
 
-        Args:
-            metric_id: The metric ID to retrieve
-
-        Returns:
-            Metric definition dictionary or None if not found
+        This should be called once per step before applying policies.
         """
-        return next((m for m in self.world.metric_definitions if m.get("id") == metric_id), None)
+        # Rebuild goal cache in case goals changed
+        self._rebuild_goal_cache()
 
-    def score(self, metric_id: str) -> float:
+        # Calculate scores for all metrics with goals
+        self._metric_scores.clear()
+        for metric_id, goal in self._goals_by_metric.items():
+            score = self._calculate_score(metric_id, goal)
+            self._metric_scores[metric_id] = score
+
+    def _calculate_score(self, metric_id: str, goal: PerformanceGoal) -> Optional[float]:
         """
-        Return a normalized score (0..1) for the given metric.
-
-        Score Interpretation:
-        - 1.0 = optimal/best performance
-        - 0.0 = worst performance
-        - Based on metric type (positive/negative) and defined thresholds
+        Calculate score for a single metric based on its goal.
 
         Args:
             metric_id: The metric ID to score
+            goal: The performance goal for this metric
 
         Returns:
-            Normalized score between 0.0 and 1.0
+            Score from 0.0 (worst) to 1.0 (best), or None if calculation fails
         """
-        mdef = self._get_metric_definition(metric_id)
-        if not mdef:
-            return 1.0  # Default to optimal if metric not found
+        try:
+            current_value = float(self.world.get_performance_metric(metric_id))
+            target_value = goal.target_value
+            direction = goal.direction
 
-        # Get current value and metric properties
-        current_value = float(self.world.get_performance_metric(metric_id))
-        metric_type = mdef.get("type", MetricType.POSITIVE.value)
-        threshold_low = float(mdef.get("threshold_low", 0.0))
-        threshold_high = float(mdef.get("threshold_high", 1.0))
+            if target_value == 0:
+                return 1.0
 
-        # Calculate normalized score
-        threshold_span = threshold_high - threshold_low if threshold_high != threshold_low else 1.0
+            if direction == GoalDirection.MINIMIZE.value:
+                # Lower values are better - score based on how close to target
+                if current_value <= target_value:
+                    return 1.0  # At or below target = perfect
+                else:
+                    # Score decreases as we get further from target
+                    deviation_ratio = min(2.0, current_value / target_value)  # Cap at 2x target
+                    return max(0.0, 2.0 - deviation_ratio)  # 1.0 at target, 0.0 at 2x target
 
-        if metric_type == MetricType.POSITIVE.value:
-            # Higher values are better
-            score = (current_value - threshold_low) / threshold_span
-        else:
-            # Lower values are better (negative metric)
-            score = (threshold_high - current_value) / threshold_span
+            elif direction == GoalDirection.MAXIMIZE.value:
+                # Higher values are better
+                if current_value >= target_value:
+                    return 1.0  # At or above target = perfect
+                else:
+                    # Score decreases as we get further from target
+                    achievement_ratio = current_value / target_value
+                    return max(0.0, min(1.0, achievement_ratio))
 
-        # Clamp to valid range
-        return max(0.0, min(1.0, score))
+            return None
+
+        except (ValueError, KeyError, AttributeError) as e:
+            logger.warning(f"Failed to calculate score for {metric_id}: {e}")
+            return None
+
+    def score(self, metric_id: str) -> Optional[float]:
+        """
+        Get cached score for a metric.
+
+        Args:
+            metric_id: The metric ID to retrieve score for
+
+        Returns:
+            Cached score from 0.0 (worst) to 1.0 (best), or None if not available
+        """
+        return self._metric_scores.get(metric_id)
+
+    def get_all_scores(self) -> Dict[str, Optional[float]]:
+        """
+        Get all cached metric scores.
+
+        Returns:
+            Dictionary mapping metric IDs to their scores
+        """
+        return self._metric_scores.copy()
 
     def add_policy(self, policy: Policy) -> None:
         """
@@ -321,6 +302,8 @@ class PolicyEngine:
         Returns:
             Dictionary of effects from all applied policies, keyed by policy ID
         """
+        # Update all scores before applying policies
+        self.update_scores()
         effects: Dict[str, Any] = {}
 
         for policy in self._policies:
@@ -338,7 +321,3 @@ class PolicyEngine:
                 effects[policy_id] = {"error": str(e)}
 
         return effects
-
-    def clear_metric_cache(self):
-        """Clear the metric definition cache (no longer needed)."""
-        pass  # Cache removed, method kept for API compatibility

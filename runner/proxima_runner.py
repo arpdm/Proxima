@@ -175,32 +175,26 @@ class ProximaRunner:
             },
         }
 
+        # 🎯 Build metrics dict with only what exists
+        metrics_to_log = {
+            "step": self.ws.steps,
+            "latest_state": self.current_state,
+        }
+        
+        # Add all available sector metrics
+        for sector_name in ["environment", "energy", "science", "manufacturing", 
+                           "equipment_manufacturing", "transportation", "performance"]:
+            if sector_name in self.ws.model_metrics:
+                metrics_to_log[sector_name] = self.ws.model_metrics[sector_name]
+            else:
+                print(f"⚠️ Warning: {sector_name} metrics not found, skipping")
+
         # Log to local DB
-        self.logger.log(
-            step=self.ws.steps,
-            environment=self.ws.model_metrics["environment"],
-            energy=self.ws.model_metrics["energy"],
-            science=self.ws.model_metrics["science"],
-            manufacturing=self.ws.model_metrics["manufacturing"],
-            equipment_manufacturing=self.ws.model_metrics["equipment_manufacturing"],
-            transportation=self.ws.model_metrics["transportation"],
-            performance=self.ws.model_metrics.get("performance", {}),
-            latest_state=self.current_state,
-        )
+        self.logger.log(**metrics_to_log)
 
         # Optionally update hosted DB
         if update_hosted and self.hosted_logger:
-            self.hosted_logger.log(
-                step=self.ws.steps,
-                environment=self.ws.model_metrics["environment"],
-                energy=self.ws.model_metrics["energy"],
-                science=self.ws.model_metrics["science"],
-                manufacturing=self.ws.model_metrics["manufacturing"],
-                equipment_manufacturing=self.ws.model_metrics["equipment_manufacturing"],
-                transportation=self.ws.model_metrics["transportation"],
-                performance=self.ws.model_metrics.get("performance", {}),
-                latest_state=self.current_state,
-            )
+            self.hosted_logger.log(**metrics_to_log)
 
     def _check_startup_commands(self):
         """Check for startup commands in the database and start simulation accordingly."""
@@ -252,15 +246,23 @@ def main():
 
 if __name__ == "__main__":
     
-    # Configure Logging
-    logging.basicConfig(level=logging.INFO)
-    logging.getLogger('proxima_model.components.rocket').setLevel(logging.INFO)
-    logging.getLogger('proxima_model.components.isru').setLevel(logging.ERROR)
-    logging.getLogger('proxima_model.sphere_engine.equipment_manufacturing_sector').setLevel(logging.ERROR)
-    logging.getLogger('proxima_model.sphere_engine.manufacturing_sector').setLevel(logging.ERROR)
-    logging.getLogger('proxima_model.sphere_engine.science_sector').setLevel(logging.ERROR)
-    logging.getLogger('proxima_model.sphere_engine.transportation_sector').setLevel(logging.ERROR)
-    logging.getLogger('proxima_model.world_system_builder.world_system_builder').setLevel(logging.ERROR)
-    logging.getLogger('proxima_model.world_system_builder.world_system').setLevel(logging.ERROR)
-    logging.getLogger('proxima_model.tools.data_logger').setLevel(logging.ERROR)
+    # Configure Logging - Focused debugging
+    logging.basicConfig(
+        level=logging.WARNING,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        force=True  # ← Add this to override any existing config
+    )
+    
+    # Test that logging is working
+    test_logger = logging.getLogger('test')
+    test_logger.setLevel(logging.DEBUG)
+    test_logger.debug("🧪 Test debug message")
+    test_logger.info("🧪 Test info message")
+    test_logger.warning("🧪 Test warning message")
+    
+    # Only enable DEBUG for the components we're debugging
+    logging.getLogger('proxima_model.sphere_engine.science_sector').setLevel(logging.DEBUG)
+    logging.getLogger('proxima_model.sphere_engine.manufacturing_sector').setLevel(logging.DEBUG)
+    logging.getLogger('proxima_model.policy_engine.policy_engine').setLevel(logging.DEBUG)
+    logging.getLogger('proxima_model.world_system_builder.world_system').setLevel(logging.INFO)
     main()

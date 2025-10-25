@@ -35,10 +35,10 @@ class ScienceSector:
 
     def _initialize_rovers(self):
         """Initialize all science rovers from config, correctly integrating with Mesa."""
-        rover_configs = self.config.get("science_rovers", [])
+        self.rover_configs = self.config.get("science_rovers", [])
         rover_id_counter = 0
 
-        for agent_config in rover_configs:
+        for agent_config in self.rover_configs:
             quantity = agent_config.get("quantity", 1)
             for _ in range(quantity):
                 unique_id = f"science_rover_{rover_id_counter}"
@@ -105,17 +105,19 @@ class ScienceSector:
         """
         metric_map = {}
 
-        for rover in self.science_rovers:
-            if rover.status == "operational":
-                # Assumes metric contribution config is part of the rover's own config
-                contribution_cfg = rover.config.get("metric_contribution", {})
-                metric_id = contribution_cfg.get("metric_id", "IND-DUST-COV")
-                value = float(contribution_cfg.get("contribution_value", 0.0))
+        if self.rover_configs:
+            # Get metric_contribution from first rover config (same for all)
+            contribution_cfg = self.rover_configs[0].get("metric_contribution", {})
+            metric_id = contribution_cfg.get("metric_id")
+            value_per_rover = float(contribution_cfg.get("value", 0.0))
 
-                if metric_id in metric_map:
-                    metric_map[metric_id] += value
-                else:
-                    metric_map[metric_id] = value
+            # Count operational rovers
+            operational_count = sum(1 for r in self.science_rovers if r.status == "operational")
+            if operational_count > 0 and metric_id:
+                metric_map[metric_id] = operational_count * value_per_rover
+                print(
+                    f"🔍 Science contribution: {operational_count} rovers × {value_per_rover} = {metric_map[metric_id]}"
+                )
 
         return metric_map
 

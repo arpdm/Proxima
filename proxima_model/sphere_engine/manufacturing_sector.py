@@ -157,9 +157,6 @@ class ManufacturingSector:
         self._current_metrics = ManufacturingMetrics()
         self.total_power_consumed = 0.0
 
-        # Metric contributions from config (now for robots)
-        self.robot_metric_contributions = config.get("robot_metric_contributions", {"value": 1.0})  # Renamed
-
         # Initialize resource stocks
         self.stocks: Dict[str, float] = {
             "H2O_kg": 0.0,
@@ -216,10 +213,11 @@ class ManufacturingSector:
     def _initialize_agents(self, config: dict):
         """Initialize ISRU agents from configuration."""
         # Initialize ISRU robots (unified type)
-        for agent_cfg in config.get("isru_robots", []):
+        self._manufacturing_config = config.get("isru_robots", [])
+
+        for agent_cfg in self._manufacturing_config:
             quantity = agent_cfg.get("quantity", 1)
             agent_config = agent_cfg.get("config", {})
-
             for _ in range(quantity):
                 robot = ISRUAgent(self.model, agent_config)
                 self.isru_robots.append(robot)
@@ -390,9 +388,6 @@ class ManufacturingSector:
         # Process buffered resource requests first
         self._process_buffered_resource_requests()
 
-        # Reset metrics
-        self._current_metrics = ManufacturingMetrics()
-
         if allocated_power <= 0 or self.sector_state == SectorState.INACTIVE:
             self._set_all_agents_inactive()
             return allocated_power
@@ -430,7 +425,6 @@ class ManufacturingSector:
         # Update total metrics
         self.total_power_consumed += self._current_metrics.power_consumed
         self._current_metrics.active_operations = self._current_metrics.operational_robots
-
         return remaining_power
 
     def _set_all_agents_inactive(self):
@@ -461,16 +455,11 @@ class ManufacturingSector:
         Returns:
             dict: A dictionary where keys are metric IDs and values are their contributions.
         """
-
+        contribution_cfg = self._manufacturing_config[0].get("metric_contribution", {})
+        metric_id = contribution_cfg.get("metric_id")
+        value = float(contribution_cfg.get("value", 0.0))
         metric_map = {}
-        value = float(
-            self.robot_metric_contributions.get(  # Updated to use robot_metric_contributions
-                "value", self.robot_metric_contributions.get("contribution_value", 0.0)
-            )
-        )
-        metric_map["IND-DUST-COV"] = (
-            self._current_metrics.operational_robots * value
-        )  # Updated to use operational_robots
+        metric_map[metric_id] = self._current_metrics.operational_robots * value
         return metric_map
 
     def get_metrics(self) -> Dict:
