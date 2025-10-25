@@ -5,11 +5,12 @@ Manages all science-related activities in the Proxima simulation.
 Handles science rovers, research operations, and power management.
 """
 
-from proxima_model.components.science_rover import ScienceRover
+from proxima_model.components.science_rover import ScienceRover, RoverStatus
+
 import random
 import logging
 
-logger = logging.getLogger(__name__)
+logger_science = logging.getLogger(__name__)
 
 
 class ScienceSector:
@@ -49,7 +50,7 @@ class ScienceSector:
     def set_throttle_factor(self, throttle_value: float):
         """Set throttle factor for probabilistic rover operation (0.0 to 1.0)."""
         self.throttle_factor = max(0.0, min(1.0, throttle_value))  # Clamp to 0-1
-        logger.info(f"Science sector throttle factor set to: {self.throttle_factor}")
+        logger_science.info(f"Science sector throttle factor set to: {self.throttle_factor}")
 
     def get_power_demand(self) -> float:
         """
@@ -82,15 +83,13 @@ class ScienceSector:
                 # Rover is throttled - skip its step
                 power_used = 0.0
                 science_generated = 0.0
-                logger.info(f"Rover {i}: THROTTLED (skipped this step)")
+                rover.status = RoverStatus.THROTTLED
             else:
                 # Rover operates normally - give it its share of power
+                rover.status = RoverStatus.OPERATIONAL
                 rover_power = min(power_per_rover, remaining_power)
                 power_used, science_generated = rover.step(rover_power)
                 remaining_power = max(0.0, remaining_power - power_used)
-                logger.info(
-                    f"Rover {i}: OPERATIONAL - used {power_used:.2f} kW, generated {science_generated:.2f} science"
-                )
 
             total_power_used += power_used
             self.step_science_generated += science_generated
@@ -111,11 +110,12 @@ class ScienceSector:
             metric_id = contribution_cfg.get("metric_id")
             value_per_rover = float(contribution_cfg.get("value", 0.0))
 
-            # Count operational rovers
-            operational_count = sum(1 for r in self.science_rovers if r.status == "operational")
+            # Count operational rovers (exclude throttled)
+            operational_count = sum(1 for r in self.science_rovers if r.status == RoverStatus.OPERATIONAL)
+
             if operational_count > 0 and metric_id:
                 metric_map[metric_id] = operational_count * value_per_rover
-                print(
+                logger_science.info(
                     f"🔍 Science contribution: {operational_count} rovers × {value_per_rover} = {metric_map[metric_id]}"
                 )
 
