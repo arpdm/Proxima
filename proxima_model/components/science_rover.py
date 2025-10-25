@@ -1,4 +1,15 @@
 from mesa import Agent
+from enum import Enum
+
+
+class RoverStatus(Enum):
+    """Enumeration of possible rover statuses."""
+
+    IDLE = "idle"
+    OPERATIONAL = "operational"
+    CHARGING = "charging"
+    LOW_BATTERY = "low_battery"
+    THROTTLED = "throttled"
 
 
 class ScienceRover(Agent):
@@ -29,7 +40,7 @@ class ScienceRover(Agent):
         # State variables
         self.current_battery_kWh = float(config.get("current_battery_kWh", self.battery_capacity_kWh))
         self.science_buffer = float(config.get("science_buffer", 0.0))
-        self.status = config.get("status", "idle")
+        self.status = RoverStatus(config.get("status", RoverStatus.IDLE.value))
         self.location = config.get("location", (0, 0))
 
     def step(self, available_energy_kWh: float) -> tuple:
@@ -49,10 +60,10 @@ class ScienceRover(Agent):
             self.current_battery_kWh -= self.power_usage_kWh
             self.science_buffer += self.science_generation
             science_generated = self.science_generation
-            self.status = "operational"
+            self.status = RoverStatus.OPERATIONAL
         else:
             # If we can't operate, try to charge ---
-            self.status = "charging"
+            self.status = RoverStatus.CHARGING
             charge_needed = self.battery_capacity_kWh - self.current_battery_kWh
             charge_this_step = min(charge_needed, available_energy_kWh)
 
@@ -61,7 +72,7 @@ class ScienceRover(Agent):
 
             # If still not enough power to operate after charging, status is low battery
             if self.current_battery_kWh < self.power_usage_kWh:
-                self.status = "low_battery"
+                self.status = RoverStatus.LOW_BATTERY
 
         return power_draw_from_grid, science_generated
 
@@ -78,7 +89,7 @@ class ScienceRover(Agent):
             "battery_percentage": round(battery_percentage, 1),
             "battery_capacity_kWh": self.battery_capacity_kWh,
             "science_buffer": round(self.science_buffer, 2),
-            "status": self.status,
-            "is_operational": self.status == "operational",
+            "status": self.status.value,  # Return string value for compatibility
+            "is_operational": self.status == RoverStatus.OPERATIONAL,
             "type": "science_rover",
         }

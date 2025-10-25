@@ -22,6 +22,14 @@ class ISRUMode(Enum):
     INACTIVE = "INACTIVE"
 
 
+class ISRUStatus(Enum):
+    """ISRU robot operational status."""
+
+    INACTIVE = "inactive"
+    OPERATIONAL = "operational"
+    THROTTLED = "throttled"
+
+
 @dataclass
 class ISRUConfig:
     """Configuration for ISRU agents."""
@@ -85,6 +93,9 @@ class ISRUAgent(Agent):
         except (ValueError, IndexError):
             self.operational_mode = ISRUMode.INACTIVE
 
+        # Status tracking
+        self.status = ISRUStatus.INACTIVE
+
         # Cache power demands for efficiency
         self._power_demand_cache = {
             ISRUMode.ICE_EXTRACTION: self.config.ice_extraction_power_kWh,
@@ -109,6 +120,8 @@ class ISRUAgent(Agent):
         """Set the operational mode for this ISRU agent."""
         try:
             self.operational_mode = ISRUMode(mode)
+            if self.operational_mode == ISRUMode.INACTIVE:
+                self.status = ISRUStatus.INACTIVE
         except ValueError:
             available_modes = [mode.value for mode in ISRUMode]
             logger.error(f"Invalid mode {mode}. Available modes: {available_modes}")
@@ -126,17 +139,24 @@ class ISRUAgent(Agent):
 
         # Check if we have enough power to operate
         if allocated_power < power_needed:
+            self.status = ISRUStatus.INACTIVE  # 🔧 SET STATUS
             return {}, {}, 0.0
 
         # Route to appropriate operation method based on mode
         if self.operational_mode in [ISRUMode.ICE_EXTRACTION, ISRUMode.REGOLITH_EXTRACTION]:
-            return self._perform_extraction()
+            result = self._perform_extraction()
         elif self.operational_mode == ISRUMode.HE3_GENERATION:
-            return self._perform_he3_generation()
+            result = self._perform_he3_generation()
         elif self.operational_mode == ISRUMode.INACTIVE:
+            self.status = ISRUStatus.INACTIVE  # 🔧 SET STATUS
+            return {}, {}, 0.0
+        else:
+            self.status = ISRUStatus.INACTIVE  # 🔧 SET STATUS
             return {}, {}, 0.0
 
-        return {}, {}, 0.0
+        # 🔧 SET STATUS: If we got here, operation was successful
+        self.status = ISRUStatus.OPERATIONAL
+        return result
 
     def _perform_extraction(self) -> Tuple[Dict[str, float], Dict[str, float], float]:
         """Perform extraction operations."""
@@ -170,3 +190,12 @@ class ISRUAgent(Agent):
             {},  # Consumed resources
             self.config.he3_extraction_power_kWh,  # Power consumed
         )
+
+    def report(self) -> dict:
+        """Return status report for visualization/logging."""
+        return {
+            "type": "isru_robot",
+            "mode": self.operational_mode.value,
+            "status": self.status.value,
+            "power_demand": self.get_power_demand(),
+        }

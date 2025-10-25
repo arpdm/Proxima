@@ -22,7 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, List, Tuple, Optional
-from proxima_model.components.isru import ISRUAgent, ISRUMode
+from proxima_model.components.isru import ISRUAgent, ISRUMode, ISRUStatus  # 🔧 ADD ISRUStatus
 
 import random  # Added for probabilistic throttling
 import threading
@@ -234,6 +234,7 @@ class ManufacturingSector:
 
     def _process_buffered_resource_requests(self):
         """Process buffered resource requests and integrate with stock flows."""
+
         with self._lock:
             i = 0
             while i < len(self._resource_request_buffer):
@@ -248,14 +249,15 @@ class ManufacturingSector:
                         consumed={request.resource: request.amount},
                         allocated=allocated_resources,
                     )
+
                     logger.info(
                         f"Queued resource allocation: {request.amount:.2f} kg of {request.resource} to {request.requesting_sector}"
                     )
 
-                    # Remove fulfilled request directly from buffer
                     del self._resource_request_buffer[i]
-                    # Don't increment i since we removed an element
+
                 else:
+
                     logger.info(
                         f"Insufficient {request.resource}: requested {request.amount:.2f} kg, available {available_amount:.2f} kg"
                     )
@@ -320,7 +322,6 @@ class ManufacturingSector:
 
             # Clear processed flows
             self.pending_stock_flows.clear()
-
             return {"consumed": total_consumed, "generated": total_generated, "allocated": total_allocated}
 
     def _calculate_task_priorities(self) -> List[TaskType]:
@@ -400,8 +401,10 @@ class ManufacturingSector:
 
         # Execute ISRU robot operations with probabilistic throttling
         for robot in self.isru_robots:
+
             # Probabilistic throttling: skip robot with probability = robot_throttle
             if random.random() < self.robot_throttle:
+                robot.status = ISRUStatus.THROTTLED
                 logger.debug(f"Robot: THROTTLED (skipped this step)")
                 continue
 
@@ -418,6 +421,8 @@ class ManufacturingSector:
                 if used_power > 0:
                     self._current_metrics.operational_robots += 1
                     logger.debug(f"Robot: OPERATIONAL - used {used_power:.2f} kW")
+                else:
+                    robot.status = ISRUStatus.INACTIVE
 
         # Process all stock flows atomically
         self.process_all_stock_flows()
@@ -458,8 +463,13 @@ class ManufacturingSector:
         contribution_cfg = self._manufacturing_config[0].get("metric_contribution", {})
         metric_id = contribution_cfg.get("metric_id")
         value = float(contribution_cfg.get("value", 0.0))
+
+        # 🔧 UPDATE: Count truly operational robots (not throttled)
+        operational_count = sum(1 for r in self.isru_robots if r.status == ISRUStatus.OPERATIONAL)
+
         metric_map = {}
-        metric_map[metric_id] = self._current_metrics.operational_robots * value
+        if metric_id:
+            metric_map[metric_id] = operational_count * value
         return metric_map
 
     def get_metrics(self) -> Dict:
