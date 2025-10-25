@@ -125,7 +125,7 @@ class ScienceSector:
         """
         Get current science sector metrics.
         """
-        operational_rovers = sum(1 for r in self.science_rovers if r.status == "operational")
+        operational_rovers = sum(1 for r in self.science_rovers if r.status == RoverStatus.OPERATIONAL)
 
         return {
             "total_science_cumulative": self.total_science_cumulative,

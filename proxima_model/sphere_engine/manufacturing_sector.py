@@ -386,6 +386,8 @@ class ManufacturingSector:
     def step(self, allocated_power: float) -> float:
         """Execute manufacturing operations for one simulation step."""
 
+        self._current_metrics = ManufacturingMetrics()
+
         # Process buffered resource requests first
         self._process_buffered_resource_requests()
 

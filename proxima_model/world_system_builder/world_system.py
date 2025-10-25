@@ -294,16 +294,14 @@ class WorldSystem(Model):
             # Accumulate contributions
             contributions = (metrics or {}).get("metric_contributions", {})
 
-            # 🔍 DEBUG: Print contributions from each sector
             if contributions:
-                print(f"🔍 Step {self.steps} - {sector_name}: {contributions}")
+                logger.debug(f"🔍 Step {self.steps} - {sector_name}: {contributions}")
 
             for metric_id, delta in contributions.items():
                 aggregated_contrib[metric_id] = aggregated_contrib.get(metric_id, 0.0) + float(delta)
 
-        # 🔍 DEBUG: Print total aggregated contributions
         if aggregated_contrib:
-            print(f"🌪️ Step {self.steps} - Total contributions: {aggregated_contrib}")
+            logger.debug(f"🌪️ Step {self.steps} - Total contributions: {aggregated_contrib}")
 
         # Apply contributions to performance metrics before scoring
         if aggregated_contrib:

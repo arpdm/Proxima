@@ -62,13 +62,15 @@ class DustCoverageThrottlePolicy(Policy):
     # Default configuration
     DEFAULT_METRIC_ID = "IND-DUST-COV"
     DEFAULT_SECTORS = ["science", "manufacturing"]
-    DEFAULT_THROTTLE_FACTOR = 0.2  # Maximum throttle when score = 0
+    DEFAULT_THROTTLE_FACTOR = 0.8  # Maximum throttle when score = 0
+    DEFAULT_THROTTLE_START = 0.7  # Start throttling at 90% of target
 
     def __init__(
         self,
         metric_id: str = DEFAULT_METRIC_ID,
         sectors: Optional[List[str]] = None,
         throttle_factor: float = DEFAULT_THROTTLE_FACTOR,
+        throttle_start_ratio: float = DEFAULT_THROTTLE_START,  # New parameter
     ):
         """
         Initialize dust coverage throttle policy.
@@ -76,27 +78,46 @@ class DustCoverageThrottlePolicy(Policy):
         Args:
             metric_id: The metric ID to monitor (default: "IND-DUST-COV")
             sectors: Sectors to throttle (default: ["science", "manufacturing"])
-            throttle_factor: Maximum throttle factor when performance is worst (default: 0.75)
+            throttle_factor: Maximum throttle factor when performance is worst (default: 0.9)
+            throttle_start_ratio: Ratio of target where throttling begins (default: 0.9)
         """
         self.metric_id = metric_id
         self.sectors = sectors if sectors is not None else self.DEFAULT_SECTORS.copy()
         self.throttle_factor = throttle_factor
+        self.throttle_start_ratio = throttle_start_ratio
 
     def apply(self, engine) -> Dict[str, Any]:
         """Apply dust coverage throttling policy using the scoring mechanism."""
 
-        # Get normalized score (0.0 = worst, 1.0 = best performance)
-        score = engine.score(self.metric_id)
-
-        if score is None:
-            print(f"⚠️ No score available for {self.metric_id}")
-            return {"error": f"No score available for {self.metric_id}"}
-
-        # Calculate throttle factor
-        current_throttle = (1.0 - score) * self.throttle_factor
+        # Get current dust level
         current_dust = engine.world.get_performance_metric(self.metric_id)
+        target_dust = None
 
-        print(f"🌪️ DUST POLICY: dust={current_dust:.2f}, score={score:.3f}, throttle={current_throttle:.3f}")
+        # Get target from goals
+        goal = engine._goals_by_metric.get(self.metric_id)
+        if goal:
+            target_dust = goal.target_value
+
+        if current_dust is None or target_dust is None:
+            logger.info(f"⚠️ No dust data available for {self.metric_id}")
+            return {"error": f"No dust data available for {self.metric_id}"}
+
+        # Calculate proactive throttling
+        # Start throttling when dust reaches throttle_start_ratio * target
+        throttle_start_level = target_dust * self.throttle_start_ratio
+
+        if current_dust <= throttle_start_level:
+            current_throttle = 0.0  # No throttling below start level
+            score = 1.0
+        else:
+            # Linear throttling from start level to target
+            excess_ratio = (current_dust - throttle_start_level) / (target_dust - throttle_start_level)
+            score = max(0.0, 1.0 - excess_ratio)
+            current_throttle = excess_ratio * self.throttle_factor
+
+        logger.info(
+            f"🌪️ DUST POLICY: dust={current_dust:.3f}, target={target_dust:.3f}, start={throttle_start_level:.3f}, score={score:.3f}, throttle={current_throttle:.3f}"
+        )
 
         # Apply throttling to configured sectors
         effects = {
@@ -111,9 +132,9 @@ class DustCoverageThrottlePolicy(Policy):
             if sector and hasattr(sector, "set_throttle_factor"):
                 sector.set_throttle_factor(current_throttle)
                 effects["applied_to"].append(sector_name)
-                print(f"🔧 Set {sector_name} throttle to {current_throttle:.3f}")
+                logger.info(f"🔧 Set {sector_name} throttle to {current_throttle:.3f}")
             else:
-                print(f"⚠️ Sector {sector_name} not found or doesn't support throttling")
+                logger.info(f"⚠️ Sector {sector_name} not found or doesn't support throttling")
 
         return effects
 
@@ -161,39 +182,28 @@ class PolicyEngine:
     def _calculate_score(self, metric_id: str, goal: PerformanceGoal) -> Optional[float]:
         """
         Calculate score for a single metric based on its goal.
-
-        Args:
-            metric_id: The metric ID to score
-            goal: The performance goal for this metric
-
-        Returns:
-            Score from 0.0 (worst) to 1.0 (best), or None if calculation fails
+        For normalized 0-1 metrics, score = 1.0 when at/below target, decreases as it exceeds.
         """
         try:
             current_value = float(self.world.get_performance_metric(metric_id))
             target_value = goal.target_value
-            direction = goal.direction
 
-            if target_value == 0:
+            if target_value <= 0:
                 return 1.0
 
-            if direction == GoalDirection.MINIMIZE.value:
-                # Lower values are better - score based on how close to target
-                if current_value <= target_value:
-                    return 1.0  # At or below target = perfect
-                else:
-                    # Score decreases as we get further from target
-                    deviation_ratio = min(2.0, current_value / target_value)  # Cap at 2x target
-                    return max(0.0, 2.0 - deviation_ratio)  # 1.0 at target, 0.0 at 2x target
+            # For normalized metrics (0-1 scale)
+            normalized_value = current_value / target_value
 
-            elif direction == GoalDirection.MAXIMIZE.value:
-                # Higher values are better
-                if current_value >= target_value:
-                    return 1.0  # At or above target = perfect
+            if goal.direction == GoalDirection.MINIMIZE.value:
+                # Lower normalized values are better
+                if normalized_value <= 1.0:
+                    return 1.0  # Perfect score at/below target
                 else:
-                    # Score decreases as we get further from target
-                    achievement_ratio = current_value / target_value
-                    return max(0.0, min(1.0, achievement_ratio))
+                    # Score decreases as normalized exceeds 1.0
+                    return max(0.0, 2.0 - normalized_value)
+            elif goal.direction == GoalDirection.MAXIMIZE.value:
+                # Higher normalized values are better
+                return min(1.0, normalized_value)  # 1.0 at target, 0.0 at 0
 
             return None
 
