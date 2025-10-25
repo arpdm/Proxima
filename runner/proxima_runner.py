@@ -14,6 +14,20 @@ from proxima_model.world_system_builder.world_system_builder import build_world_
 from proxima_model.world_system_builder.world_system import WorldSystem
 from proxima_model.tools.data_logger import DataLogger
 
+
+logging.basicConfig(
+level=logging.INFO,  # Set default level
+format='%(name)s - %(levelname)s - %(message)s',
+handlers=[
+    logging.StreamHandler()  # Output to console
+])
+
+logging.getLogger('proxima_model.sphere_engine.transportation_sector').setLevel(logging.WARNING)
+logging.getLogger('proxima_model.sphere_engine.science_sector').setLevel(logging.DEBUG)
+logging.getLogger('proxima_model.sphere_engine.manufacturing_sector').setLevel(logging.DEBUG)
+logging.getLogger('proxima_model.policy_engine.policy_engine').setLevel(logging.DEBUG)
+logging.getLogger('proxima_model.world_system_builder.world_system').setLevel(logging.INFO)
+
 # ==== CONFIG ====
 @dataclass
 class RunnerConfig:
@@ -32,7 +46,7 @@ def parse_args():
     parser.add_argument("--headless", action="store_true", help="Run in headless mode (no UI commands)")
     parser.add_argument("--mongo-uri", type=str, default=None, help="MongoDB URI (overrides db choice)")
     return parser.parse_args()
-
+    
 class ProximaRunner:
     """Main simulation runner class for Proxima."""
 
@@ -244,25 +258,5 @@ def main():
         print("\nShutting down...")
         runner.is_running = False
 
-if __name__ == "__main__":
-    
-    # Configure Logging - Focused debugging
-    logging.basicConfig(
-        level=logging.WARNING,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        force=True  # ← Add this to override any existing config
-    )
-    
-    # Test that logging is working
-    test_logger = logging.getLogger('test')
-    test_logger.setLevel(logging.DEBUG)
-    test_logger.debug("🧪 Test debug message")
-    test_logger.info("🧪 Test info message")
-    test_logger.warning("🧪 Test warning message")
-    
-    # Only enable DEBUG for the components we're debugging
-    logging.getLogger('proxima_model.sphere_engine.science_sector').setLevel(logging.DEBUG)
-    logging.getLogger('proxima_model.sphere_engine.manufacturing_sector').setLevel(logging.DEBUG)
-    logging.getLogger('proxima_model.policy_engine.policy_engine').setLevel(logging.DEBUG)
-    logging.getLogger('proxima_model.world_system_builder.world_system').setLevel(logging.INFO)
+if __name__ == "__main__":    
     main()
