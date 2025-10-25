@@ -352,6 +352,10 @@ class TransportationSectorBuilder(ComponentBuilder):
                 "quantity": merged.quantity,
             }
 
+            # 🔧 ADD: Include metric contribution if present
+            if merged.metric_contribution:
+                base_cfg["metric_contribution"] = merged.metric_contribution
+
             comp_type = template.get("type", "").lower()
             if comp_type == ComponentType.ORBITAL_ROCKET.value:
                 config["rockets"].append(base_cfg)

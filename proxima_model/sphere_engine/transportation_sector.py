@@ -83,18 +83,14 @@ class ResourceStocks:
 class TransportationSector:
     """Manages rocket fleet, fuel generation, and transport logistics."""
 
-    # Default configuration constants
-    DEFAULT_CONFIG = TransportationConfig()
-
     def __init__(self, model, config: Dict[str, Any], event_bus):
-
         self.model = model
         self.event_bus = event_bus
         self._fuel_request_pending = False
 
         # Load configuration dynamically from config dict
         config_kwargs = {}
-        for field_name in self.DEFAULT_CONFIG.__dataclass_fields__.keys():
+        for field_name in TransportationConfig.__dataclass_fields__.keys():
             if field_name in config:
                 config_kwargs[field_name] = config[field_name]
 
@@ -108,8 +104,8 @@ class TransportationSector:
 
         # Initialize rocket fleet from config
         self.rockets: List[Rocket] = []
-        rocket_configs = config.get("rockets", [])
-        for rocket_config in rocket_configs:
+        self.rocket_configs = config.get("rockets", [])
+        for rocket_config in self.rocket_configs:
             rocket_quantity = rocket_config.get("quantity", 1)
             for _ in range(rocket_quantity):
                 self.rockets.append(Rocket(self.model, rocket_config, event_bus))
@@ -126,6 +122,9 @@ class TransportationSector:
         # Subscribe to events
         self.event_bus.subscribe("transport_request", self.handle_transport_request)
         self.event_bus.subscribe("resource_allocated", self.handle_resource_allocation)
+
+        # Initialize launch counter for metrics
+        self.launches_this_step = 0
 
     @property
     def stocks(self) -> Dict[str, float]:
@@ -261,6 +260,9 @@ class TransportationSector:
                 requesting_sector=request.requesting_sector,
             )
 
+            # Record successful launch for metrics
+            self.launches_this_step += 1
+
             return True
         else:
             logger.warning(
@@ -296,6 +298,9 @@ class TransportationSector:
         Args:
             allocated_power: Power allocated to sector (currently unused)
         """
+        # Reset launch counter
+        self.launches_this_step = 0
+
         # 1. Generate Fuel
         self._request_resources_for_fuel()
         self._generate_fuel()
@@ -305,6 +310,26 @@ class TransportationSector:
 
         # 3. Step All Rockets
         self._step_all_rockets()
+
+    def _create_metric_map(self) -> dict:
+        """
+        Create a map of metric contributions from rocket launches.
+        """
+        metric_map = {}
+
+        # Get rocket configs to find metric contribution
+        if self.rocket_configs and self.launches_this_step > 0:
+            # Get metric_contribution from first rocket config (same for all)
+            contribution_cfg = self.rocket_configs[0].get("metric_contribution", {})
+            metric_id = contribution_cfg.get("metric_id")
+            value_per_launch = float(contribution_cfg.get("value", 0.0))
+            if metric_id:
+                metric_map[metric_id] = self.launches_this_step * value_per_launch
+                logger.info(
+                    f"🚀 Rocket launches: {self.launches_this_step} × {value_per_launch} = {metric_map[metric_id]} dust impact"
+                )
+
+        return metric_map
 
     def get_metrics(self) -> Dict[str, Any]:
         """
@@ -318,4 +343,6 @@ class TransportationSector:
             "fuel_generators": len(self.fuel_generators),
             "queued_requests": len(self.transport_queue),
             "rocket_fuel_kg": self._stocks.rocket_fuel_kg,
+            "launches_this_step": self.launches_this_step,
+            "metric_contributions": self._create_metric_map(),
         }
