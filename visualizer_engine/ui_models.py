@@ -25,6 +25,7 @@ class SectorName(Enum):
     EQUIPMENT_MANUFACTURING = "equipment_manufacturing"
     TRANSPORTATION = "transportation"
     ENVIRONMENT = "environment"
+    CONSTRUCTION = "construction"  # ← ADD
     PERFORMANCE = "performance"
 
 
@@ -136,6 +137,14 @@ class SectorRegistry:
                 icon="🌍",
                 color="#10b981",
                 primary_metrics=["step", "simulation_time"],
+            ),
+            SectorName.CONSTRUCTION.value: SectorConfig(
+                id=SectorName.CONSTRUCTION.value,
+                display_name="Construction",
+                icon="🏗️",
+                color="#8b5cf6",
+                badge_format="🏗️ CONST: {modules_completed_this_step} modules | {shells_produced_this_step} shells",
+                primary_metrics=["modules_completed_this_step", "shells_produced_this_step"],
             ),
             SectorName.PERFORMANCE.value: SectorConfig(
                 id=SectorName.PERFORMANCE.value,
@@ -260,7 +269,14 @@ class MetricFilterConfig:
                 icon="🚀",
                 color="#f59e0b",
                 metric_patterns=["transportation_", "vehicle_", "mission_"],
-            )
+            ),
+            "construction": MetricCategory(
+                id="construction",
+                display_name="Construction",
+                icon="🏗️",
+                color="#8b5cf6",
+                metric_patterns=["construction_", "module_", "shell_", "robot_"],
+            ),
         }
 
     def categorize_metric(self, metric_name: str) -> str:

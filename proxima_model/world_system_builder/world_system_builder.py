@@ -35,6 +35,8 @@ class ComponentType(Enum):
     FUEL_GEN = "fuel_gen"
     SCIENCE_ROVER = "science_rover"
     ISRU_ROBOT = "isru_robot"
+    PRINTING_ROBOT = "printing_robot"
+    ASSEMBLY_ROBOT = "assembly_robot"
 
 
 class GoalType(Enum):
@@ -458,6 +460,71 @@ class GoalsSystemBuilder:
         logger.info(f"✅ Configured goals system: {len(config['performance_goals'])} performance goals")
         return config
 
+class ConstructionSectorBuilder(ComponentBuilder):
+    """Builds construction sector configuration."""
+
+    def build(self, components: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Build construction sector configuration.
+
+        Args:
+            components: List of construction component instances
+
+        Returns:
+            Dictionary with sector config, printing_robots, and assembly_robots
+        """
+        # Import the config class to get default values
+        from proxima_model.sphere_engine.construction_sector import ConstructionConfig
+
+        # Start with defaults from the dataclass
+        default_config = ConstructionConfig()
+
+        config = {
+            "sector_name": "construction",
+            "printing_robots": [],
+            "assembly_robots": [],
+        }
+
+        # Add all fields from ConstructionConfig with their default values
+        for field_name in default_config.__dataclass_fields__.keys():
+            config[field_name] = getattr(default_config, field_name)
+
+        for comp in components:
+            # Check if this is a sector configuration (no template_id)
+            if "template_id" not in comp:
+                # Dynamically update any field that exists in the config
+                for key, value in comp.items():
+                    if key in config:  # Only update if key exists in our config
+                        config[key] = value
+                        logger.info(f"✅ Updated construction config: {key} = {value}")
+                continue
+
+            # This is a component instance
+            template = self._get_template(comp["template_id"])
+            if not template:
+                continue
+
+            merged = self._merge_config(comp, template)
+            base_cfg = {
+                "template_id": merged.template_id,
+                "subtype": merged.subtype,
+                "config": merged.config,
+                "quantity": merged.quantity,
+            }
+
+            # Follow standard pattern: check type from template
+            comp_type = template.get("type", "").lower()
+            
+            if comp_type == ComponentType.PRINTING_ROBOT.value:
+                config["printing_robots"].append(base_cfg)
+            elif comp_type == ComponentType.ASSEMBLY_ROBOT.value:
+                config["assembly_robots"].append(base_cfg)
+       
+        logger.info(
+            f"✅ Configured construction sector: {len(config['printing_robots'])} printing robots, {len(config['assembly_robots'])} assembly robots"
+        )
+        return config
+
 
 def build_world_system_config(world_system_id: str, experiment_id: str, db: ProximaDB) -> dict:
     """
@@ -515,6 +582,9 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
 
     transportation_builder = TransportationSectorBuilder(component_templates)
     config["agents_config"]["transportation"] = transportation_builder.build(components_dict.get("transportation", []))
+
+    construction_builder = ConstructionSectorBuilder(component_templates)
+    config["agents_config"]["construction"] = construction_builder.build(components_dict.get("construction", []))
 
     # Build goals configuration
     goals_builder = GoalsSystemBuilder(db)

@@ -22,11 +22,13 @@ handlers=[
     logging.StreamHandler()  # Output to console
 ])
 
-logging.getLogger('proxima_model.sphere_engine.transportation_sector').setLevel(logging.DEBUG)
+logging.getLogger('proxima_model.sphere_engine.transportation_sector').setLevel(logging.ERROR)
 logging.getLogger('proxima_model.sphere_engine.science_sector').setLevel(logging.WARNING)
 logging.getLogger('proxima_model.sphere_engine.manufacturing_sector').setLevel(logging.WARNING)
 logging.getLogger('proxima_model.policy_engine.policy_engine').setLevel(logging.WARNING)
 logging.getLogger('proxima_model.world_system_builder.world_system').setLevel(logging.WARNING)
+logging.getLogger('proxima_model.sphere_engine.construction_sector').setLevel(logging.DEBUG)
+logging.getLogger('proxima_model.sphere_engine.equipment_manufacturing_sector').setLevel(logging.DEBUG)
 
 # ==== CONFIG ====
 @dataclass
@@ -197,7 +199,7 @@ class ProximaRunner:
         
         # Add all available sector metrics
         for sector_name in ["environment", "energy", "science", "manufacturing", 
-                           "equipment_manufacturing", "transportation", "performance"]:
+                           "equipment_manufacturing", "transportation", "construction" , "performance"]:
             if sector_name in self.ws.model_metrics:
                 metrics_to_log[sector_name] = self.ws.model_metrics[sector_name]
             else:

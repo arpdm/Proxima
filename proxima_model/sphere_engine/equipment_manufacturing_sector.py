@@ -19,7 +19,7 @@ CORE ALGORITHMS:
 from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import logging
 
@@ -38,14 +38,17 @@ class EquipmentType(Enum):
 
     ASSEMBLY_ROBOT = "Assembly_Robot_EQ"
     PRINTING_ROBOT = "Printing_Robot_EQ"
-    # Add more equipment types as needed
+    SCIENCE_ROVER = "Science_Rover_EQ"
+    ENERGY_GENERATOR = "Energy_Generator_EQ"
+    ISRU_ROBOT = "ISRU_Robot_EQ"
+    ROCKET = "Rocket_EQ"
 
 
 @dataclass
 class EquipmentConfig:
     """Configuration for equipment minimum levels."""
 
-    minimum_level: int = 1
+    minimum_level: int = 3
 
     def __post_init__(self):
         if self.minimum_level < 0:
@@ -89,6 +92,17 @@ class EquipmentInventory:
             raise ValueError("Amount must be non-negative")
         self.pending_orders[item] = max(0, self.get_pending(item) - amount)
 
+    def remove(self, item: str, amount: float):
+        """Remove from physical stock (allocation to other sectors)."""
+        if amount < 0:
+            raise ValueError("Amount must be non-negative")
+        if item in self.physical_stock:
+            new_level = self.physical_stock[item] - amount
+            if new_level <= 0:
+                del self.physical_stock[item]
+            else:
+                self.physical_stock[item] = new_level
+
 
 class EquipmentManSector:
     """Manages equipment manufacturing, storage, and resupply processes."""
@@ -97,9 +111,10 @@ class EquipmentManSector:
     DEFAULT_MINIMUMS = {
         EquipmentType.ASSEMBLY_ROBOT.value: 1,
         EquipmentType.PRINTING_ROBOT.value: 1,
+        EquipmentType.SCIENCE_ROVER.value: 1,
     }
 
-    def __init__(self, model, config: Dict, event_bus):
+    def __init__(self, model, config: Dict[str, Any], event_bus):
         """
         Initialize equipment manufacturing sector with agents and resource stocks.
 
@@ -126,6 +141,9 @@ class EquipmentManSector:
         # Subscribe to events
         self.event_bus.subscribe("payload_delivered", self.handle_payload_delivery)
 
+        # Subscribe to equipment requests from other sectors
+        self.event_bus.subscribe("equipment_request", self.handle_equipment_request)
+
     @property
     def equipment(self) -> Dict[str, float]:
         """Get physical equipment stock (for backwards compatibility)."""
@@ -141,6 +159,55 @@ class EquipmentManSector:
         if to_sector == self.config.get("sector_name"):
             # Buffer the event instead of processing immediately
             self._event_buffer.append(("payload_delivered", payload))
+
+    def handle_equipment_request(self, requesting_sector: str, equipment_type: str, quantity: int) -> None:
+        """Handle equipment request from another sector."""
+        logger.info(f"EquipmentManSector received request from {requesting_sector} for {quantity} {equipment_type}")
+
+        effective_stock = self._inventory.get_effective(equipment_type)
+
+        if effective_stock >= quantity:
+            # Allocate from stock
+            self._inventory.remove(equipment_type, quantity)
+            self.event_bus.publish(
+                "equipment_allocated",
+                recipient_sector=requesting_sector,
+                equipment_type=equipment_type,
+                quantity=quantity,
+            )
+            logger.info(f"Allocated {quantity} {equipment_type} to {requesting_sector}")
+        else:
+            # Not enough stock, request transport from Earth
+            shortfall = quantity - effective_stock
+            logger.info(
+                f"Insufficient {equipment_type} stock ({effective_stock} < {quantity}), shortfall: {shortfall}. Requesting transport from Earth."
+            )
+
+            # Send transportation request for shortfall (matching _check_and_request_resupply format)
+            payload = {equipment_type: shortfall}
+            self.event_bus.publish(
+                "transport_request",
+                requesting_sector="equipment_manufacturing",
+                payload=payload,
+                origin="Earth",
+                destination="Moon",
+            )
+
+            # Add to pending for tracking
+            self._inventory.add_pending(equipment_type, shortfall)
+
+            # If we have some, allocate what's available
+            if effective_stock > 0:
+                self._inventory.remove(equipment_type, effective_stock)
+                self.event_bus.publish(
+                    "equipment_allocated",
+                    recipient_sector=requesting_sector,
+                    equipment_type=equipment_type,
+                    quantity=effective_stock,
+                )
+                logger.info(
+                    f"Allocated available {effective_stock} {equipment_type} to {requesting_sector}, shortfall requested: {shortfall}"
+                )
 
     def _process_buffered_events(self):
         # Process in reverse order (LIFO - most recent first)

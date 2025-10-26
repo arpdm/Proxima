@@ -15,6 +15,7 @@ from proxima_model.sphere_engine.science_sector import ScienceSector
 from proxima_model.sphere_engine.manufacturing_sector import ManufacturingSector
 from proxima_model.sphere_engine.equipment_manufacturing_sector import EquipmentManSector
 from proxima_model.sphere_engine.transportation_sector import TransportationSector
+from proxima_model.sphere_engine.construction_sector import ConstructionSector
 from proxima_model.policy_engine.policy_engine import PolicyEngine
 from proxima_model.policy_engine.metrics import (
     MetricDefinition,
@@ -44,6 +45,7 @@ class WorldSystem(Model):
         "manufacturing": ManufacturingSector,
         "equipment_manufacturing": EquipmentManSector,
         "transportation": TransportationSector,
+        "construction": ConstructionSector
     }
 
     def __init__(self, config: Dict[str, Any], seed: Optional[int] = None):
