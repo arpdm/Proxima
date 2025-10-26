@@ -25,7 +25,7 @@ class SectorName(Enum):
     EQUIPMENT_MANUFACTURING = "equipment_manufacturing"
     TRANSPORTATION = "transportation"
     ENVIRONMENT = "environment"
-    CONSTRUCTION = "construction"  # ← ADD
+    CONSTRUCTION = "construction"
     PERFORMANCE = "performance"
 
 

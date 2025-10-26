@@ -33,7 +33,8 @@ class ConstructionRequest:
     shell_quantity_needed: int
     equipment_needed: Dict[str, int] = field(default_factory=dict)
     status: str = "queued"
-    assigned_assembly_robot: Optional[AssemblyRobot] = None  # ← Only assembly robot
+    assigned_assembly_robot: Optional[AssemblyRobot] = None
+    equipment_requested: bool = False
 
     def __post_init__(self):
         if self.shell_quantity_needed <= 0:
@@ -44,8 +45,9 @@ class ConstructionRequest:
 class ConstructionConfig:
     """Configuration for construction sector."""
 
+    # TODO: These need to be added to policy engine and controlled by growth dynamically
     max_concurrent_projects: int = 3
-    shell_storage_capacity: int = 100
+    shell_storage_capacity: int = 10
 
     def __post_init__(self):
         if self.max_concurrent_projects < 0:
@@ -57,11 +59,6 @@ class ConstructionStocks:
     """Internal resource stocks for construction sector."""
 
     shells: int = 0
-    regolith_kg: float = 0.0
-
-    def __post_init__(self):
-        if self.shells < 0 or self.regolith_kg < 0:
-            raise ValueError("Stock values cannot be negative")
 
 
 class ConstructionSector:
@@ -95,10 +92,12 @@ class ConstructionSector:
 
         # Construction queue
         self.construction_queue: List[ConstructionRequest] = []
+        self.regolith_used_kg: float = 0.0
 
         # Initialize printing robots
         self.printing_robots: List[PrintingRobot] = []
         printing_configs = config.get("printing_robots", [])
+
         for robot_config in printing_configs:
             quantity = robot_config.get("quantity", 1)
             for _ in range(quantity):
@@ -107,6 +106,7 @@ class ConstructionSector:
         # Initialize assembly robots
         self.assembly_robots: List[AssemblyRobot] = []
         assembly_configs = config.get("assembly_robots", [])
+
         for robot_config in assembly_configs:
             quantity = robot_config.get("quantity", 1)
             for _ in range(quantity):
@@ -115,7 +115,6 @@ class ConstructionSector:
         # Subscribe to events
         self.event_bus.subscribe("construction_request", self.handle_construction_request)
         self.event_bus.subscribe("equipment_allocated", self.handle_equipment_allocation)
-        self.event_bus.subscribe("resource_allocated", self.handle_resource_allocation)
 
         # Metrics
         self.modules_completed_this_step = 0
@@ -146,6 +145,7 @@ class ConstructionSector:
 
     def handle_equipment_allocation(self, recipient_sector: str, equipment_type: str, quantity: int) -> None:
         """Handle equipment allocation from equipment manufacturing."""
+
         if recipient_sector == "construction":
             if equipment_type in self.equipment_stock:
                 self.equipment_stock[equipment_type] += quantity
@@ -154,12 +154,6 @@ class ConstructionSector:
                 )
             else:
                 logger.warning(f"Unknown equipment type {equipment_type} allocated to construction")
-
-    def handle_resource_allocation(self, recipient_sector: str, resource: str, amount: float) -> None:
-        """Handle resource allocation."""
-        if recipient_sector == "construction":
-            if resource == "regolith_kg":
-                self._stocks.regolith_kg += amount
 
     def _process_construction_queue(self) -> None:
         """Process queued construction requests."""
@@ -176,32 +170,44 @@ class ConstructionSector:
                 if self._advance_construction_project(request):
                     active_projects += 1
 
+        # Remove completed requests from queue
+        self.construction_queue = [
+            r for r in self.construction_queue if r.status != ConstructionRequestStatus.COMPLETED.value
+        ]
+
     def _start_construction_project(self, request: ConstructionRequest) -> bool:
         """Start a construction project if resources available."""
+
         # Check equipment availability
         equipment_available = all(
             self.equipment_stock.get(eq, 0) >= qty for eq, qty in request.equipment_needed.items()
         )
 
         if not equipment_available:
+
             missing_equipment = {
                 eq: qty - self.equipment_stock.get(eq, 0)
                 for eq, qty in request.equipment_needed.items()
                 if self.equipment_stock.get(eq, 0) < qty
             }
+
             logger.debug(f"Cannot start {request.module_id}: missing equipment {missing_equipment}")
 
-            # Request missing equipment from equipment manufacturing
-            for eq, qty_needed in missing_equipment.items():
-                self.event_bus.publish(
-                    "equipment_request", requesting_sector="construction", equipment_type=eq, quantity=qty_needed
-                )
+            if not request.equipment_requested:
+                # Request missing equipment from equipment manufacturing
+                for eq, qty_needed in missing_equipment.items():
+                    self.event_bus.publish(
+                        "equipment_request", requesting_sector="construction", equipment_type=eq, quantity=qty_needed
+                    )
+                request.equipment_requested = True
+
             return False
 
         if self._stocks.shells < request.shell_quantity_needed:
             logger.debug(
                 f"Cannot start {request.module_id}: not enough shells ({self._stocks.shells} < {request.shell_quantity_needed})"
             )
+
             return False
 
         # Find available assembly robot
@@ -217,8 +223,11 @@ class ConstructionSector:
 
         # Assign assembly robot
         request.assigned_assembly_robot = available_assembly
+        logger.debug(f"Assigned assembly robot {available_assembly.unique_id} to {request.module_id}")
+
         if available_assembly.start_assembly(request.module_id):
             request.status = ConstructionRequestStatus.IN_PROGRESS.value
+            logger.debug(f"Assembly robot {available_assembly.unique_id} started assembling {request.module_id}")
             logger.info(
                 f"Started construction of {request.module_id} (equipment consumed: {request.equipment_needed}, shells consumed: {request.shell_quantity_needed})"
             )
@@ -228,20 +237,34 @@ class ConstructionSector:
             for eq, qty in request.equipment_needed.items():
                 self.equipment_stock[eq] += qty
             self._stocks.shells += request.shell_quantity_needed
+            logger.debug(
+                f"Assembly robot {available_assembly.unique_id} failed to start assembling {request.module_id}"
+            )
             return False
 
     def _advance_construction_project(self, request: ConstructionRequest) -> bool:
         """Advance an in-progress construction project."""
+
+        request.assigned_assembly_robot.step()
+
         # Check if assembly is complete
         if request.assigned_assembly_robot.mode == AssemblyRobotMode.IDLE:
+
             # Assembly complete
+
+            logger.debug(
+                f"Assembly robot {request.assigned_assembly_robot.unique_id} completed assembling {request.module_id}"
+            )
+
             request.status = ConstructionRequestStatus.COMPLETED.value
             self.modules_completed_this_step += 1
+
             # Free robot
             request.assigned_assembly_robot = None
+
             # Notify sphere
             self.event_bus.publish(
-                "construction_completed",
+                "module_created",
                 sphere=request.requesting_sphere,
                 module_id=request.module_id,
                 equipment_consumed=request.equipment_needed,
@@ -254,14 +277,13 @@ class ConstructionSector:
     def _manage_printing_operations(self) -> None:
         """Manage printing robot operations - produce shells into stock."""
         for robot in self.printing_robots:
-            if robot.mode == PrintingRobotMode.IDLE and self._stocks.regolith_kg >= robot.regolith_usage_kg:
+            if robot.mode == PrintingRobotMode.IDLE and self._stocks.shells < self._config.shell_storage_capacity:
                 robot.start_printing()
-
             result = robot.step()
-            print(result)
+
             if result["shell_produced"]:
                 self._stocks.shells += 1
-                self._stocks.regolith_kg -= result["regolith_consumed"]
+                self.regolith_used_kg += result["regolith_consumed"]
                 self.shells_produced_this_step += 1
 
     def get_power_demand(self) -> float:
@@ -290,7 +312,7 @@ class ConstructionSector:
             "assembly_robots": len(self.assembly_robots),
             "queued_requests": len(self.construction_queue),
             "shells_in_stock": self._stocks.shells,
-            "regolith_kg": self._stocks.regolith_kg,
+            "regolith_used_kg": self.regolith_used_kg,
             "modules_completed_this_step": self.modules_completed_this_step,
             "shells_produced_this_step": self.shells_produced_this_step,
             **{f"equipment_{k}": v for k, v in self.equipment_stock.items()},

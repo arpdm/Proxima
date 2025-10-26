@@ -19,7 +19,8 @@ CORE ALGORITHMS:
 from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
+from collections import deque
 
 import logging
 
@@ -130,6 +131,7 @@ class EquipmentManSector:
 
         # Buffer for incoming events (process next step)
         self._event_buffer = []
+        self._equipment_backlog: deque[dict] = deque()
 
         # Initialize inventory
         initial_stocks = config.get("initial_stocks", {})
@@ -155,19 +157,62 @@ class EquipmentManSector:
         return self._inventory.pending_orders.copy()
 
     def handle_payload_delivery(self, to_sector: str, payload: Dict[str, float]):
-        """Buffer payload delivery events to process next step."""
         if to_sector == self.config.get("sector_name"):
-            # Buffer the event instead of processing immediately
             self._event_buffer.append(("payload_delivered", payload))
 
     def handle_equipment_request(self, requesting_sector: str, equipment_type: str, quantity: int) -> None:
-        """Handle equipment request from another sector."""
-        logger.info(f"EquipmentManSector received request from {requesting_sector} for {quantity} {equipment_type}")
+        self._event_buffer.append(
+            (
+                "equipment_request",
+                {
+                    "requesting_sector": requesting_sector,
+                    "equipment_type": equipment_type,
+                    "quantity": quantity,
+                },
+            )
+        )
 
-        effective_stock = self._inventory.get_effective(equipment_type)
+    def _process_buffered_events(self):
+        while self._event_buffer:
+            event_type, data = self._event_buffer.pop()
+            if event_type == "payload_delivered":
+                self._process_payload_delivery(data)
+            elif event_type == "equipment_request":
+                self._enqueue_equipment_request(data)
 
-        if effective_stock >= quantity:
-            # Allocate from stock
+        self._process_equipment_backlog()
+
+    def _process_payload_delivery(self, payload: Dict[str, float]) -> None:
+        logger.info(f"EquipmentManSector processing payload: {payload}")
+        for item, amount in payload.items():
+            self._inventory.add_physical(item, amount)
+            self._inventory.reduce_pending(item, amount)
+
+    def _enqueue_equipment_request(self, payload: dict) -> None:
+        self._equipment_backlog.append(payload)
+
+    def _process_equipment_backlog(self) -> None:
+        remaining_requests = deque()
+
+        while self._equipment_backlog:
+            request = self._equipment_backlog.popleft()
+            outstanding = self._fulfill_equipment_request(request)
+
+            if outstanding > 0:
+                request["quantity"] = outstanding
+                remaining_requests.append(request)
+
+        self._equipment_backlog = remaining_requests
+
+    def _fulfill_equipment_request(self, request: dict) -> int:
+        "Try to fullifill the request if not, keep it in the backlog"
+
+        requesting_sector = request["requesting_sector"]
+        equipment_type = request["equipment_type"]
+        quantity = request["quantity"]
+        available = self._inventory.get_physical(equipment_type)
+
+        if available >= quantity:
             self._inventory.remove(equipment_type, quantity)
             self.event_bus.publish(
                 "equipment_allocated",
@@ -176,48 +221,9 @@ class EquipmentManSector:
                 quantity=quantity,
             )
             logger.info(f"Allocated {quantity} {equipment_type} to {requesting_sector}")
+            return 0
         else:
-            # Not enough stock, request transport from Earth
-            shortfall = quantity - effective_stock
-            logger.info(
-                f"Insufficient {equipment_type} stock ({effective_stock} < {quantity}), shortfall: {shortfall}. Requesting transport from Earth."
-            )
-
-            # Send transportation request for shortfall (matching _check_and_request_resupply format)
-            payload = {equipment_type: shortfall}
-            self.event_bus.publish(
-                "transport_request",
-                requesting_sector="equipment_manufacturing",
-                payload=payload,
-                origin="Earth",
-                destination="Moon",
-            )
-
-            # Add to pending for tracking
-            self._inventory.add_pending(equipment_type, shortfall)
-
-            # If we have some, allocate what's available
-            if effective_stock > 0:
-                self._inventory.remove(equipment_type, effective_stock)
-                self.event_bus.publish(
-                    "equipment_allocated",
-                    recipient_sector=requesting_sector,
-                    equipment_type=equipment_type,
-                    quantity=effective_stock,
-                )
-                logger.info(
-                    f"Allocated available {effective_stock} {equipment_type} to {requesting_sector}, shortfall requested: {shortfall}"
-                )
-
-    def _process_buffered_events(self):
-        # Process in reverse order (LIFO - most recent first)
-        for event_type, payload in reversed(self._event_buffer):
-            if event_type == "payload_delivered":
-                logger.info(f"Equipment Manufacturing Sector Processing Buffered Payload: {payload}")
-                for item, amount in payload.items():
-                    self._inventory.add_physical(item, amount)
-                    self._inventory.reduce_pending(item, amount)
-                self._event_buffer.clear()
+            return quantity - available
 
     def _check_and_request_resupply(self):
         """

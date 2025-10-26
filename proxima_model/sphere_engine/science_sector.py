@@ -77,8 +77,13 @@ class ScienceSector:
         power_per_rover = remaining_power / len(self.science_rovers) if self.science_rovers else 0.0
 
         if not self.test:
-             # TESTING Construction Sector
-            self.event_bus.publish("construction_request", requesting_sphere = self.config.get("sector_name"), module_id = "comp_science_rover", shell_quantity = 2)
+            # TESTING Construction Sector
+            self.event_bus.publish(
+                "construction_request",
+                requesting_sphere=self.config.get("sector_name"),
+                module_id="comp_science_rover",
+                shell_quantity=2,
+            )
             self.test = True
         # Update each rover
         for i, rover in enumerate(self.science_rovers):

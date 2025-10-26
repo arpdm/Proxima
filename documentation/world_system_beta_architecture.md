@@ -431,7 +431,7 @@ With each phase/component, the world system will have:
 | World System Can Import From World System Alpha | Phase 2 | ✅ |
 | World System Has Nuclear Power | Phase 3 | 🚧 |
 | World System Has Rockets for transortation of cargo | Phase 2 | ✅ |
-| World System Has Assembly Robots and 3D Printing Robots | Phase 2 | 🚧 |
+| World System Has Assembly Robots and 3D Printing Robots | Phase 2 | ✅ |
 | Calculate contribution of each metric to sector | Phase 2 | 🚧 |
 
 ---

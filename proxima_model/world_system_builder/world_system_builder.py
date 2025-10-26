@@ -460,6 +460,7 @@ class GoalsSystemBuilder:
         logger.info(f"✅ Configured goals system: {len(config['performance_goals'])} performance goals")
         return config
 
+
 class ConstructionSectorBuilder(ComponentBuilder):
     """Builds construction sector configuration."""
 
@@ -514,12 +515,12 @@ class ConstructionSectorBuilder(ComponentBuilder):
 
             # Follow standard pattern: check type from template
             comp_type = template.get("type", "").lower()
-            
+
             if comp_type == ComponentType.PRINTING_ROBOT.value:
                 config["printing_robots"].append(base_cfg)
             elif comp_type == ComponentType.ASSEMBLY_ROBOT.value:
                 config["assembly_robots"].append(base_cfg)
-       
+
         logger.info(
             f"✅ Configured construction sector: {len(config['printing_robots'])} printing robots, {len(config['assembly_robots'])} assembly robots"
         )

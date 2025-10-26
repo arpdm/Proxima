@@ -45,7 +45,7 @@ class WorldSystem(Model):
         "manufacturing": ManufacturingSector,
         "equipment_manufacturing": EquipmentManSector,
         "transportation": TransportationSector,
-        "construction": ConstructionSector
+        "construction": ConstructionSector,
     }
 
     def __init__(self, config: Dict[str, Any], seed: Optional[int] = None):

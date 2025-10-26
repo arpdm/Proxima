@@ -38,7 +38,7 @@ class RunnerConfig:
     local_uri: str = "mongodb://localhost:27017"
     hosted_uri: str = None
     host_update_frequency: int = 600
-    default_step_delay: float = 0.1
+    default_step_delay: float = 0.01
     log_flush_interval: int = 1000  # Flush logs every N steps to manage memory
 
 def parse_args():
