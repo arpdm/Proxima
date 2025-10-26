@@ -42,7 +42,7 @@ class ProximaUI:
         self,
         db,
         experiment_id="exp_001",
-        update_rate_ms=1000,
+        update_rate_ms=100,
         update_cycles=1,
         read_only=True,
         ts_data_count=200,
@@ -165,50 +165,11 @@ class ProximaUI:
         )
 
     def _create_sector_table_component(self):
-        """Create AG Grid for sector data with improved settings"""
+        """Create AG Grid for sector data - simplified"""
         col_defs = [
-            {
-                "headerName": "Sector",
-                "field": "Sector",
-                "sortable": True,
-                "filter": True,
-                "resizable": True,
-                "width": 180,
-                "pinned": "left",  # Pin sector column for easy reference
-                "cellStyle": {"color": "#e0e0e0", "backgroundColor": "transparent", "fontWeight": "500"},
-            },
-            {
-                "headerName": "Metric",
-                "field": "Metric",
-                "sortable": True,
-                "filter": True,
-                "resizable": True,
-                "wrapText": True,
-                "autoHeight": True,
-                "flex": 1,
-                "cellStyle": {
-                    "whiteSpace": "normal",
-                    "lineHeight": "1.3rem",
-                    "color": "#e0e0e0",
-                    "backgroundColor": "transparent",
-                },
-            },
-            {
-                "headerName": "Value",
-                "field": "Value",
-                "sortable": True,
-                "filter": True,
-                "resizable": True,
-                "wrapText": True,
-                "autoHeight": True,
-                "flex": 1,
-                "cellStyle": {
-                    "whiteSpace": "normal",
-                    "lineHeight": "1.3rem",
-                    "color": "#e0e0e0",
-                    "backgroundColor": "transparent",
-                },
-            },
+            {"field": "Sector", "sortable": True, "filter": True, "width": 180},
+            {"field": "Metric", "sortable": True, "filter": True, "flex": 1},
+            {"field": "Value", "sortable": True, "filter": True, "flex": 1},
         ]
 
         return dag.AgGrid(
@@ -216,25 +177,11 @@ class ProximaUI:
             className="ag-theme-alpine-dark",
             columnDefs=col_defs,
             rowData=[],
-            persistence=True,
-            persistence_type="session",
-            persisted_props=["filterModel", "sortModel", "columnState"],
-            defaultColDef={"minWidth": 100},
+            defaultColDef={"resizable": True, "sortable": True, "filter": True},
             dashGridOptions={
-                "domLayout": "autoHeight",  # Changed from "normal" to prevent scrolling
-                "suppressScrollOnNewData": True,
-                "deltaRowDataMode": True,
-                "getRowId": "function(params) { return params.data._id; }",
-                "animateRows": False,
-                "suppressCellFocus": True,
-                "maintainColumnOrder": True,  # Maintain column order on updates
-                "suppressColumnVirtualisation": True,  # Better for smaller grids
-                "rowSelection": "multiple",
-                "enableRangeSelection": True,
-                "enableCellTextSelection": True,  # Allow text selection
-                "ensureDomOrder": True,  # Helps with stability
+                "domLayout": "autoHeight",
             },
-            style={"width": "100%", "backgroundColor": "transparent"},
+            style={"width": "100%"},
         )
 
     def _status_badge(self, status: str, score: float = None) -> dbc.Badge:
@@ -912,7 +859,7 @@ class ProximaUI:
                 return ["all"], [], [True] * len(button_ids), ["secondary"] * len(button_ids)
 
             numeric_cols = DataFrameProcessor.get_numeric_columns(df)
-
+            
             # Initialize selected categories
             if isinstance(current_categories, str):
                 selected_categories = [current_categories] if current_categories else ["all"]
@@ -1208,8 +1155,31 @@ class ProximaUI:
                 continue
 
             for k, v in sector_data.items():
-                # Skip dictionaries and lists - only show raw string and numerical data
-                if isinstance(v, (dict, list)):
+                # Handle nested dicts - flatten one level deep
+                if isinstance(v, dict):
+                    for subkey, subval in v.items():
+                        # Don't go deeper than 1 level
+                        if isinstance(subval, (dict, list)):
+                            continue
+                        
+                        # Handle special float values (NaN, Inf)
+                        if isinstance(subval, float) and (math.isnan(subval) or math.isinf(subval)):
+                            subval = str(subval)
+                        
+                        # Add nested value with dotted notation
+                        if isinstance(subval, (str, int, float, bool, type(None))):
+                            all_rows.append(
+                                {
+                                    "Sector": sector_config.display_name,
+                                    "Metric": f"{k}.{subkey}",
+                                    "Value": str(subval),
+                                    "_id": f"{sector_config.id}_{k}_{subkey}",
+                                }
+                            )
+                    continue
+                
+                # Skip lists
+                if isinstance(v, list):
                     continue
 
                 # Handle special float values (NaN, Inf)

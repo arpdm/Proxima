@@ -143,8 +143,8 @@ class SectorRegistry:
                 display_name="Construction",
                 icon="🏗️",
                 color="#8b5cf6",
-                badge_format="🏗️ CONST: {modules_completed_this_step} modules | {shells_produced_this_step} shells",
-                primary_metrics=["modules_completed_this_step", "shells_produced_this_step"],
+                badge_format="🏗️ CONST: {shells_in_stock} shells",
+                primary_metrics=["shells_in_stock"],
             ),
             SectorName.PERFORMANCE.value: SectorConfig(
                 id=SectorName.PERFORMANCE.value,

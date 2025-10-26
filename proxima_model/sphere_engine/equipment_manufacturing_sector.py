@@ -97,12 +97,13 @@ class EquipmentInventory:
         """Remove from physical stock (allocation to other sectors)."""
         if amount < 0:
             raise ValueError("Amount must be non-negative")
-        if item in self.physical_stock:
-            new_level = self.physical_stock[item] - amount
-            if new_level <= 0:
-                del self.physical_stock[item]
-            else:
-                self.physical_stock[item] = new_level
+
+        current = self.get_physical(item)
+        new_level = max(0, current - amount)
+        self.physical_stock[item] = new_level
+
+        # Keep the item in the dictionary even if it reaches 0
+        # This ensures consistent metrics reporting
 
 
 class EquipmentManSector:
@@ -213,13 +214,13 @@ class EquipmentManSector:
         available = self._inventory.get_physical(equipment_type)
 
         if available >= quantity:
-            self._inventory.remove(equipment_type, quantity)
             self.event_bus.publish(
                 "equipment_allocated",
                 recipient_sector=requesting_sector,
                 equipment_type=equipment_type,
                 quantity=quantity,
             )
+            self._inventory.remove(equipment_type, quantity)
             logger.info(f"Allocated {quantity} {equipment_type} to {requesting_sector}")
             return 0
         else:
