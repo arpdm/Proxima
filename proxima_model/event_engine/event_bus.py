@@ -11,12 +11,12 @@ class EventBus:
 
     def __init__(self):
         self._subscribers: Dict[str, List[Callable]] = defaultdict(list)
-        self._lock = threading.Lock()  # For thread safety
+        self._lock = threading.Lock()
 
     def subscribe(self, event_type: str, callback_fn: Callable):
         """Register a function to be called when an event of a certain type is published."""
         with self._lock:
-            if callback_fn not in self._subscribers[event_type]:  # Prevent duplicates
+            if callback_fn not in self._subscribers[event_type]:
                 self._subscribers[event_type].append(callback_fn)
 
     def unsubscribe(self, event_type: str, callback_fn: Callable):
