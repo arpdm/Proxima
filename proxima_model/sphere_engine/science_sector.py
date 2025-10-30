@@ -32,25 +32,56 @@ class ScienceSector:
         self.total_science_cumulative = 0.0
         self.throttle_factor = 0.0  # 0.0 = no throttling, 1.0 = always throttled
         self.test = False
+
+        # Event Subscribtions
+        self.event_bus.subscribe("module_completed", self.handle_module_completed)
         self._initialize_rovers()
 
     def _initialize_rovers(self):
-        """Initialize all science rovers from config, correctly integrating with Mesa."""
+        """Initialize all science rovers from config."""
         self.rover_configs = self.config.get("science_rovers", [])
-        rover_id_counter = 0
+        self.rover_id_counter = 0
 
         for agent_config in self.rover_configs:
             quantity = agent_config.get("quantity", 1)
             for _ in range(quantity):
-                unique_id = f"science_rover_{rover_id_counter}"
-                rover = ScienceRover(unique_id, self.model, agent_config)
-                self.science_rovers.append(rover)
-                rover_id_counter += 1
+                self._create_rover(agent_config)
 
+    def _create_rover(self, rover_config):
+        """Create a single science rover."""
+        unique_id = f"science_rover_{self.rover_id_counter}"
+        rover = ScienceRover(unique_id, self.model, rover_config)
+        self.science_rovers.append(rover)
+        self.rover_id_counter += 1
+        logger_science.info(f"Created {unique_id}")
+        return rover    
+
+    def handle_module_completed(self, requesting_sphere: str, module_id: str, **kwargs):
+        """Handle newly constructed modules."""
+        # Only process if it's for us and it's a science rover
+        if requesting_sphere != self.config.get("sector_name"):
+            return
+        
+        if module_id != "comp_science_rover":
+            return
+        
+        # Get base config from our existing rovers
+        if not self.rover_configs:
+            logger_science.error("Cannot add rover: no config available")
+            return
+        
+        base_config = self.rover_configs[0]
+        new_rover = self._create_rover(base_config)
+        
+        logger_science.info(
+            f"✅ Added new science rover: {new_rover.unique_id} "
+            f"(total: {len(self.science_rovers)})"
+        )
+    
     def set_throttle_factor(self, throttle_value: float):
         """Set throttle factor for probabilistic rover operation (0.0 to 1.0)."""
         self.throttle_factor = max(0.0, min(1.0, throttle_value))  # Clamp to 0-1
-        logger_science.info(f"Science sector throttle factor set to: {self.throttle_factor}")
+        #logger_science.info(f"Science sector throttle factor set to: {self.throttle_factor}")
 
     def get_power_demand(self) -> float:
         """
@@ -124,9 +155,9 @@ class ScienceSector:
 
             if operational_count > 0 and metric_id:
                 metric_map[metric_id] = operational_count * value_per_rover
-                logger_science.info(
-                    f"🔍 Science contribution: {operational_count} rovers × {value_per_rover} = {metric_map[metric_id]}"
-                )
+                # logger_science.info(
+                #     f"🔍 Science contribution: {operational_count} rovers × {value_per_rover} = {metric_map[metric_id]}"
+                # )
 
         return metric_map
 
@@ -140,6 +171,7 @@ class ScienceSector:
             "total_science_cumulative": self.total_science_cumulative,
             "science_generated": self.step_science_generated,
             "operational_rovers": operational_rovers,
+            "total_rovers" : self.rover_id_counter,
             "total_power_demand": self.get_power_demand(),
             "metric_contributions": self._create_metric_map(),
         }

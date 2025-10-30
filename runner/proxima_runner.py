@@ -16,14 +16,14 @@ from proxima_model.tools.data_logger import DataLogger
 
 
 logging.basicConfig(
-level=logging.INFO,  # Set default level
+level=logging.WARNING,  # Set default level
 format='%(name)s - %(levelname)s - %(message)s',
 handlers=[
     logging.StreamHandler()  # Output to console
 ])
 
 logging.getLogger('proxima_model.sphere_engine.transportation_sector').setLevel(logging.ERROR)
-logging.getLogger('proxima_model.sphere_engine.science_sector').setLevel(logging.WARNING)
+logging.getLogger('proxima_model.sphere_engine.science_sector').setLevel(logging.DEBUG)
 logging.getLogger('proxima_model.sphere_engine.manufacturing_sector').setLevel(logging.WARNING)
 logging.getLogger('proxima_model.policy_engine.policy_engine').setLevel(logging.WARNING)
 logging.getLogger('proxima_model.world_system_builder.world_system').setLevel(logging.WARNING)

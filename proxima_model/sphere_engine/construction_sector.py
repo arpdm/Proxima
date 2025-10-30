@@ -251,7 +251,6 @@ class ConstructionSector:
         if request.assigned_assembly_robot.mode == AssemblyRobotMode.IDLE:
 
             # Assembly complete
-
             logger.debug(
                 f"Assembly robot {request.assigned_assembly_robot.unique_id} completed assembling {request.module_id}"
             )
@@ -264,10 +263,9 @@ class ConstructionSector:
 
             # Notify sphere
             self.event_bus.publish(
-                "module_created",
-                sphere=request.requesting_sphere,
+                "module_completed",
+                requesting_sphere=request.requesting_sphere,
                 module_id=request.module_id,
-                equipment_consumed=request.equipment_needed,
             )
 
             logger.info(f"Completed construction of {request.module_id} for {request.requesting_sphere}")
