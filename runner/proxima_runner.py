@@ -10,8 +10,8 @@ import logging
 from dataclasses import dataclass
 
 from data_engine.proxima_db_engine import ProximaDB
-from proxima_model.world_system_builder.world_system_builder import build_world_system_config
-from proxima_model.world_system_builder.world_system import WorldSystem
+from proxima_model.world_system.world_system_builder import build_world_system_config
+from proxima_model.world_system.world_system import WorldSystem
 from proxima_model.tools.data_logger import DataLogger
 
 
