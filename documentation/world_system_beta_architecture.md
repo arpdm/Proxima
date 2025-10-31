@@ -264,25 +264,22 @@ E^{(\mathrm{Lunar})}_t = \gamma_1 E^{(\mathrm{Lunar})}_{t-1} + \gamma_2 \left( E
 - $\gamma_3 N_t$: effect of number of active agents/missions.  
 - $\gamma_4 P_{\mathrm{mitigation},t}$: mitigation policy effects.
 
----
 
 
 # Policies
 
-## Dust Coverage Index - Throttling
-### Problem Background
-### Solution Background
-### Case Studies
-### Functional Definition
-### Equation
-### Algorithm
-### Side Effects
-[x] TBD
+The simulation includes an adaptive **Policy Engine** that applies operational policies based on real-time system performance. These policies can dynamically adjust sector parameters to mitigate risks or optimize for specific goals.
 
+| Policy Category          | Documentation Link                               |
+| ------------------------ | ------------------------------------------------ |
+| Environmental Policies   | [View Environmental Policies](./environmental_policies.md) |
+| Science Policies         | [View Science Policies](./science_policies.md)         |
+| Manufacturing Policies   | |
+| Economic Policies        |      |
 
-## Proxima Capabilities
+# Proxima Capabilities
 
-### Phases
+## Phases
 
 With each phase/component, the world system will have:
 
@@ -321,7 +318,7 @@ With each phase/component, the world system will have:
 
 ---
 
-### Data Infrastructure
+## Data Infrastructure
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
@@ -342,7 +339,7 @@ With each phase/component, the world system will have:
 
 ---
 
-### World System Configurator
+## World System Configurator
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
@@ -351,7 +348,7 @@ With each phase/component, the world system will have:
 
 ---
 
-### Launcher
+## Launcher
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
@@ -364,7 +361,7 @@ With each phase/component, the world system will have:
 
 ---
 
-### UI Engine
+## UI Engine
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
@@ -380,7 +377,7 @@ With each phase/component, the world system will have:
 
 ---
 
-### Simulation
+## Simulation
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
@@ -392,7 +389,7 @@ With each phase/component, the world system will have:
 
 ---
 
-### Policy Engine
+## Policy Engine
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
@@ -402,7 +399,7 @@ With each phase/component, the world system will have:
 
 ---
 
-### Complexity Engine
+## Complexity Engine
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
@@ -414,7 +411,7 @@ With each phase/component, the world system will have:
 
 ---
 
-### Event Engine
+## Event Engine
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
@@ -422,7 +419,7 @@ With each phase/component, the world system will have:
 
 ---
 
-### Model
+## Model
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
@@ -435,7 +432,7 @@ With each phase/component, the world system will have:
 
 ---
 
-### Post Processor
+## Post Processor
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
@@ -447,7 +444,7 @@ With each phase/component, the world system will have:
 
 ---
 
-## Appendix A: Tools and Techniques
+# Appendix A: Tools and Techniques
 
 | Tool | Use Case | 
 | ---- | -------- | 
