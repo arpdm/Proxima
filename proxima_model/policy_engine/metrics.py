@@ -34,7 +34,7 @@ class GoalDirection(Enum):
 
 @dataclass
 class PerformanceGoal:
-    """Performance goal configuration."""
+    """Performance goal configuration defining how to evailate a performance metric and used to define policies to reach these goals."""
 
     goal_id: str
     name: str
@@ -104,7 +104,7 @@ class MetricDefinition:
 
 @dataclass
 class MetricScore:
-    """Score report for a single metric."""
+    """Score report for a single metric indicating how well a performance metric is doing against a set goal."""
 
     name: str
     unit: Optional[str]

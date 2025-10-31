@@ -21,13 +21,8 @@ from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Protocol
 import logging
 
-from proxima_model.policy_engine.metrics import (
-    MetricType,
-    GoalDirection,
-    PerformanceGoal,
-    MetricDefinition,
-    MetricScore,
-)
+# No longer need to import all metric details here
+from proxima_model.world_system.evaluation_engine import EvaluationResult
 
 logger = logging.getLogger(__name__)
 
@@ -39,15 +34,16 @@ class Policy(Protocol):
     name: str
     enabled: bool
 
-    def apply(self, engine: "PolicyEngine") -> Dict[str, Any]:
+    def apply(self, engine: "PolicyEngine", evaluation_result: EvaluationResult) -> Dict[str, Any]:
         """
         Apply the policy to the simulation world.
 
         Args:
-            engine: The policy engine instance
+            engine: The policy engine instance.
+            evaluation_result: The complete evaluation result for the current step.
 
         Returns:
-            Dictionary of policy effects
+            Dictionary of policy effects.
         """
         ...
 
@@ -86,34 +82,35 @@ class DustCoverageThrottlePolicy(Policy):
         self.throttle_factor = throttle_factor
         self.throttle_start_ratio = throttle_start_ratio
 
-    def apply(self, engine) -> Dict[str, Any]:
-        """Apply dust coverage throttling policy using the scoring mechanism."""
+    def apply(self, engine: "PolicyEngine", evaluation_result: EvaluationResult) -> Dict[str, Any]:
+        """Apply dust coverage throttling policy using the provided evaluation result."""
 
-        # Get current dust level
-        current_dust = engine.world.get_performance_metric(self.metric_id)
-        target_dust = None
+        # Get current dust level from the evaluation result
+        current_dust = evaluation_result.performance_metrics.get(self.metric_id)
 
-        # Get target from goals
-        goal = engine._goals_by_metric.get(self.metric_id)
-        if goal:
-            target_dust = goal.target_value
+        # Get the score and goal information from the evaluation result
+        score_data = evaluation_result.scores.get(self.metric_id)
 
-        if current_dust is None or target_dust is None:
-            logger.info(f"⚠️ No dust data available for {self.metric_id}")
-            return {"error": f"No dust data available for {self.metric_id}"}
+        if current_dust is None or score_data is None or score_data.get("goal") is None:
+            logger.warning(f"⚠️ No dust data or goal available for {self.metric_id}")
+            return {"error": f"No data or goal for {self.metric_id}"}
+
+        target_dust = score_data["goal"]["target"]
+        score = score_data["score"]
 
         # Calculate proactive throttling
-        # Start throttling when dust reaches throttle_start_ratio * target
         throttle_start_level = target_dust * self.throttle_start_ratio
 
         if current_dust <= throttle_start_level:
-            current_throttle = 0.0  # No throttling below start level
-            score = 1.0
+            current_throttle = 0.0
         else:
             # Linear throttling from start level to target
-            excess_ratio = (current_dust - throttle_start_level) / (target_dust - throttle_start_level)
-            score = max(0.0, 1.0 - excess_ratio)
-            current_throttle = excess_ratio * self.throttle_factor
+            range_val = target_dust - throttle_start_level
+            if range_val > 0:
+                excess_ratio = (current_dust - throttle_start_level) / range_val
+                current_throttle = min(1.0, excess_ratio) * self.throttle_factor
+            else:
+                current_throttle = self.throttle_factor if current_dust >= target_dust else 0.0
 
         logger.info(
             f"🌪️ DUST POLICY: dust={current_dust:.3f}, target={target_dust:.3f}, start={throttle_start_level:.3f}, score={score:.3f}, throttle={current_throttle:.3f}"
@@ -134,7 +131,7 @@ class DustCoverageThrottlePolicy(Policy):
                 effects["applied_to"].append(sector_name)
                 logger.info(f"🔧 Set {sector_name} throttle to {current_throttle:.3f}")
             else:
-                logger.info(f"⚠️ Sector {sector_name} not found or doesn't support throttling")
+                logger.warning(f"⚠️ Sector {sector_name} not found or doesn't support throttling")
 
         return effects
 
@@ -155,82 +152,6 @@ class PolicyEngine:
         self._policies: List[Policy] = [
             DustCoverageThrottlePolicy(),  # Default policy
         ]
-
-        self._metric_scores: Dict[str, Optional[float]] = {}
-        self._goals_by_metric: Dict[str, PerformanceGoal] = {}
-        self._rebuild_goal_cache()
-
-    def _rebuild_goal_cache(self) -> None:
-        """Rebuild the goals-by-metric lookup cache."""
-        self._goals_by_metric = {goal.metric_id: goal for goal in self.world.performance_goals if goal.metric_id}
-
-    def update_scores(self) -> None:
-        """
-        Update all metric scores based on current performance goals.
-
-        This should be called once per step before applying policies.
-        """
-        # Rebuild goal cache in case goals changed
-        self._rebuild_goal_cache()
-
-        # Calculate scores for all metrics with goals
-        self._metric_scores.clear()
-        for metric_id, goal in self._goals_by_metric.items():
-            score = self._calculate_score(metric_id, goal)
-            self._metric_scores[metric_id] = score
-
-    def _calculate_score(self, metric_id: str, goal: PerformanceGoal) -> Optional[float]:
-        """
-        Calculate score for a single metric based on its goal.
-        For normalized 0-1 metrics, score = 1.0 when at/below target, decreases as it exceeds.
-        """
-        try:
-            current_value = float(self.world.get_performance_metric(metric_id))
-            target_value = goal.target_value
-
-            if target_value <= 0:
-                return 1.0
-
-            # For normalized metrics (0-1 scale)
-            normalized_value = current_value / target_value
-
-            if goal.direction == GoalDirection.MINIMIZE.value:
-                # Lower normalized values are better
-                if normalized_value <= 1.0:
-                    return 1.0  # Perfect score at/below target
-                else:
-                    # Score decreases as normalized exceeds 1.0
-                    return max(0.0, 2.0 - normalized_value)
-            elif goal.direction == GoalDirection.MAXIMIZE.value:
-                # Higher normalized values are better
-                return min(1.0, normalized_value)  # 1.0 at target, 0.0 at 0
-
-            return None
-
-        except (ValueError, KeyError, AttributeError) as e:
-            logger.warning(f"Failed to calculate score for {metric_id}: {e}")
-            return None
-
-    def score(self, metric_id: str) -> Optional[float]:
-        """
-        Get cached score for a metric.
-
-        Args:
-            metric_id: The metric ID to retrieve score for
-
-        Returns:
-            Cached score from 0.0 (worst) to 1.0 (best), or None if not available
-        """
-        return self._metric_scores.get(metric_id)
-
-    def get_all_scores(self) -> Dict[str, Optional[float]]:
-        """
-        Get all cached metric scores.
-
-        Returns:
-            Dictionary mapping metric IDs to their scores
-        """
-        return self._metric_scores.copy()
 
     def add_policy(self, policy: Policy) -> None:
         """
@@ -302,32 +223,31 @@ class PolicyEngine:
             for p in self._policies
         ]
 
-    def apply_policies(self) -> Dict[str, Any]:
+    def apply_policies(self, evaluation_result: EvaluationResult) -> Dict[str, Any]:
         """
-        Apply all enabled policies and return aggregated effects.
+        Apply all enabled policies using the provided evaluation result.
 
-        Each policy's apply() method is called in registration order.
-        If a policy raises an exception, it's caught and recorded in the effects.
+        Args:
+            evaluation_result: The complete evaluation result for the current step.
 
         Returns:
-            Dictionary of effects from all applied policies, keyed by policy ID
+            Dictionary of effects from all applied policies, keyed by policy ID.
         """
-        # Update all scores before applying policies
-        self.update_scores()
         effects: Dict[str, Any] = {}
 
         for policy in self._policies:
-            # Skip disabled policies
             if not getattr(policy, "enabled", False):
                 continue
 
             try:
-                result = policy.apply(self)
+                # Pass the evaluation_result directly to the policy
+                result = policy.apply(self, evaluation_result)
                 if isinstance(result, dict):
-                    effects.update(result)
+                    # Use policy ID for namespacing effects
+                    effects[policy.id] = result
             except Exception as e:
-                # Record error but continue processing other policies
                 policy_id = getattr(policy, "id", "unknown")
                 effects[policy_id] = {"error": str(e)}
+                logger.error(f"Error applying policy {policy_id}: {e}", exc_info=True)
 
         return effects

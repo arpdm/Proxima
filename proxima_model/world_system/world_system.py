@@ -79,33 +79,11 @@ class WorldSystem(Model):
         self.model_metrics: Dict[str, Any] = {"environment": {"step": 0}}
 
         # Environment dynamics
+        # TODO: Create a class for environment dynamis as they will grow
         self.dust_decay_per_step = float(self.config.get("dust_decay_per_step", 0.0))
 
         # Initialize policy engine (uses evaluation engine internally)
         self.policy = PolicyEngine(self)
-
-    @property
-    def metric_definitions(self) -> list:
-        """Get metric definitions as list (backwards compatibility)."""
-        return self.evaluation_engine.metric_definitions
-
-    @property
-    def performance_goals(self) -> List:
-        """Get performance goals (backwards compatibility)."""
-        return self.evaluation_engine.performance_goals
-
-    @property
-    def performance_metrics(self) -> Dict[str, float]:
-        """Get current performance metrics (backwards compatibility)."""
-        return self.evaluation_engine.performance_metrics
-
-    def get_performance_metric(self, metric_id: str) -> float:
-        """Get the current value of a performance metric."""
-        return self.evaluation_engine.get_performance_metric(metric_id)
-
-    def set_performance_metric(self, metric_id: str, value: float) -> None:
-        """Set the value of a performance metric."""
-        self.evaluation_engine.set_performance_metric(metric_id, value)
 
     def _initialize_sectors(self) -> None:
         """Initialize all sectors dynamically based on configuration."""
@@ -203,7 +181,7 @@ class WorldSystem(Model):
         # Store sector metrics
         self.model_metrics = {"environment": {"step": self.steps}, **sector_metrics}
 
-        # Evaluate metrics using evaluation engine
+        # 1. Evaluate metrics using evaluation engine
         evaluation_result = self.evaluation_engine.evaluate(
             sector_metrics=sector_metrics, dust_decay_per_step=self.dust_decay_per_step
         )
@@ -214,6 +192,5 @@ class WorldSystem(Model):
             "scores": evaluation_result.scores,
         }
 
-        # Update and apply policies
-        self.policy.update_scores()
-        self.policy.apply_policies()
+        # 2. Apply policies using the complete evaluation result
+        self.policy.apply_policies(evaluation_result)

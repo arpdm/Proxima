@@ -76,7 +76,7 @@ class EvaluationEngine:
             pg.metric_id: pg for pg in self.performance_goals if pg.metric_id
         }
 
-        # Initialize performance metrics (current values)
+        # Initialize performance metrics (current values of how well the system is doing)
         self.performance_metrics: Dict[str, float] = {metric_id: 0.0 for metric_id in self._metric_definitions.keys()}
 
         logger.info(
@@ -85,10 +85,9 @@ class EvaluationEngine:
             f"{len(self.performance_goals)} goals"
         )
 
-    @property
-    def metric_definitions(self) -> List[Dict[str, Any]]:
-        """Get metric definitions as list (backwards compatibility)."""
-        return [m.to_dict() for m in self._metric_definitions.values()]
+    def get_goal(self, metric_id: str) -> Optional[PerformanceGoal]:
+        """Get the performance goal for a specific metric."""
+        return self._goals_by_metric.get(metric_id)
 
     def get_performance_metric(self, metric_id: str) -> float:
         """Get the current value of a performance metric."""

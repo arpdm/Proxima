@@ -16,6 +16,8 @@ from proxima_model.tools.data_logger import DataLogger
 from proxima_model.world_system.world_system_defs import get_sector_list, RunnerConfig
 
 
+# ==== CONFIG ====
+
 logging.basicConfig(
 level=logging.WARNING,  # Set default level
 format='%(name)s - %(levelname)s - %(message)s',
@@ -24,16 +26,16 @@ handlers=[
 ])
 
 debug_logger = logging.getLogger(__name__)
+debug_logger.setLevel(logging.INFO)
 
 logging.getLogger('proxima_model.sphere_engine.transportation_sector').setLevel(logging.ERROR)
 logging.getLogger('proxima_model.sphere_engine.science_sector').setLevel(logging.DEBUG)
 logging.getLogger('proxima_model.sphere_engine.manufacturing_sector').setLevel(logging.WARNING)
 logging.getLogger('proxima_model.policy_engine.policy_engine').setLevel(logging.WARNING)
-logging.getLogger('proxima_model.world_system_builder.world_system').setLevel(logging.WARNING)
+logging.getLogger('proxima_model.world_system.world_system').setLevel(logging.WARNING)
 logging.getLogger('proxima_model.sphere_engine.construction_sector').setLevel(logging.DEBUG)
 logging.getLogger('proxima_model.sphere_engine.equipment_manufacturing_sector').setLevel(logging.DEBUG)
-
-# ==== CONFIG ====
+logging.getLogger('proxima_model.sphere_engine.equipment_manufacturing_sector').setLevel(logging.DEBUG)
 
 def parse_args():
     """Parse command-line arguments for runner options."""
@@ -43,6 +45,8 @@ def parse_args():
     parser.add_argument("--mongo-uri", type=str, default=None, help="MongoDB URI (overrides db choice)")
     return parser.parse_args()
     
+# ==== CONFIG END ====
+
 class ProximaRunner:
     """Main simulation runner class for Proxima."""
 
@@ -240,7 +244,7 @@ def main():
 
     try:
         if args.headless:
-            print("Running Proxima in Headless Mode")
+            debug_logger.info("Running Proxima in Headless Mode")
             runner.run(continuous=True)
         else:
             # UI mode: wait for startup commands
@@ -250,7 +254,7 @@ def main():
                         continue
                 time.sleep(1)
     except KeyboardInterrupt:
-        print("\nShutting down...")
+        debug_logger.info("\nShutting down...")
         runner.is_running = False
 
 if __name__ == "__main__":    

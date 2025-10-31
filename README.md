@@ -67,6 +67,16 @@ See `pyproject.toml` for the full list.
 - **Docker**: Containerization for deployment
 - **Poetry**: Python dependency and packaging manager
 
+
+## Source Code Configuration Options Per Added Feature
+
+For each world system feature, make sure following configuration sections are updated.
+
+**proxima_runner.py** : 
+
+1. Logger Config
+2. Command Line Arguments
+
 ---
 
 For more details, see the documentation folder.
