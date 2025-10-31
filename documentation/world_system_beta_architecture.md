@@ -28,7 +28,6 @@ This section defines the simulation’s functional contract—what **Proxima** c
 ### Core Agent Functions
 
 - **Operational modes:** Each agent implements one or more mutually exclusive operational modes (e.g., idle, active, maintenance, fault-handling). At any time, exactly one mode is active; mode transitions follow defined preconditions and safety checks.  
-- **Single-mode execution:** While executing, an agent performs the key function mapped to its current mode. Concurrency within an agent is internal (e.g., monitoring), but external behavior is represented by a single active mode.  
 - **Mode control vs. goals:** Agents are goal-agnostic—they do not store or reason about global world-system goals or priorities. Mode changes are commanded by their sector’s scheduler/policy layer, which interprets goals and translates them into local assignments.  
 - **Task interface:** Agents receive tasks with inputs, required resources, and acceptance criteria; they return status, outputs, and telemetry (including health and consumption metrics).  
 - **Lifetime & health:** Each agent has a lifetime and health state (e.g., age, wear, fault counters). End-of-life or degraded health triggers policy-driven actions (derating, maintenance, swap-out, retirement).  
@@ -39,14 +38,15 @@ This section defines the simulation’s functional contract—what **Proxima** c
 
 - **Parametric goals:** World-system goals are expressed in parametric form (metric, target/bounds, horizon, weight), enabling versioning, comparison, and optimization.  
 - **External updates:** Authorized external actors (human or supervisory policy engine) may inject new goals or modify existing ones at runtime. All changes are timestamped, versioned, and auditable.  
-- **Goal interpretation:** The world system translates global goals into sector-level priority vectors using observed state, constraints, and policy, resolving tradeoffs across sectors.  
-- **Scheduling & assignment:** Each sector applies its prioritization and scheduling policies (e.g., priority-weighted scheduling, earliest-deadline-first, resource-aware dispatch) to allocate tasks and set agent modes to meet goals under constraints (power, comms, spares, health).  
+- **Goal interpretation:** The world system translates global goals into sector-level policies.
+- **Scheduling & assignment:** Each sector applies uses the applied policies to meet the goals to assign concrete tasks to its agents.
 - **Closed-loop adaptation:** Sectors periodically recompute priorities based on goal deviation and performance. Policies may adapt automatically (auto-mode) or be updated manually (manual-mode) with immediate effect.  
 
 ---
 
 ### System Performance Monitoring Against Goals
-*(Content TBD)*
+
+System performance is continuously monitored by the **Evaluation Engine** at each simulation step. The engine aggregates metric contributions from all active sectors to maintain a live state of system-wide performance indicators. These indicators are then compared against predefined **Performance Goals** to calculate a normalized score (0.0 to 1.0) and determine a status (e.g., "within" or "outside" limits). The resulting `EvaluationResult`, containing all metrics, scores, and statuses, provides a comprehensive, data-driven snapshot of goal attainment that informs the `Policy Engine` and other adaptive systems.
 
 ---
 
@@ -56,7 +56,7 @@ This section defines the simulation’s functional contract—what **Proxima** c
 ---
 
 ### Policy Injection
-- Policy engine and prioritization
+*(Content TBD)*
 
 ---
 
@@ -103,15 +103,6 @@ This section defines how the world system progresses through stages using explic
 *(Content TBD)*
 
 
-## World System Beta Functions
-
-The World System Beta is expected to perform the following functions throughout different phases of development, in ways that directly support the objectives defined in the problem background.
-
-- **Energy Production:** The model supports energy production through various means.  
-- **Store Energy:** The model stores energy in batteries for scenarios when energy needs exceed maximum generation capacity.  
-- **ISRU:** The model supports regolith processing and Helium-3 generation, contributing to the economy and growth.  
-- **Science:** The model supports the generation of science output using Lunar Terrain Vehicles (LTVs).
-
 ## World System Goals and Policy Definitions
 
 This section defines the contract between strategy and execution in Proxima. It specifies how high-level goals are declared, governed, and prioritized, and how policies translate those goals into actionable guidance for sectors and agents. Detailed goals, policies and metrics are defined in \([Goals and Policies Spreadsheet Document](https://docs.google.com/spreadsheets/d/1DJ1qMmEId6VD6TH9aABLoQtjdzCsc1FVIo08yIPi0ic/edit?gid=808380489#gid=808380489)).
@@ -153,12 +144,20 @@ Simulation loop controller that builds the config, instantiates World System, ru
 Figure 3 Proxima Model Operation Flow
 
 ## Policy Engine
-Policy Engine is used for managing polcies, activation/deactivating and injecting them to world system spheres.
 
+Extensible policy engine that centralizes scoring and applies operational policies to the simulation world. Manages dynamic throttling and other adaptive behaviors based on world system metrics.
+
+- Policy Protocol: Interface for pluggable policies
+- PolicyEngine: Central manager for policy registration and application
+- Built-in Policies: Pre-configured policies like dust coverage throttling
 
 # Dynamical Architecture
 
-## Dynamics
+This section covers the dynamical aspects of the world system. The dynamics might be world system equations identified as a result of policy flow and system identification, or may be equations used for various world system functional operations.
+
+For each scenario, the dynamics are assessed against Proxima Model equations with hollistic view defined in the [Exploring the Long Future and Survival of Human Civilization](Exploring_the_Long_Future_and_Survival_of_Human_Civilization.pdf)
+
+## Dynamics [TODO - UPDATE]
 
 ### Agent Evolution with Resource Production and Environmental Side-effects
 
