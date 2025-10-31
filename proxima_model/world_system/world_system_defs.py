@@ -20,6 +20,18 @@ from dataclasses import dataclass
 # =============================================================================
 
 
+@dataclass
+class RunnerConfig:
+    """Configuration for the ProximaRunner."""
+
+    local_uri: str = "mongodb://localhost:27017"
+    hosted_uri: str = None
+    host_update_frequency: int = 600
+    default_step_delay: float = 0.1
+    log_flush_interval: int = 1000  # Flush logs every N steps to manage memory
+    experiment = "exp_001"
+
+
 class SimulationConstants:
     """Global simulation constants."""
 
@@ -216,3 +228,8 @@ def get_target_sector_for_module(module_type: ModuleType) -> SectorType:
 def extract_module_type_from_id(module_id: str) -> str:
     """Extract module type string from module_id (e.g., 'comp_science_rover' -> 'science_rover')."""
     return module_id.replace("comp_", "")
+
+
+def get_sector_list() -> list:
+    """Return a list of available sectors as SectorType enum members."""
+    return [s.value for s in SectorType]

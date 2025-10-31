@@ -69,7 +69,7 @@ class WorldSystem(Model):
         goals_cfg = self.config.get("goals", {}) or {}
         performance_goals_data = goals_cfg.get("performance_goals", []) or []
         metric_defs_data = self.config.get("metrics", [])
-        
+
         self.evaluation_engine = EvaluationEngine(
             metric_definitions=metric_defs_data,
             performance_goals=performance_goals_data,
@@ -168,11 +168,11 @@ class WorldSystem(Model):
     def _collect_sector_metrics(self) -> Dict[str, Dict[str, Any]]:
         """Collect metrics from all sectors."""
         sector_metrics = {}
-        
+
         for sector_name, sector in self.sectors.items():
             if hasattr(sector, "get_metrics"):
                 sector_metrics[sector_name] = sector.get_metrics()
-        
+
         return sector_metrics
 
     def step(self) -> None:
@@ -199,25 +199,21 @@ class WorldSystem(Model):
 
         # Collect metrics from all sectors
         sector_metrics = self._collect_sector_metrics()
-        
+
         # Store sector metrics
-        self.model_metrics = {
-            "environment": {"step": self.steps},
-            **sector_metrics
-        }
-        
+        self.model_metrics = {"environment": {"step": self.steps}, **sector_metrics}
+
         # Evaluate metrics using evaluation engine
         evaluation_result = self.evaluation_engine.evaluate(
-            sector_metrics=sector_metrics,
-            dust_decay_per_step=self.dust_decay_per_step
+            sector_metrics=sector_metrics, dust_decay_per_step=self.dust_decay_per_step
         )
-        
+
         # Add performance data to model metrics
         self.model_metrics["performance"] = {
             "metrics": evaluation_result.performance_metrics,
             "scores": evaluation_result.scores,
         }
-        
+
         # Update and apply policies
         self.policy.update_scores()
         self.policy.apply_policies()

@@ -13,6 +13,7 @@ from data_engine.proxima_db_engine import ProximaDB
 from proxima_model.world_system.world_system_builder import build_world_system_config
 from proxima_model.world_system.world_system import WorldSystem
 from proxima_model.tools.data_logger import DataLogger
+from proxima_model.world_system.world_system_defs import get_sector_list, RunnerConfig
 
 
 logging.basicConfig(
@@ -21,6 +22,8 @@ format='%(name)s - %(levelname)s - %(message)s',
 handlers=[
     logging.StreamHandler()  # Output to console
 ])
+
+debug_logger = logging.getLogger(__name__)
 
 logging.getLogger('proxima_model.sphere_engine.transportation_sector').setLevel(logging.ERROR)
 logging.getLogger('proxima_model.sphere_engine.science_sector').setLevel(logging.DEBUG)
@@ -31,15 +34,6 @@ logging.getLogger('proxima_model.sphere_engine.construction_sector').setLevel(lo
 logging.getLogger('proxima_model.sphere_engine.equipment_manufacturing_sector').setLevel(logging.DEBUG)
 
 # ==== CONFIG ====
-@dataclass
-class RunnerConfig:
-    """Configuration for the ProximaRunner."""
-
-    local_uri: str = "mongodb://localhost:27017"
-    hosted_uri: str = None
-    host_update_frequency: int = 600
-    default_step_delay: float = 0.01
-    log_flush_interval: int = 1000  # Flush logs every N steps to manage memory
 
 def parse_args():
     """Parse command-line arguments for runner options."""
@@ -63,7 +57,7 @@ class ProximaRunner:
         self.local_db.db.db.logs_simulation.delete_many({})  # Clear old logs
 
         # Load experiment configuration from DB
-        exp_config = self.local_db.find_by_id("experiments", "exp_001")
+        exp_config = self.local_db.find_by_id("experiments", self.config.experiment)
         self.sim_time = exp_config.get("simulation_time_stapes", None)
         self.ws_id = exp_config["world_system_id"]
         self.exp_id = exp_config["_id"]
@@ -107,7 +101,7 @@ class ProximaRunner:
                 time.sleep(self.step_delay)
 
         except Exception as e:
-            print(f"Simulation error: {e}")
+            debug_logger.error(f"Simulation error: {e}")
             traceback.print_exc()
         finally:
             self._finalize_run()
@@ -158,13 +152,13 @@ class ProximaRunner:
             if command:
                 self._execute_command(command)
         except Exception as e:
-            print(f"Command processing error: {e}")
+            debug_logger.error(f"Command processing error: {e}")
 
     def _execute_command(self, command):
         """Execute a single runtime command."""
 
         action = command.get("action")
-        print(f"Processing: {action}")
+        debug_logger.info(f"Processing: {action}")
 
         command_map = {
             "pause": lambda: setattr(self, "is_paused", True),
@@ -175,7 +169,7 @@ class ProximaRunner:
 
         if action in command_map:
             command_map[action]()
-            print(f"Applied: {action}")
+            debug_logger.info(f"Applied: {action}")
 
     def _update_world_system_state(self, update_hosted=False):
         """Update world system state in MongoDB for UI access and logging."""
@@ -198,12 +192,11 @@ class ProximaRunner:
         }
         
         # Add all available sector metrics
-        for sector_name in ["environment", "energy", "science", "manufacturing", 
-                           "equipment_manufacturing", "transportation", "construction" , "performance"]:
+        for sector_name in get_sector_list():
             if sector_name in self.ws.model_metrics:
                 metrics_to_log[sector_name] = self.ws.model_metrics[sector_name]
             else:
-                print(f"⚠️ Warning: {sector_name} metrics not found, skipping")
+                debug_logger.warning(f"⚠️ Warning: {sector_name} metrics not found, skipping")
 
         # Log to local DB
         self.logger.log(**metrics_to_log)
@@ -224,7 +217,7 @@ class ProximaRunner:
                 return False
 
             action = command.get("action")
-            print(f"Starting: {action}")
+            debug_logger.info(f"Starting: {action}")
 
             if action == "start_continuous":
                 self.run(continuous=True)
@@ -236,7 +229,7 @@ class ProximaRunner:
                 self.sim_time = original_sim_time
             return True
         except Exception as e:
-            print(f"Startup command error: {e}")
+            debug_logger.error(f"Startup command error: {e}")
             return False
 
 def main():

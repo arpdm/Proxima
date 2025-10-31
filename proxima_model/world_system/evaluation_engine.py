@@ -147,22 +147,22 @@ class EvaluationEngine:
     def calculate_score(self, metric_id: str) -> Optional[float]:
         """
         Calculate normalized score for a metric (0.0 to 1.0).
-        
+
         Uses the actual PerformanceGoal attributes (target_value only).
-        
+
         Args:
             metric_id: ID of the metric to score
-        
+
         Returns:
             Score value between 0.0 and 1.0, or None if no goal defined
         """
         goal = self._goals_by_metric.get(metric_id)
         if not goal:
             return None
-        
+
         current = self.get_performance_metric(metric_id)
         target = goal.target_value
-        
+
         # Simple scoring: 1.0 if target achieved, otherwise proportional
         if goal.direction == "minimize":
             if current <= target:
@@ -183,7 +183,7 @@ class EvaluationEngine:
                 if target <= 0:
                     return 0.0
                 return current / target
-            
+
     def determine_metric_status(self, metric_id: str) -> str:
         """
         Determine metric status based on performance goal.
