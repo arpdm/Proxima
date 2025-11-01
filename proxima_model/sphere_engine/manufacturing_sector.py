@@ -462,16 +462,21 @@ class ManufacturingSector:
         Returns:
             dict: A dictionary where keys are metric IDs and values are their contributions.
         """
-        contribution_cfg = self._manufacturing_config[0].get("metric_contribution", {})
-        metric_id = contribution_cfg.get("metric_id")
-        value = float(contribution_cfg.get("value", 0.0))
-
-        # 🔧 UPDATE: Count truly operational robots (not throttled)
-        operational_count = sum(1 for r in self.isru_robots if r.status == ISRUStatus.OPERATIONAL)
 
         metric_map = {}
-        if metric_id:
-            metric_map[metric_id] = operational_count * value
+        contributions_cfg = self._manufacturing_config[0].get("metric_contributions", [])
+    
+        for contrib in contributions_cfg:
+
+            metric_id = contrib.get("metric_id")
+            value = float(contrib.get("contribution_value", 0.0))
+            contribution_type = contrib.get("contribution_type")
+
+            # TODO: Add contribution type as an enum to metrics
+            if metric_id and contribution_type == "predefined":
+                operational_count = sum(1 for r in self.isru_robots if r.status == ISRUStatus.OPERATIONAL)
+                metric_map[metric_id] = operational_count * value
+
         return metric_map
 
     def get_metrics(self) -> Dict:

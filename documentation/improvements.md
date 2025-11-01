@@ -12,14 +12,69 @@
 
 
 
-# Components Refactored
+# Code Refactored
 
-- World System Runner
-- UI
-- Policy Protocol
-- Policy Engine
-- Environmental Policies
+- World System Runner [x]
+- UI Engine
+- Components
+    - assembly_robot.py []
+    - energy_microgrid.py []
+    - fuel_generator.py []
+    - isru.py []
+    - printing_robot.py []
+    - rocket.py []
+    - science_rover.py []
+- event engine
+    - event_bus.py [x]
+- policy engine
+    - metrics.py [x]
+    - policy_protoco.py [x]
+    - policy_engine.py [x]
+    - environment_policies.py [x]
+    - sceince_policies.py []
+- sphere engine
+    - construction_sector.py []
+    - energy_sector.py []
+    - equipment_manufacturing_sector.py []
+    - manufacturing_sector.py []
+    - scince_sector.py []
+    - transportation_sector.py []
+- world system
+    - world_system.py []
+    - world_system_builder.py []
+    - world_system_defs.py []
+    - evaluation_engine.py []
+
 
 # Components Documented
 
-- World System Runner
+- World System Runner [x]
+- UI Engine
+- Components
+    - assembly_robot.py []
+    - energy_microgrid.py []
+    - fuel_generator.py []
+    - isru.py []
+    - printing_robot.py []
+    - rocket.py []
+    - science_rover.py []
+- event engine
+    - event_bus.py [x]
+- policy engine
+    - metrics.py []
+    - policy_protoco.py []
+    - policy_engine.py []
+    - environment_policies.py []
+    - sceince_policies.py []
+- sphere engine
+    - construction_sector.py []
+    - energy_sector.py []
+    - equipment_manufacturing_sector.py []
+    - manufacturing_sector.py []
+    - scince_sector.py []
+    - transportation_sector.py []
+- world system
+    - world_system.py []
+    - world_system_builder.py []
+    - world_system_defs.py []
+    - evaluation_engine.py []

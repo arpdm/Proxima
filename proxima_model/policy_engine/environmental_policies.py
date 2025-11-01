@@ -65,7 +65,7 @@ class DustCoverageThrottlePolicy(Policy):
         if current_dust is None or score_data is None or score_data.get("goal") is None:
             logger.warning(f"⚠️ No dust data or goal available for {self.metric_id}")
             return {"error": f"No data or goal for {self.metric_id}"}
-
+        print(score_data)
         target_dust = score_data["goal"]["target"]
         score = score_data["score"]
 

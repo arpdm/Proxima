@@ -61,7 +61,7 @@ class ComponentConfig:
     subtype: Optional[str] = None
     config: Dict[str, Any] = field(default_factory=dict)
     quantity: int = 1
-    metric_contribution: Optional[Dict[str, Any]] = None
+    metric_contributions: Optional[List[Dict[str, Any]]] = None
 
     def __post_init__(self):
         """Validate component configuration."""
@@ -69,6 +69,7 @@ class ComponentConfig:
             raise ValueError("Quantity must be non-negative")
 
 
+#TODO: Use the Performance Goal From Metrics.py
 @dataclass
 class PerformanceGoal:
     """Configuration for a performance goal."""
@@ -164,20 +165,21 @@ class ComponentBuilder:
             **component.get("config", {}),
         }
 
+        print(component)
+
+        # Pass metric_contributions directly into the constructor.
+        # .get() will return None if the key is not found, which matches the dataclass default.
         config = ComponentConfig(
             template_id=component["template_id"],
             subtype=component.get("subtype", template.get("subtype")),
             config=merged_config,
             quantity=int(component.get("quantity", 1)),
+            metric_contributions=component.get("metric_contributions")
         )
 
-        # Add metric contribution if present
-        if "metric_contribution" in component:
-            mc = component["metric_contribution"]
-            config.metric_contribution = {
-                "metric_id": mc.get("metric_id"),
-                "value": float(mc.get("contribution_value", mc.get("value", 0.0))),
-            }
+        # The post-assignment logic is no longer needed.
+        # if "metric_contributions" in component:
+        #     config.metric_contributions = component["metric_contributions"]
 
         return config
 
@@ -188,7 +190,6 @@ class EnergySectorBuilder(ComponentBuilder):
     def build(self, components: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
         """
         Build energy sector configuration.
-
         Args:
             components: List of energy component instances
 
@@ -250,8 +251,8 @@ class ScienceSectorBuilder(ComponentBuilder):
                 "quantity": merged.quantity,
             }
 
-            if merged.metric_contribution:
-                rover_cfg["metric_contribution"] = merged.metric_contribution
+            if merged.metric_contributions:
+                rover_cfg["metric_contributions"] = merged.metric_contributions
 
             config["science_rovers"].append(rover_cfg)
 
@@ -292,8 +293,8 @@ class ManufacturingSectorBuilder(ComponentBuilder):
                 "quantity": merged.quantity,
             }
 
-            if merged.metric_contribution:
-                robot_cfg["metric_contribution"] = merged.metric_contribution
+            if merged.metric_contributions:  # This should be metric_contributions
+                robot_cfg["metric_contributions"] = merged.metric_contributions
 
             # All ISRU components are now robots
             config["isru_robots"].append(robot_cfg)
@@ -355,8 +356,8 @@ class TransportationSectorBuilder(ComponentBuilder):
             }
 
             # 🔧 ADD: Include metric contribution if present
-            if merged.metric_contribution:
-                base_cfg["metric_contribution"] = merged.metric_contribution
+            if merged.metric_contributions:
+                base_cfg["metric_contributions"] = merged.metric_contributions
 
             comp_type = template.get("type", "").lower()
             if comp_type == ComponentType.ORBITAL_ROCKET.value:

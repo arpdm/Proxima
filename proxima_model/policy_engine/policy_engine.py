@@ -23,6 +23,7 @@ import logging
 from proxima_model.world_system.evaluation_engine import EvaluationResult
 from proxima_model.policy_engine.policy_protocol import Policy
 from proxima_model.policy_engine.environmental_policies import DustCoverageThrottlePolicy
+from proxima_model.policy_engine.science_policies import ScienceProductionRate
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +55,7 @@ class PolicyEngine:
             world: The simulation world object (WorldSystem)
         """
         self.world = world
-        self._policies: List[Policy] = [
-            DustCoverageThrottlePolicy(),  # Default policy
-        ]
+        self._policies: List[Policy] = [DustCoverageThrottlePolicy(), ScienceProductionRate()]
 
     def add_policy(self, policy: Policy) -> None:
         """

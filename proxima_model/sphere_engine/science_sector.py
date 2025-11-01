@@ -139,23 +139,28 @@ class ScienceSector:
 
     def _create_metric_map(self) -> dict:
         """
-        Create a map of metric contributions from operational rovers.
+        Create a map of all metric contributions from the science sector.
+        This includes contributions from operational rovers and direct sector outputs.
         """
         metric_map = {}
 
+        # 1. Calculate contributions based on operational agents from config
         if self.rover_configs:
-            # Get metric_contribution from first rover config (same for all)
-            contribution_cfg = self.rover_configs[0].get("metric_contribution", {})
-            metric_id = contribution_cfg.get("metric_id")
-            value_per_rover = float(contribution_cfg.get("value", 0.0))
+            # Get the list of contributions from the first rover config (assumed to be the same for all)
+            contributions_cfg = self.rover_configs[0].get("metric_contributions", [])
 
-            # Count operational rovers (exclude throttled)
+            # Count rovers that are currently operational (not throttled)
             operational_count = sum(1 for r in self.science_rovers if r.status == RoverStatus.OPERATIONAL)
 
-            if operational_count > 0 and metric_id:
-                metric_map[metric_id] = operational_count * value_per_rover
-            else:
-                metric_map[metric_id] = 0
+            for contrib in contributions_cfg:
+                metric_id = contrib.get("metric_id")
+                value_per_agent = float(contrib.get("contribution_value", 0.0))
+                contribution_type = contrib.get("contribution_type")
+
+                if metric_id and contribution_type == "predefined":
+                    # Calculate total contribution for this metric
+                    total_contribution = operational_count * value_per_agent
+                    metric_map[metric_id] = total_contribution
 
         return metric_map
 
