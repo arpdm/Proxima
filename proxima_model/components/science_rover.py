@@ -29,19 +29,19 @@ class ScienceRover(Agent):
         """
         super().__init__(model)
 
-        config = agent_config.get("config", agent_config)
-        self.config = config
+        self.config = agent_config.get("config", agent_config)
+        self.unique_id = unique_id
 
         # Characteristics
-        self.power_usage_kWh = float(config.get("power_usage_kWh", 0.2))
-        self.science_generation = float(config.get("science_generation", 0.5))
-        self.battery_capacity_kWh = float(config.get("battery_capacity_kWh", 20))
+        self.power_usage_kWh = float(self.config.get("power_usage_kWh", 0.2))
+        self.science_generation = float(self.config.get("science_generation", 0.5))
+        self.battery_capacity_kWh = float(self.config.get("battery_capacity_kWh", 20))
 
         # State variables
-        self.current_battery_kWh = float(config.get("current_battery_kWh", self.battery_capacity_kWh))
-        self.science_buffer = float(config.get("science_buffer", 0.0))
-        self.status = RoverStatus(config.get("status", RoverStatus.IDLE.value))
-        self.location = config.get("location", (0, 0))
+        self.current_battery_kWh = float(self.config.get("current_battery_kWh", self.battery_capacity_kWh))
+        self.science_buffer = float(self.config.get("science_buffer", 0.0))
+        self.status = RoverStatus(self.config.get("status", RoverStatus.IDLE.value))
+        self.location = self.config.get("location", (0, 0))
 
     def step(self, available_energy_kWh: float) -> tuple:
         """
@@ -89,7 +89,7 @@ class ScienceRover(Agent):
             "battery_percentage": round(battery_percentage, 1),
             "battery_capacity_kWh": self.battery_capacity_kWh,
             "science_buffer": round(self.science_buffer, 2),
-            "status": self.status.value,  # Return string value for compatibility
+            "status": self.status.value,
             "is_operational": self.status == RoverStatus.OPERATIONAL,
             "type": "science_rover",
         }
