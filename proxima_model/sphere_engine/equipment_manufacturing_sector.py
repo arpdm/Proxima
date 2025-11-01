@@ -33,7 +33,7 @@ class SectorState(Enum):
     ACTIVE = auto()
     INACTIVE = auto()
 
-
+#TODO: Move to the definitions
 class EquipmentType(Enum):
     """Available equipment types for expansion."""
 
