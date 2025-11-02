@@ -6,6 +6,7 @@ Handles science rovers, research operations, and power management.
 """
 
 from proxima_model.components.science_rover import ScienceRover, RoverStatus
+from proxima_model.world_system.world_system_defs import EventType
 
 import random
 import logging
@@ -34,7 +35,7 @@ class ScienceSector:
         self.throttle_factor = 0.0  # 0.0 = no throttling, 1.0 = always throttled
 
         # Event Subscribtions
-        self.event_bus.subscribe("module_completed", self.handle_module_completed)
+        self.event_bus.subscribe(EventType.MODULE_COMPLETED.value, self.handle_module_completed)
         self._initialize_rovers()
 
     def _initialize_rovers(self):

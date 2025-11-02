@@ -1,9 +1,19 @@
 from mesa import Agent
 from typing import Dict, Optional, Tuple
+from enum import Enum
+from proxima_model.world_system.world_system_defs import EventType
 
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class MissionPhase(Enum):
+    """Enum for the different phases of a rocket mission."""
+
+    OUTBOUND = "outbound"
+    LOADING = "loading"
+    INBOUND = "inbound"
 
 
 class Rocket(Agent):
@@ -30,10 +40,13 @@ class Rocket(Agent):
         self.event_bus = event_bus
         self.config = config
 
-        # Physical characteristics
+        # ===== Configuration =====
+
         self.prop_usage_kg_per_payload_kg = float(config.get("prop_usage_kg_per_payload_kg", 21.4))
         self.carrying_capacity_kg = float(config.get("carrying_capacity_equipment", 22800))
         self.max_speed_km_h = float(config.get("max_speed_km_h", 5300))
+
+        # ===== Configuration =====
 
         # State variables
         self.is_available = True
@@ -74,13 +87,13 @@ class Rocket(Agent):
         This should only be called after confirming resource availability.
         """
         if not self.is_available:
-            return  # Should not happen if logic is correct
+            return
 
         self.is_available = False
         self.mission = {
             "origin": origin,
             "destination": destination,
-            "phase": "outbound",  # Phases: outbound, loading, inbound
+            "phase": MissionPhase.OUTBOUND,
             "outbound_payload": outbound_payload,
             "return_payload": return_payload,
             "eta_steps": one_way_duration,
@@ -105,34 +118,38 @@ class Rocket(Agent):
         if self.mission["eta_steps"] <= 0:
 
             # --- OUTBOUND ARRIVAL ---
-            if self.mission["phase"] == "outbound":
+            if self.mission["phase"] == MissionPhase.OUTBOUND:
+
                 logger.info(f"Rocket arrived at {self.mission['destination']}. Unloading payload.")
                 self.location = self.mission["destination"]
-                self.mission["phase"] = "loading"
+                self.mission["phase"] = MissionPhase.LOADING
                 self.mission["eta_steps"] = self.mission["loading_duration"]
 
                 # Publish event for payload delivery
                 self.event_bus.publish(
-                    "payload_delivered",
+                    EventType.PAYLOAD_DELIVERY.value,
                     to_sector=self.mission["requesting_sector"],
                     payload=self.mission["outbound_payload"],
                 )
 
             # --- LOADING COMPLETE ---
-            elif self.mission["phase"] == "loading":
+            elif self.mission["phase"] == MissionPhase.LOADING:
+
                 logger.info(f"Rocket finished loading at {self.mission['destination']}. Launching return trip.")
                 self.location = "In-Transit (Inbound)"
-                self.mission["phase"] = "inbound"
+                self.mission["phase"] = MissionPhase.INBOUND
                 self.mission["eta_steps"] = self.mission["one_way_duration"]
 
             # --- INBOUND ARRIVAL (Round Trip Complete) ---
-            elif self.mission["phase"] == "inbound":
+            elif self.mission["phase"] == MissionPhase.INBOUND:
+
                 logger.info(f"Rocket has returned to {self.mission['origin']}. Mission complete.")
                 self.location = self.mission["origin"]
                 self.is_available = True
+
                 # Publish event for return payload delivery
                 self.event_bus.publish(
-                    "payload_delivered",
+                    EventType.PAYLOAD_DELIVERY.value,
                     to_sector=self.mission["requesting_sector"],
                     payload=self.mission["return_payload"],
                 )

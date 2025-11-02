@@ -165,8 +165,6 @@ class ComponentBuilder:
             **component.get("config", {}),
         }
 
-        print(component)
-
         # Pass metric_contributions directly into the constructor.
         config = ComponentConfig(
             template_id=component["template_id"],

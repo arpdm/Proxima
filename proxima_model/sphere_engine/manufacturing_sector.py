@@ -22,7 +22,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, List, Tuple, Optional
-from proxima_model.components.isru import ISRUAgent, ISRUMode, ISRUStatus  # 🔧 ADD ISRUStatus
+from proxima_model.components.isru import ISRUAgent, ISRUMode, ISRUStatus
+from proxima_model.world_system.world_system_defs import EventType
 
 import random  # Added for probabilistic throttling
 import threading
@@ -86,7 +87,7 @@ class StockFlow:
     source_component: str
     consumed: Dict[str, float] = field(default_factory=dict)
     generated: Dict[str, float] = field(default_factory=dict)
-    allocated: Dict[str, Tuple[str, float]] = field(default_factory=dict)  # resource -> (recipient_sector, amount)
+    allocated: Dict[str, Tuple[str, float]] = field(default_factory=dict)
 
 
 @dataclass
@@ -180,7 +181,7 @@ class ManufacturingSector:
         self._resource_request_buffer: List[ResourceRequest] = []
 
         # Subscribe to events
-        self.event_bus.subscribe("resource_request", self.handle_resource_request)
+        self.event_bus.subscribe(EventType.RESOURCE_REQUEST.value, self.handle_resource_request)
 
     def _initialize_buffer_targets(self, config: dict) -> Dict[str, BufferTarget]:
         """Initialize buffer targets from configuration."""
@@ -311,7 +312,7 @@ class ManufacturingSector:
 
                     # Publish the allocation event
                     self.event_bus.publish(
-                        "resource_allocated",
+                        EventType.RESOURCE_ALLOCATED.value,
                         recipient_sector=recipient_sector,
                         resource=resource,
                         amount=amount,

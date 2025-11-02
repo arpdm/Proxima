@@ -16,6 +16,34 @@ from dataclasses import dataclass
 
 
 # =============================================================================
+# EVENT BUS EVENT TYPES
+# =============================================================================
+
+
+class EventType(Enum):
+    """Standard event types published on the event bus."""
+
+    # Construction events
+    CONSTRUCTION_REQUEST = "construction_request"
+    MODULE_COMPLETED = "module_completed"
+    SHELL_PRODUCED = "shell_produced"
+
+    # Equipment events
+    EQUIPMENT_REQUEST = "equipment_request"
+    EQUIPMENT_ALLOCATED = "equipment_allocated"
+    EQUIPMENT_DELIVERY_CONFIRMED = "equipment_delivery_confirmed"
+
+    # Payload/Transportation events
+    PAYLOAD_DELIVERY = "payload_delivered"
+    PAYLOAD_REQUEST = "payload_request"
+    TRANSPORT_REQUEST = "transport_request"
+
+    # Manufacturing
+    RESOURCE_REQUEST = "resource_request"
+    RESOURCE_ALLOCATED = "resource_allocated"
+
+
+# =============================================================================
 # SIMULATION CONSTANTS
 # =============================================================================
 
@@ -27,11 +55,12 @@ class RunnerConfig:
     local_uri: str = "mongodb://localhost:27017"
     hosted_uri: str = None
     host_update_frequency: int = 600
-    default_step_delay: float = 0.1
+    default_step_delay: float = 0.01
     log_flush_interval: int = 1000  # Flush logs every N steps to manage memory
     experiment = "exp_001"
 
 
+# ===========================
 class SimulationConstants:
     """Global simulation constants."""
 
@@ -144,35 +173,6 @@ MODULE_TYPE_TO_SECTOR_MAP: Dict[ModuleType, SectorType] = {
     ModuleType.PRINTING_ROBOT: SectorType.CONSTRUCTION,
     ModuleType.ASSEMBLY_ROBOT: SectorType.CONSTRUCTION,
 }
-
-
-# =============================================================================
-# EVENT BUS EVENT TYPES
-# =============================================================================
-
-
-class EventType(Enum):
-    """Standard event types published on the event bus."""
-
-    # Construction events
-    CONSTRUCTION_REQUEST = "construction_request"
-    MODULE_COMPLETED = "module_completed"
-    SHELL_PRODUCED = "shell_produced"
-
-    # Equipment events
-    EQUIPMENT_REQUEST = "equipment_request"
-    EQUIPMENT_ALLOCATED = "equipment_allocated"
-    EQUIPMENT_DELIVERY_CONFIRMED = "equipment_delivery_confirmed"
-
-    # Payload/Transportation events
-    PAYLOAD_DELIVERY = "payload_delivered"
-    PAYLOAD_REQUEST = "payload_request"
-    TRANSPORT_REQUEST = "transport_request"
-
-    # Manufacturing
-    RESOURCE_REQUEST = "resource_request"
-    RESOURCE_ALLOCATED = "resource_allocated"
-
 
 # =============================================================================
 # METRIC DEFINITIONS

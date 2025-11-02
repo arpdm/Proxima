@@ -9,6 +9,7 @@ from enum import Enum, auto
 from typing import List, Dict, Optional, Any
 from proxima_model.components.printing_robot import PrintingRobot, PrintingRobotMode
 from proxima_model.components.assembly_robot import AssemblyRobot, AssemblyRobotMode
+from proxima_model.world_system.world_system_defs import EventType
 
 import logging
 
@@ -113,8 +114,8 @@ class ConstructionSector:
                 self.assembly_robots.append(AssemblyRobot(self.model, robot_config))
 
         # Subscribe to events
-        self.event_bus.subscribe("construction_request", self.handle_construction_request)
-        self.event_bus.subscribe("equipment_allocated", self.handle_equipment_allocation)
+        self.event_bus.subscribe(EventType.CONSTRUCTION_REQUEST.value, self.handle_construction_request)
+        self.event_bus.subscribe(EventType.EQUIPMENT_ALLOCATED.value, self.handle_equipment_allocation)
 
         # Metrics
         self.modules_completed_this_step = 0
@@ -195,9 +196,13 @@ class ConstructionSector:
 
             if not request.equipment_requested:
                 # Request missing equipment from equipment manufacturing
+                # TODO: Make requesting sector dynamic
                 for eq, qty_needed in missing_equipment.items():
                     self.event_bus.publish(
-                        "equipment_request", requesting_sector="construction", equipment_type=eq, quantity=qty_needed
+                        EventType.EQUIPMENT_REQUEST.value,
+                        requesting_sector="construction",
+                        equipment_type=eq,
+                        quantity=qty_needed,
                     )
                 request.equipment_requested = True
 
@@ -263,7 +268,7 @@ class ConstructionSector:
 
             # Notify sphere
             self.event_bus.publish(
-                "module_completed",
+                EventType.MODULE_COMPLETED.value,
                 requesting_sphere=request.requesting_sphere,
                 module_id=request.module_id,
             )

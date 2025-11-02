@@ -1,3 +1,11 @@
+"""
+Science Rover Component
+
+Configuration:
+1. For any config parameter changed for science rover, must be aligned with __init__ function
+2. For any new data to report, add to report function
+"""
+
 from mesa import Agent
 from enum import Enum
 
@@ -32,7 +40,7 @@ class ScienceRover(Agent):
         self.config = agent_config.get("config", agent_config)
         self.unique_id = unique_id
 
-        # Characteristics
+        # Configuration Parameters
         self.power_usage_kWh = float(self.config.get("power_usage_kWh", 0.2))
         self.science_generation = float(self.config.get("science_generation", 0.5))
         self.battery_capacity_kWh = float(self.config.get("battery_capacity_kWh", 20))
@@ -41,7 +49,6 @@ class ScienceRover(Agent):
         self.current_battery_kWh = float(self.config.get("current_battery_kWh", self.battery_capacity_kWh))
         self.science_buffer = float(self.config.get("science_buffer", 0.0))
         self.status = RoverStatus(self.config.get("status", RoverStatus.IDLE.value))
-        self.location = self.config.get("location", (0, 0))
 
     def step(self, available_energy_kWh: float) -> tuple:
         """

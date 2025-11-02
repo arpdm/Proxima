@@ -36,7 +36,6 @@ class PrintingRobot(Agent):
         # State
         self.mode = PrintingRobotMode.IDLE
         self.processing_steps_remaining = 0
-        self.current_job = None
 
         # Metrics
         self.shells_produced = 0
@@ -56,7 +55,6 @@ class PrintingRobot(Agent):
 
         self.mode = PrintingRobotMode.PRINTING
         self.processing_steps_remaining = self.processing_time_steps
-        self.current_job = shell_type
 
         logger.debug(f"Printing robot {self.unique_id} started printing {shell_type}")
         return True
@@ -79,13 +77,12 @@ class PrintingRobot(Agent):
 
             if self.processing_steps_remaining <= 0:
                 # Production complete
-                result["shell_produced"] = self.current_job
+                result["shell_produced"] = 1
                 result["regolith_consumed"] = self.regolith_usage_kg
                 self.shells_produced += 1
 
                 # Reset to idle
                 self.mode = PrintingRobotMode.IDLE
-                self.current_job = None
                 self.processing_steps_remaining = 0
 
                 logger.debug(f"Printing robot {self.unique_id} completed shell production")

@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Dict
 from collections import deque
+from proxima_model.world_system.world_system_defs import EventType
 
 import logging
 
@@ -46,6 +47,7 @@ class EquipmentType(Enum):
     ROCKET = "Rocket_EQ"
 
 
+# TODO: Not using equipment config - Need to use this
 @dataclass
 class EquipmentConfig:
     """Configuration for equipment minimum levels."""
@@ -111,6 +113,7 @@ class EquipmentManSector:
     """Manages equipment manufacturing, storage, and resupply processes."""
 
     # Default minimum levels for equipment
+    # TODO: Need to do something about this
     DEFAULT_MINIMUMS = {
         EquipmentType.ASSEMBLY_ROBOT.value: 1,
         EquipmentType.PRINTING_ROBOT.value: 1,
@@ -143,10 +146,10 @@ class EquipmentManSector:
         self._minimum_levels = {**self.DEFAULT_MINIMUMS, **config.get("minimum_levels", {})}
 
         # Subscribe to events
-        self.event_bus.subscribe("payload_delivered", self.handle_payload_delivery)
+        self.event_bus.subscribe(EventType.PAYLOAD_DELIVERY.value, self.handle_payload_delivery)
 
         # Subscribe to equipment requests from other sectors
-        self.event_bus.subscribe("equipment_request", self.handle_equipment_request)
+        self.event_bus.subscribe(EventType.EQUIPMENT_REQUEST.value, self.handle_equipment_request)
 
     @property
     def equipment(self) -> Dict[str, float]:
@@ -216,7 +219,7 @@ class EquipmentManSector:
 
         if available >= quantity:
             self.event_bus.publish(
-                "equipment_allocated",
+                EventType.EQUIPMENT_ALLOCATED.value,
                 recipient_sector=requesting_sector,
                 equipment_type=equipment_type,
                 quantity=quantity,
@@ -250,7 +253,7 @@ class EquipmentManSector:
         if payload_to_request:
             logger.info(f"EquipmentManSector requesting transport for: {payload_to_request}")
             self.event_bus.publish(
-                "transport_request",
+                EventType.TRANSPORT_REQUEST.value,
                 requesting_sector="equipment_manufacturing",
                 payload=payload_to_request,
                 origin="Moon",  # TODO: Get from Environment Configuration

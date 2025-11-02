@@ -9,6 +9,7 @@ from enum import Enum, auto
 from typing import List, Dict, Optional, Any
 from proxima_model.components.rocket import Rocket
 from proxima_model.components.fuel_generator import FuelGenerator
+from proxima_model.world_system.world_system_defs import EventType
 
 import logging
 
@@ -120,8 +121,8 @@ class TransportationSector:
                 self.fuel_generators.append(FuelGenerator(fuel_gen_config))
 
         # Subscribe to events
-        self.event_bus.subscribe("transport_request", self.handle_transport_request)
-        self.event_bus.subscribe("resource_allocated", self.handle_resource_allocation)
+        self.event_bus.subscribe(EventType.TRANSPORT_REQUEST.value, self.handle_transport_request)
+        self.event_bus.subscribe(EventType.RESOURCE_ALLOCATED.value, self.handle_resource_allocation)
 
         # Initialize launch counter for metrics
         self.launches_this_step = 0
@@ -184,7 +185,7 @@ class TransportationSector:
             and self._stocks.rocket_fuel_kg < self._config.minimum_fuel_k_sp
         ):
             self.event_bus.publish(
-                "resource_request",
+                EventType.RESOURCE_REQUEST.value,
                 requesting_sector="transportation",
                 resource="He3_kg",
                 amount=self._config.he3_request_threshold_kg,
