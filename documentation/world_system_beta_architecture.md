@@ -143,13 +143,27 @@ Simulation loop controller that builds the config, instantiates World System, ru
 
 Figure 3 Proxima Model Operation Flow
 
+## Evaluation Engine
+Provides centralized metric evaluation, scoring, and performance tracking. Decoupled from WorldSystem for better separation of concerns.
+
+
+## Sectors
+
+### Construction Sector
+
+**Agents**
+
+1. **Assembly Robot :** Handles assembly of world system modules from structural shells and equipment
+2. **Printing Robot :**
+
+
 ## Policy Engine
 
 Extensible policy engine that centralizes scoring and applies operational policies to the simulation world. Manages dynamic throttling and other adaptive behaviors based on world system metrics.
 
-- Policy Protocol: Interface for pluggable policies
-- PolicyEngine: Central manager for policy registration and application
-- Built-in Policies: Pre-configured policies like dust coverage throttling
+- **Policy Protocol:** Interface for pluggable policies
+- **PolicyEngine:** Central manager for policy registration and application
+- **Built-in Policies:** Pre-configured policies like dust coverage throttling
 
 # Dynamical Architecture
 

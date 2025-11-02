@@ -9,57 +9,65 @@
 7. Document equations for manufacturing, and fuel generation sectors []
 8. Make the policy configurations parameteric in the database []
 9. Add policy description for Industrial Dust Coverage []
+10. Pull energy_microgrid code to energy sector []
+11. Use the config classes in energy_microgrid Code []
+12. Document Fuel Generator Equations []
+13. Document ISRU Equations []
+14. Document Instructions on updating  or creating new components []
+15. Use ENUMS for Event Engine Events
+16. Document Rocket Equeations
+17. For equipment manufacturing sector find a way to add more sophisticated policy for prioritizing orders
 
 
 
 # Code Refactored
 
-- World System Runner [x]
+- World System Runner [X]
 - UI Engine
 - Components
-    - assembly_robot.py []
-    - energy_microgrid.py []
-    - fuel_generator.py []
+    - assembly_robot.py [X]
+    - energy_microgrid.py [X]
+    - fuel_generator.py [X]
     - isru.py []
-    - printing_robot.py []
-    - rocket.py []
-    - science_rover.py []
+    - printing_robot.py [X]
+    - rocket.py [X]
+    - science_rover.py [X]
 - event engine
     - event_bus.py [x]
 - policy engine
-    - metrics.py [x]
-    - policy_protoco.py [x]
-    - policy_engine.py [x]
-    - environment_policies.py [x]
+    - metrics.py []
+    - policy_protocol.py []
+    - policy_engine.py []
+    - environment_policies.py []
     - sceince_policies.py []
 - sphere engine
-    - construction_sector.py []
-    - energy_sector.py []
-    - equipment_manufacturing_sector.py []
+    - construction_sector.py [X]
+    - energy_sector.py [X]
+    - equipment_manufacturing_sector.py [X]
     - manufacturing_sector.py []
-    - scince_sector.py []
-    - transportation_sector.py []
+    - scince_sector.py [X]
+    - transportation_sector.py [X]
 - world system
     - world_system.py []
     - world_system_builder.py []
     - world_system_defs.py []
-    - evaluation_engine.py []
+    - evaluation_engine.py [X]
 
 
 # Components Documented
 
-- World System Runner [x]
+- World System Runner [X]
 - UI Engine
 - Components
-    - assembly_robot.py []
-    - energy_microgrid.py []
-    - fuel_generator.py []
+    - assembly_robot.py [X]
+    - energy_microgrid.py [X]
+    - fuel_generator.py [X]
     - isru.py []
-    - printing_robot.py []
-    - rocket.py []
-    - science_rover.py []
+    - printing_robot.py [X]
+    - rocket.py [X]
+    - science_rover.py [X]
 - event engine
-    - event_bus.py [x]
+    - event_bus.py [X]
 - policy engine
     - metrics.py []
     - policy_protoco.py []
@@ -67,14 +75,14 @@
     - environment_policies.py []
     - sceince_policies.py []
 - sphere engine
-    - construction_sector.py []
-    - energy_sector.py []
-    - equipment_manufacturing_sector.py []
+    - construction_sector.py [X]
+    - energy_sector.py [X]
+    - equipment_manufacturing_sector.py [X]
     - manufacturing_sector.py []
-    - scince_sector.py []
-    - transportation_sector.py []
+    - scince_sector.py [X]
+    - transportation_sector.py [X]
 - world system
     - world_system.py []
     - world_system_builder.py []
     - world_system_defs.py []
-    - evaluation_engine.py []
+    - evaluation_engine.py [X]

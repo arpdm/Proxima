@@ -465,7 +465,7 @@ class ManufacturingSector:
 
         metric_map = {}
         contributions_cfg = self._manufacturing_config[0].get("metric_contributions", [])
-    
+
         for contrib in contributions_cfg:
 
             metric_id = contrib.get("metric_id")
@@ -487,7 +487,7 @@ class ManufacturingSector:
                 "power_demand": self.get_power_demand(),
                 "power_consumed": self._current_metrics.power_consumed,
                 "active_operations": self._current_metrics.active_operations,
-                "operational_robots": self._current_metrics.operational_robots,  # Updated field
+                "operational_robots": self._current_metrics.operational_robots,
                 "sector_state": self.sector_state.name,
                 **{f"stock_{k}": v for k, v in self.stocks.items()},
                 "metric_contributions": self._create_metric_map(),

@@ -139,7 +139,7 @@ class ISRUAgent(Agent):
 
         # Check if we have enough power to operate
         if allocated_power < power_needed:
-            self.status = ISRUStatus.INACTIVE  # 🔧 SET STATUS
+            self.status = ISRUStatus.INACTIVE
             return {}, {}, 0.0
 
         # Route to appropriate operation method based on mode
@@ -148,13 +148,12 @@ class ISRUAgent(Agent):
         elif self.operational_mode == ISRUMode.HE3_GENERATION:
             result = self._perform_he3_generation()
         elif self.operational_mode == ISRUMode.INACTIVE:
-            self.status = ISRUStatus.INACTIVE  # 🔧 SET STATUS
+            self.status = ISRUStatus.INACTIVE
             return {}, {}, 0.0
         else:
-            self.status = ISRUStatus.INACTIVE  # 🔧 SET STATUS
+            self.status = ISRUStatus.INACTIVE
             return {}, {}, 0.0
 
-        # 🔧 SET STATUS: If we got here, operation was successful
         self.status = ISRUStatus.OPERATIONAL
         return result
 
