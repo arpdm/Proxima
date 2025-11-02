@@ -103,6 +103,7 @@ class Rocket(Agent):
 
         # Check for phase completion
         if self.mission["eta_steps"] <= 0:
+            
             # --- OUTBOUND ARRIVAL ---
             if self.mission["phase"] == "outbound":
                 logger.info(f"Rocket arrived at {self.mission['destination']}. Unloading payload.")
