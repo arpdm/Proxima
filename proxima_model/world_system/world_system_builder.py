@@ -69,7 +69,7 @@ class ComponentConfig:
             raise ValueError("Quantity must be non-negative")
 
 
-#TODO: Use the Performance Goal From Metrics.py
+# TODO: Use the Performance Goal From Metrics.py
 @dataclass
 class PerformanceGoal:
     """Configuration for a performance goal."""
@@ -168,18 +168,13 @@ class ComponentBuilder:
         print(component)
 
         # Pass metric_contributions directly into the constructor.
-        # .get() will return None if the key is not found, which matches the dataclass default.
         config = ComponentConfig(
             template_id=component["template_id"],
             subtype=component.get("subtype", template.get("subtype")),
             config=merged_config,
             quantity=int(component.get("quantity", 1)),
-            metric_contributions=component.get("metric_contributions")
+            metric_contributions=component.get("metric_contributions"),
         )
-
-        # The post-assignment logic is no longer needed.
-        # if "metric_contributions" in component:
-        #     config.metric_contributions = component["metric_contributions"]
 
         return config
 

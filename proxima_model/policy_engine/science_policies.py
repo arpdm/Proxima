@@ -43,24 +43,10 @@ class ScienceProductionRate(Policy):
         Reads the evaluation for the science growth metric and logs it.
         This policy is passive and doesn't apply throttling or other effects.
         """
-        print("Science Policies")
-        # score_data = evaluation_result.scores.get(self.metric_id)
 
-        # if not score_data:
-        #     msg = f"No score data available for metric '{self.metric_id}'"
-        #     logger.warning(f"⚠️ {msg}")
-        #     return {"error": msg}
+        self.metric_id = None
 
-        # current_value = score_data.get("current")
-        # score = score_data.get("score")
-        # goal = score_data.get("goal")
-
-        # logger.info(
-        #     f"📈 SCIENCE GROWTH POLICY: Metric='{self.metric_id}', "
-        #     f"Current Value={current_value:.2f}, Score={score:.3f}, Goal={goal}"
-        # )
-
-        # # This policy is for monitoring, so it returns the observed data without applying effects.
+        # This policy is for monitoring, so it returns the observed data without applying effects.
         effects = {
             "metric_id": self.metric_id,
             "score": 0,

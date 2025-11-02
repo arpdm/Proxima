@@ -1,4 +1,4 @@
-### Science Sector
+# Science Sector
 
 **Purpose:** The `ScienceSector` orchestrates all scientific research activities within the simulation. Its primary function is to manage a fleet of `ScienceRover` agents to generate a cumulative science score, which can unlock new technologies or fulfill mission objectives.
 
@@ -21,3 +21,27 @@
     *   **`IND-DUST-COV`**: The number of *operational* rovers contributes to the overall dust coverage, simulating the environmental impact of their activity.
 *   **Policy Interface:** The `set_throttle_factor` method serves as a direct interface for the `PolicyEngine`. Policies can call this method to increase or decrease the sector's operational tempo in response to system-wide conditions.
 *   **Dynamic Growth:** The sector listens for `module_completed` events on the event bus, allowing it to dynamically add new rovers to its fleet as they are constructed by other sectors.
+
+
+## Science Sector Dynamics
+
+### Science Metric as Technology Unlock Driver
+
+
+```math
+S_t = S_{t-1} + \eta_{\mathrm{SCI}} \cdot r_{\mathrm{SCI}}(t) - \delta_{\mathrm{SCI}} \, S_{t-1}
+```
+
+Unlock condition:
+
+```math
+S_t \geq S_{\mathrm{fusion}} \quad \Rightarrow \quad \text{Fusion technology unlocked}
+```
+
+**Explanation:**  
+- $S_t$: cumulative science score.  
+- $\eta_{\mathrm{SCI}}$: science efficiency per rover-hour/mission.  
+- $r_{\mathrm{SCI}}(t)$: science rate at time \(t\).  
+- $\delta_{\mathrm{SCI}}$: knowledge decay rate.  
+- Crossing $S_{\mathrm{fusion}}$ unlocks helium-3 fusion tech.
+

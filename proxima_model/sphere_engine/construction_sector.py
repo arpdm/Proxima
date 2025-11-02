@@ -57,6 +57,7 @@ class ConstructionConfig:
 @dataclass
 class ConstructionStocks:
     """Internal resource stocks for construction sector."""
+
     shells: int = 0
 
 

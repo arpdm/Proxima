@@ -146,17 +146,6 @@ Figure 3 Proxima Model Operation Flow
 ## Evaluation Engine
 Provides centralized metric evaluation, scoring, and performance tracking. Decoupled from WorldSystem for better separation of concerns.
 
-
-## Sectors
-
-### Construction Sector
-
-**Agents**
-
-1. **Assembly Robot :** Handles assembly of world system modules from structural shells and equipment
-2. **Printing Robot :**
-
-
 ## Policy Engine
 
 Extensible policy engine that centralizes scoring and applies operational policies to the simulation world. Manages dynamic throttling and other adaptive behaviors based on world system metrics.
@@ -165,131 +154,40 @@ Extensible policy engine that centralizes scoring and applies operational polici
 - **PolicyEngine:** Central manager for policy registration and application
 - **Built-in Policies:** Pre-configured policies like dust coverage throttling
 
+## Sectors
+
+For creating a new sector, refer to [World System](./sectors/world_system.md) documentation.
+
+| Sector                        | Documentation Link                                                      |
+| ----------------------------- | ----------------------------------------------------------------------- |
+| Construction Sector           | [View Documentation](./sectors/construction_sector.md)                  |
+| Energy Sector                 | [View Documentation](./sectors/energy_sector.md)                        |
+| Equipment Manufacturing Sector| [View Documentation](./sectors/equipment_manufacturing_sector.md)       |
+| Manufacturing Sector          | [View Documentation](./sectors/manufacturing_sector.md)                 |
+| Science Sector                | [View Documentation](./sectors/science_sector.md)                       |
+| Transportation Sector         | [View Documentation](./sectors/transportation_sector.md)                |
+
+
 # Dynamical Architecture
 
 This section covers the dynamical aspects of the world system. The dynamics might be world system equations identified as a result of policy flow and system identification, or may be equations used for various world system functional operations.
 
 For each scenario, the dynamics are assessed against Proxima Model equations with hollistic view defined in the [Exploring the Long Future and Survival of Human Civilization](Exploring_the_Long_Future_and_Survival_of_Human_Civilization.pdf)
 
-## Dynamics [TODO - UPDATE]
+## Dynamics 
 
-### Agent Evolution with Resource Production and Environmental Side-effects
-
-**ICE Extraction Agents**
-
-```math
-X^{(\mathrm{ICE})}_t = A_{\mathrm{ICE}} \, X^{(\mathrm{ICE})}_{t-1} + B_{\mathrm{ICE}} \, P^{(\mathrm{ICE})}_t + C_{\mathrm{ICE}} \, E^{(\mathrm{ICE})}_t
-```
-
-Where:
-
-```math
-X^{(\mathrm{ICE})}_t =
-\begin{bmatrix}
-H_2 \\
-O_2 \\
-E_{\text{dust}} \\
-E_{\text{surface}}
-\end{bmatrix}
-```
-
-**Explanation:**  
-- Models **state update** for ICE extraction agents mining lunar ice for hydrogen and oxygen.  
-- $A_{\mathrm{ICE}}$: persistence/decay from previous timestep.  
-- $B_{\mathrm{ICE}}$: effect of **policies** (extraction rate, dust suppression, energy allocation).  
-- $C_{\mathrm{ICE}}$: effect of **external events** (equipment failure, impacts).  
-- Tracks both **outputs** (H₂, O₂) and **side-effects** (dust, surface degradation).
-
----
-
-**Regolith Extraction Agents**
-
-```math
-X^{(\mathrm{REG})}_t = A_{\mathrm{REG}} \, X^{(\mathrm{REG})}_{t-1} + B_{\mathrm{REG}} \, P^{(\mathrm{REG})}_t + C_{\mathrm{REG}} \, E^{(\mathrm{REG})}_t
-```
-
-Where:
-
-```math
-X^{(\mathrm{REG})}_t =
-\begin{bmatrix}
-\mathrm{He}_3 \\
-\mathrm{Metal} \\
-E_{\text{dust}} \\
-E_{\text{surface}}
-\end{bmatrix}
-```
-
-**Explanation:**  
-- Similar to ICE extraction but for **regolith mining** (producing helium-3 and metals).  
-- Includes same **environmental impact tracking** variables for aggregation.
-
----
-
-### Science Metric as Technology Unlock Driver
-
-```math
-S_t = S_{t-1} + \eta_{\mathrm{SCI}} \cdot r_{\mathrm{SCI}}(t) - \delta_{\mathrm{SCI}} \, S_{t-1}
-```
-
-Unlock condition:
-
-```math
-S_t \geq S_{\mathrm{fusion}} \quad \Rightarrow \quad \text{Fusion technology unlocked}
-```
-
-**Explanation:**  
-- $S_t$: cumulative science score.  
-- $\eta_{\mathrm{SCI}}$: science efficiency per rover-hour/mission.  
-- $r_{\mathrm{SCI}}(t)$: science rate at time \(t\).  
-- $\delta_{\mathrm{SCI}}$: knowledge decay rate.  
-- Crossing $S_{\mathrm{fusion}}$ unlocks helium-3 fusion tech.
-
----
-
-### World System State Aggregation
-
-```math
-X^{(\mathrm{WSB})}_t = \omega_{\mathrm{ICE}} \, X^{(\mathrm{ICE})}_t + \omega_{\mathrm{REG}} \, X^{(\mathrm{REG})}_t + \omega_{\mathrm{SCI}} \, S_t
-```
-
-Extension of the manuscript’s:
-
-```math
-X^{(\mathrm{WS})}_t = \sum_{i=1}^N \omega_i \, X^{(i)}_t
-```
-
-**Explanation:**  
-- Aggregates ICE, REG, and SCI states into one composite lunar system state.  
-- Weights $\omega$ represent subsystem importance.
-
----
-
-### Environmental Impact – Lunar Specialization
-
-```math
-E^{(\mathrm{Lunar})}_t = \gamma_1 E^{(\mathrm{Lunar})}_{t-1} + \gamma_2 \left( E_{\text{dust}} + E_{\text{surface}} \right) + \gamma_3 N_t - \gamma_4 P_{\mathrm{mitigation},t}
-```
-
-**Explanation:**  
-- $E^{(\mathrm{Lunar})}_t$: total environmental impact index.  
-- $\gamma_1$: persistence of previous damage.  
-- $\gamma_2$: impact of dust and surface degradation.  
-- $\gamma_3 N_t$: effect of number of active agents/missions.  
-- $\gamma_4 P_{\mathrm{mitigation},t}$: mitigation policy effects.
-
-
+TBD - Needs to be added
 
 # Policies
 
 The simulation includes an adaptive **Policy Engine** that applies operational policies based on real-time system performance. These policies can dynamically adjust sector parameters to mitigate risks or optimize for specific goals.
 
-| Policy Category          | Documentation Link                               |
-| ------------------------ | ------------------------------------------------ |
+| Policy Category          | Documentation Link                                         |
+| ------------------------ | -------------------------------------------------------    |
 | Environmental Policies   | [View Environmental Policies](./environmental_policies.md) |
-| Science Policies         | [View Science Policies](./science_policies.md)         |
-| Manufacturing Policies   | |
-| Economic Policies        |      |
+| Science Policies         | [View Science Policies](./policies/science_policies.md)    |
+| Manufacturing Policies   |                                                            |
+| Economic Policies        |                                                            |
 
 # Proxima Capabilities
 
@@ -314,7 +212,7 @@ With each phase/component, the world system will have:
 11. Perform sensitivity analysis
 12. Apply adaptive policy control and re-enforcement learning.
 
-**Phase Goals**
+
 
 | Phase  | Goal | Status |
 | ------ | ---- | ------ |
