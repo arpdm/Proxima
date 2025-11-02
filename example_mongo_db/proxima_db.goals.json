@@ -1,0 +1,21 @@
+[{
+  "_id": "WS-PG-003",
+  "name": "Preserve Lunar Environment",
+  "type": "performance_goal",
+  "goal_type": "static_target",
+  "metric_id": "IND-DUST-COV",
+  "target_value": 0.75,
+  "direction": "minimize",
+  "weight": 0.05
+},
+{
+  "_id": "WS-PG-001",
+  "name": "Increase Science Production Rate",
+  "type": "performance_goal",
+  "metric_id": "SCI-PROD-RATE",
+  "direction": "maximize",
+  "goal_type": "growth_rate",
+  "growth_factor": 2,
+  "time_period": 120,
+  "weight": 0.8
+}]

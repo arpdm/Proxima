@@ -1,0 +1,27 @@
+[{
+  "_id": "env_moon",
+  "name": "Moon",
+  "gravity": 1.62,
+  "resources": [
+    {
+      "resource": "helium3",
+      "density_ppb": [
+        4,
+        26
+      ],
+      "total_reserve_kg": 1100000000
+    }
+  ],
+  "day_hours": 336,
+  "night_hours": 336,
+  "dust_decay_per_step": 0.01,
+  "metrics": [
+    {
+      "id": "IND-DUST-COV",
+      "name": "Dust Coverage Index",
+      "type": "negative",
+      "unit": "index_0_1",
+      "notes": "Penalizes solar efficiency and optics health as well as visibility."
+    }
+  ]
+}]
