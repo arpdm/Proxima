@@ -1,7 +1,6 @@
 """
 Assembly Robot Component
-
-Handles assembly of lunar base modules from structural shells.
+Handles assembly of world system modules from structural shells and equipment
 """
 
 from mesa import Agent
