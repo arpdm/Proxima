@@ -28,9 +28,9 @@ logger = logging.getLogger(__name__)
 class EvaluationResult:
     """Result of metric evaluation for a simulation step."""
 
-    performance_metrics: Dict[str, float]
-    scores: Dict[str, Dict[str, Any]]
-    aggregated_contributions: Dict[str, float]
+    performance_metrics: Dict[str, float]  # Current System Performance Values
+    scores: Dict[str, Dict[str, Any]]  # Scored System Performance
+    aggregated_contributions: Dict[str, float]  # Aggregated System Metric Contributions
 
 
 class EvaluationEngine:
