@@ -24,12 +24,12 @@ class AssemblyRobot(Agent):
 
     def __init__(self, model, config: dict):
         super().__init__(model)
-        self.config = config
+        self.config = config.get("config")
 
         # Characteristics
-        self.max_power_usage_kWh = float(config.get("max_power_usage_kWh", 50.0))
-        self.efficiency = float(config.get("efficiency", 0.9))
-        self.assembly_time_steps = int(config.get("assembly_time_t", 60))
+        self.max_power_usage_kWh = float(self.config.get("max_power_usage_kWh", 40.0))
+        self.efficiency = float(self.config.get("efficiency", 0.9))
+        self.assembly_time_steps = int(self.config.get("assembly_time_t", 60))
 
         # State
         self.mode = AssemblyRobotMode.IDLE

@@ -79,6 +79,7 @@ class ConstructionSector:
     def __init__(self, model, config: Dict[str, Any], event_bus):
         self.model = model
         self.event_bus = event_bus
+        self.power_demand_step = 0
 
         # Load configuration
         config_kwargs = {}
@@ -293,7 +294,8 @@ class ConstructionSector:
         """Calculate total power demand."""
         printing_power = sum(r.get_power_demand() for r in self.printing_robots)
         assembly_power = sum(r.get_power_demand() for r in self.assembly_robots)
-        return printing_power + assembly_power
+        self.power_demand_step = printing_power + assembly_power
+        return self.power_demand_step
 
     def step(self, allocated_power: float) -> None:
         """Execute single simulation step."""
@@ -316,6 +318,7 @@ class ConstructionSector:
             "queued_requests": len(self.construction_queue),
             "shells_in_stock": self._stocks.shells,
             "regolith_used_kg": self.regolith_used_kg,
+            "power_demand_kw_step": self.power_demand_step,
             "modules_completed_this_step": self.modules_completed_this_step,
             "shells_produced_this_step": self.shells_produced_this_step,
             **{f"equipment_{k}": v for k, v in self.equipment_stock.items()},

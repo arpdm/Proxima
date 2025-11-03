@@ -25,13 +25,13 @@ class PrintingRobot(Agent):
 
     def __init__(self, model, config: dict):
         super().__init__(model)
-        self.config = config
+        self.config = config.get("config")
 
         # Characteristics
-        self.max_power_usage_kWh = float(config.get("max_power_usage_kWh", 65.0))
-        self.efficiency = float(config.get("efficiency", 0.9))
-        self.processing_time_steps = int(config.get("processing_time_t", 80))
-        self.regolith_usage_kg = float(config.get("regolith_usage_kg", 200.0))
+        self.max_power_usage_kWh = float(self.config.get("max_power_usage_kWh", 65.0))
+        self.efficiency = float(self.config.get("efficiency", 0.9))
+        self.processing_time_steps = int(self.config.get("processing_time_t", 80))
+        self.regolith_usage_kg = float(self.config.get("regolith_usage_kg", 200.0))
 
         # State
         self.mode = PrintingRobotMode.IDLE
