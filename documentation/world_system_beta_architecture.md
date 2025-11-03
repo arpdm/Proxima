@@ -184,7 +184,7 @@ The simulation includes an adaptive **Policy Engine** that applies operational p
 
 | Policy Category          | Documentation Link                                         |
 | ------------------------ | -------------------------------------------------------    |
-| Environmental Policies   | [View Environmental Policies](./environmental_policies.md) |
+| Environmental Policies   | [View Environmental Policies](./policies/environmental_policies.md) |
 | Science Policies         | [View Science Policies](./policies/science_policies.md)    |
 | Manufacturing Policies   |                                                            |
 | Economic Policies        |                                                            |
