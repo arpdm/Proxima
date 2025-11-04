@@ -5,17 +5,11 @@ PROXIMA LUNAR SIMULATION - WORLD SYSTEM ORCHESTRATOR
 """
 
 from __future__ import annotations
-from enum import Enum
-from typing import Dict, Any, Optional, Set, List
+from typing import Dict, Any, Optional
 import logging
 
 from mesa import Model
-from proxima_model.sphere_engine.energy_sector import EnergySector
-from proxima_model.sphere_engine.science_sector import ScienceSector
-from proxima_model.sphere_engine.manufacturing_sector import ManufacturingSector
-from proxima_model.sphere_engine.equipment_manufacturing_sector import EquipmentManSector
-from proxima_model.sphere_engine.transportation_sector import TransportationSector
-from proxima_model.sphere_engine.construction_sector import ConstructionSector
+from proxima_model.sphere_engine.sector_factory import SectorFactory
 from proxima_model.policy_engine.policy_engine import PolicyEngine
 from proxima_model.world_system.evaluation_engine import EvaluationEngine
 from proxima_model.event_engine.event_bus import EventBus
@@ -25,16 +19,6 @@ logger = logging.getLogger(__name__)
 
 class WorldSystem(Model):
     """Central orchestrator for the Proxima lunar base simulation."""
-
-    # Sector registry for dynamic initialization
-    SECTOR_REGISTRY = {
-        "energy": EnergySector,
-        "science": ScienceSector,
-        "manufacturing": ManufacturingSector,
-        "equipment_manufacturing": EquipmentManSector,
-        "transportation": TransportationSector,
-        "construction": ConstructionSector,
-    }
 
     def __init__(self, config: Dict[str, Any], seed: Optional[int] = None):
         """
@@ -75,16 +59,17 @@ class WorldSystem(Model):
         self.policy = PolicyEngine(self)
 
     def _initialize_sectors(self) -> None:
-        """Initialize all sectors dynamically based on configuration."""
+        """Initialize all sectors dynamically using the factory."""
         agents_config = self.config.get("agents_config", {})
 
-        for name, sector_class in self.SECTOR_REGISTRY.items():
-            if name in agents_config:
-                try:
-                    self.sectors[name] = sector_class(self, agents_config[name], self.event_bus)
-                    logger.info(f"✅ Initialized {name} sector")
-                except Exception as e:
-                    logger.error(f"⚠️  Failed to initialize {name} sector: {e}")
+        for sector_name, sector_config in agents_config.items():
+            try:
+                # Use the factory to create the sector
+                sector = SectorFactory.create_sector(sector_name, self, sector_config, self.event_bus)
+                self.sectors[sector_name] = sector
+                logger.info(f"✅ Initialized {sector_name} sector via factory")
+            except Exception as e:
+                logger.error(f"⚠️  Failed to initialize {sector_name} sector: {e}")
 
     def _get_power_consumers(self) -> Dict[str, Any]:
         """Get sectors that can consume power."""

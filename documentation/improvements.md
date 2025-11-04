@@ -1,7 +1,6 @@
 # Model Improvements
 
 1. Create a global definition file that includes master definitions such as sector names. []
-2. Create a base sector class so all sectors follow the same patthern. []
 
 17. For equipment manufacturing sector find a way to add more sophisticated policy for prioritizing orders []
 18. Make sure construction sector uses regolith resource properly to print shelss. Environmnet resources []
