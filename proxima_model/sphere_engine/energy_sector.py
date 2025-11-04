@@ -1,18 +1,26 @@
 """
 energy_sector.py
 
-Simplified energy sector management.
+Simplified energy sector management with integrated power allocation.
 """
 
 import numpy as np
-from typing import List
+from typing import List, Dict, Any
+from enum import Enum
 
 from proxima_model.components.power_generator import PowerGenerator
 from proxima_model.components.power_storage import PowerStorage
 
 
+class AllocationMode(Enum):
+    """Power allocation strategies."""
+
+    PROPORTIONAL = "proportional"
+    EQUAL = "equal"
+
+
 class EnergySector:
-    """Simplified energy sector with single-step processing."""
+    """Simplified energy sector with single-step processing and allocation."""
 
     def __init__(self, model, config, event_bus):
         self.model = model
@@ -36,6 +44,10 @@ class EnergySector:
         self.power_demanded = 0.0
         self.power_shortage = 0.0
 
+        # Allocation mode (moved from WorldSystem)
+        allocation_mode_str = (config.get("allocation_mode") or "proportional").lower()
+        self.allocation_mode = AllocationMode(allocation_mode_str)
+
     @property
     def total_charge(self) -> float:
         """Calculate total charge across all storages."""
@@ -51,6 +63,44 @@ class EnergySector:
         """Calculate overall state of charge."""
         total_cap = self.total_capacity
         return self.total_charge / total_cap if total_cap > 0 else 0
+
+    def allocate_power(self, sector_demands: Dict[str, float]) -> Dict[str, float]:
+        """
+        Allocate available power among sectors based on their demands.
+
+        Args:
+            sector_demands: Dictionary of sector names to their power demands.
+
+        Returns:
+            Dictionary of sector names to allocated power amounts.
+        """
+        # Generate power based on total demand
+        total_demand = sum(sector_demands.values())
+        available_power = self.step(total_demand)
+
+        if not sector_demands or available_power <= 0:
+            return {name: 0.0 for name in sector_demands}
+
+        # Snapshot demands (ensure non-negative)
+        demands = {name: max(0.0, float(demand)) for name, demand in sector_demands.items()}
+        total_demand = sum(demands.values())
+
+        if total_demand <= 0.0:
+            return {name: 0.0 for name in sector_demands}
+
+        # Case 1: Sufficient power → satisfy all demands
+        if total_demand <= available_power:
+            return demands
+
+        # Case 2: Scarcity → fair split based on allocation mode
+        if self.allocation_mode == AllocationMode.EQUAL:
+            num_sectors = len(sector_demands)
+            per_sector = available_power / num_sectors
+            return {name: min(per_sector, demands[name]) for name in sector_demands}
+        else:
+            # Proportional by demand (default)
+            ratio = available_power / total_demand
+            return {name: ratio * demands[name] for name in sector_demands}
 
     def step(self, power_demand):
         """Single step: process power demand and return what's available."""

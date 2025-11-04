@@ -23,13 +23,6 @@ from proxima_model.event_engine.event_bus import EventBus
 logger = logging.getLogger(__name__)
 
 
-class AllocationMode(Enum):
-    """Power allocation strategies."""
-
-    PROPORTIONAL = "proportional"
-    EQUAL = "equal"
-
-
 class WorldSystem(Model):
     """Central orchestrator for the Proxima lunar base simulation."""
 
@@ -55,10 +48,6 @@ class WorldSystem(Model):
 
         self.config = config
         self.running = True
-
-        # Power allocation mode (TODO: Move to policy)
-        allocation_mode_str = (self.config.get("allocation_mode") or "proportional").lower()
-        self.allocation_mode = AllocationMode(allocation_mode_str)
 
         # Initialize event bus and sectors
         self.event_bus = EventBus()
@@ -105,44 +94,6 @@ class WorldSystem(Model):
             if name != "energy" and hasattr(sector, "get_power_demand")
         }
 
-    def _allocate_power_fairly(self, available_power: float, operational_sectors: Dict[str, Any]) -> Dict[str, float]:
-        """
-        Compute fair power allocations for all non-energy sectors.
-
-        Args:
-            available_power: Total power available for allocation
-            operational_sectors: Dictionary of sectors to allocate power to
-
-        Returns:
-            Dictionary of sector names to allocated power amounts
-        """
-        if not operational_sectors or available_power <= 0:
-            return {name: 0.0 for name in operational_sectors}
-
-        # Snapshot demands
-        demands: Dict[str, float] = {
-            name: max(0.0, float(sector.get_power_demand())) for name, sector in operational_sectors.items()
-        }
-
-        total_demand = sum(demands.values())
-
-        if total_demand <= 0.0:
-            return {name: 0.0 for name in operational_sectors}
-
-        # Case 1: Sufficient power → satisfy all demands
-        if total_demand <= available_power:
-            return demands
-
-        # Case 2: Scarcity → fair split based on allocation mode
-        if self.allocation_mode == AllocationMode.EQUAL:
-            num_sectors = len(operational_sectors)
-            per_sector = available_power / num_sectors
-            return {name: min(per_sector, demands[name]) for name in operational_sectors}
-        else:
-            # Proportional by demand (default)
-            ratio = available_power / total_demand
-            return {name: ratio * demands[name] for name in operational_sectors}
-
     def _collect_sector_metrics(self) -> Dict[str, Dict[str, Any]]:
         """Collect metrics from all sectors."""
         sector_metrics = {}
@@ -159,15 +110,12 @@ class WorldSystem(Model):
         # Get power-consuming sectors
         power_consumers = self._get_power_consumers()
 
-        # Calculate total power demand
-        total_power_demand = sum(float(s.get_power_demand()) for s in power_consumers.values())
+        # Collect power demands
+        sector_demands = {name: max(0.0, float(sector.get_power_demand())) for name, sector in power_consumers.items()}
 
-        # Generate available power from energy sector
+        # Allocate power via energy sector
         energy_sector = self.sectors.get("energy")
-        available_power = energy_sector.step(total_power_demand) if energy_sector else 0.0
-
-        # Allocate power fairly among non-energy sectors
-        sector_allocations = self._allocate_power_fairly(available_power, power_consumers)
+        sector_allocations = energy_sector.allocate_power(sector_demands) if energy_sector else {}
 
         # Step each sector with its allocation
         for name, sector in power_consumers.items():
