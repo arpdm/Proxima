@@ -69,15 +69,7 @@ class TaskDefinition:
     """Definition of a manufacturing task."""
 
     task_type: TaskType
-    generator_mode: Optional[str] = None
-    extractor_mode: Optional[str] = None
     primary_output: str = ""
-
-    def __post_init__(self):
-        # Allow tasks without modes for placeholders/future expansion
-        # Only validate if modes are provided
-        if self.generator_mode and self.extractor_mode:
-            raise ValueError("Task cannot specify both generator and extractor modes")
 
 
 @dataclass
@@ -123,10 +115,11 @@ class ManufacturingSector:
     """Manages ISRU operations, resource stocks, and manufacturing processes."""
 
     # Default task definitions for easy expansion
+    # TODO: The stocks need to be defined in world system defs since its used by different sectors
     DEFAULT_TASKS = {
-        TaskType.HE3: TaskDefinition(TaskType.HE3, "HE3_GENERATION", None, "He3_kg"),  # Updated mode names
-        TaskType.WATER: TaskDefinition(TaskType.WATER, None, "ICE_EXTRACTION", "H2O_kg"),
-        TaskType.REGOLITH: TaskDefinition(TaskType.REGOLITH, None, "REGOLITH_EXTRACTION", "FeTiO3_kg"),
+        TaskType.HE3: TaskDefinition(TaskType.HE3, "He3_kg"),
+        TaskType.WATER: TaskDefinition(TaskType.WATER, "H2O_kg"),
+        TaskType.REGOLITH: TaskDefinition(TaskType.REGOLITH, "FeTiO3_kg"),
     }
 
     # Default buffer targets
@@ -203,8 +196,6 @@ class ManufacturingSector:
                 task_type = TaskType[task_config["name"].upper()]
                 custom_tasks[task_type] = TaskDefinition(
                     task_type=task_type,
-                    generator_mode=task_config.get("generator_mode"),
-                    extractor_mode=task_config.get("extractor_mode"),
                     primary_output=task_config.get("primary_output", ""),
                 )
             except (KeyError, ValueError):
@@ -213,7 +204,6 @@ class ManufacturingSector:
 
     def _initialize_agents(self, config: dict):
         """Initialize ISRU agents from configuration."""
-        # Initialize ISRU robots (unified type)
         self._manufacturing_config = config.get("isru_robots", [])
 
         for agent_cfg in self._manufacturing_config:
@@ -357,17 +347,16 @@ class ManufacturingSector:
         # Assign robots to priority tasks
         robot_index = 0
         for task_type in priority_tasks:
-            task_def = self.task_definitions[task_type]
-
-            # Map task types to ISRU modes
+            # Direct mapping from task type to ISRU mode (hardcoded for simplicity)
+            # TODO: This needs to be not hard coded
             mode_mapping = {
                 TaskType.HE3: "HE3_GENERATION",
                 TaskType.WATER: "ICE_EXTRACTION",
                 TaskType.REGOLITH: "REGOLITH_EXTRACTION",
             }
 
-            if task_def.task_type in mode_mapping and robot_index < len(self.isru_robots):
-                mode = mode_mapping[task_def.task_type]
+            if task_type in mode_mapping and robot_index < len(self.isru_robots):
+                mode = mode_mapping[task_type]
                 self.isru_robots[robot_index].set_operational_mode(mode)
                 robot_index += 1
 

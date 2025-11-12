@@ -117,14 +117,15 @@ class SectorType(Enum):
 # =============================================================================
 
 
-class ModuleType(Enum):
-    """Types of modules that can be constructed."""
+class ComponentType(Enum):
+    """Available component types."""
 
+    POWER_GENERATOR = "power_generator"
+    POWER_STORAGE = "power_storage"
+    ORBITAL_ROCKET = "orbital_rocket"
+    FUEL_GEN = "fuel_gen"
     SCIENCE_ROVER = "science_rover"
-    ENERGY_GENERATOR = "energy_generator"
-    HABITATION_MODULE = "habitation_module"
     ISRU_ROBOT = "isru_robot"
-    ROCKET = "rocket"
     PRINTING_ROBOT = "printing_robot"
     ASSEMBLY_ROBOT = "assembly_robot"
 
@@ -152,28 +153,6 @@ MODULE_TO_EQUIPMENT_MAP: Dict[str, str] = {
     "comp_assembly_robot": EquipmentType.ASSEMBLY_ROBOT_EQ.value,
 }
 
-# Module ID to Module Type mapping
-MODULE_ID_TO_TYPE_MAP: Dict[str, ModuleType] = {
-    "comp_science_rover": ModuleType.SCIENCE_ROVER,
-    "comp_energy_generator": ModuleType.ENERGY_GENERATOR,
-    "comp_habitation_module": ModuleType.HABITATION_MODULE,
-    "comp_isru_robot": ModuleType.ISRU_ROBOT,
-    "comp_rocket": ModuleType.ROCKET,
-    "comp_printing_robot": ModuleType.PRINTING_ROBOT,
-    "comp_assembly_robot": ModuleType.ASSEMBLY_ROBOT,
-}
-
-# Module Type to Sector mapping (which sector receives this module)
-MODULE_TYPE_TO_SECTOR_MAP: Dict[ModuleType, SectorType] = {
-    ModuleType.SCIENCE_ROVER: SectorType.SCIENCE,
-    ModuleType.ENERGY_GENERATOR: SectorType.ENERGY,
-    ModuleType.HABITATION_MODULE: SectorType.CONSTRUCTION,
-    ModuleType.ISRU_ROBOT: SectorType.MANUFACTURING,
-    ModuleType.ROCKET: SectorType.TRANSPORTATION,
-    ModuleType.PRINTING_ROBOT: SectorType.CONSTRUCTION,
-    ModuleType.ASSEMBLY_ROBOT: SectorType.CONSTRUCTION,
-}
-
 # =============================================================================
 # METRIC DEFINITIONS
 # =============================================================================
@@ -193,19 +172,6 @@ class MetricCategory(Enum):
 
 
 # =============================================================================
-# ALLOCATION MODES
-# =============================================================================
-
-
-class AllocationMode(Enum):
-    """Power allocation strategies."""
-
-    PROPORTIONAL = "proportional"
-    EQUAL = "equal"
-    PRIORITY = "priority"
-
-
-# =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
 
@@ -213,16 +179,6 @@ class AllocationMode(Enum):
 def get_equipment_type_for_module(module_id: str) -> str:
     """Get equipment type string for a module ID."""
     return MODULE_TO_EQUIPMENT_MAP.get(module_id, "")
-
-
-def get_module_type_for_id(module_id: str) -> ModuleType:
-    """Get module type enum for a module ID."""
-    return MODULE_ID_TO_TYPE_MAP.get(module_id)
-
-
-def get_target_sector_for_module(module_type: ModuleType) -> SectorType:
-    """Get the sector that should receive a completed module."""
-    return MODULE_TYPE_TO_SECTOR_MAP.get(module_type)
 
 
 def extract_module_type_from_id(module_id: str) -> str:

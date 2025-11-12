@@ -82,8 +82,7 @@ class ISRUAgent(Agent):
         self.config = ISRUConfig(**{k: v for k, v in config.items() if k in ISRUConfig.__dataclass_fields__})
 
         # Agent identification
-        self.agent_type = "isru"
-        self.subtype = "robot"
+        self.agent_type = "isru_robot"
 
         # Setup He-3 concentration parameters from environment
         self.he3_concentration = self._setup_he3_parameters(model)
@@ -193,7 +192,7 @@ class ISRUAgent(Agent):
     def report(self) -> dict:
         """Return status report for visualization/logging."""
         return {
-            "type": "isru_robot",
+            "type": self.agent_type,
             "mode": self.operational_mode.value,
             "status": self.status.value,
             "power_demand": self.get_power_demand(),

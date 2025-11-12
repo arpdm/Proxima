@@ -20,23 +20,11 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, List, Any, Optional
 from data_engine.proxima_db_engine import ProximaDB
+from proxima_model.world_system.world_system_defs import ComponentType
 
 import logging
 
 logger = logging.getLogger(__name__)
-
-
-class ComponentType(Enum):
-    """Available component types."""
-
-    POWER_GENERATOR = "power_generator"
-    POWER_STORAGE = "power_storage"
-    ORBITAL_ROCKET = "orbital_rocket"
-    FUEL_GEN = "fuel_gen"
-    SCIENCE_ROVER = "science_rover"
-    ISRU_ROBOT = "isru_robot"
-    PRINTING_ROBOT = "printing_robot"
-    ASSEMBLY_ROBOT = "assembly_robot"
 
 
 class GoalType(Enum):

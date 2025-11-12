@@ -9,7 +9,7 @@ from enum import Enum, auto
 from typing import List, Dict, Optional, Any
 from proxima_model.components.rocket import Rocket
 from proxima_model.components.fuel_generator import FuelGenerator
-from proxima_model.world_system.world_system_defs import EventType
+from proxima_model.world_system.world_system_defs import EventType, SectorType
 
 import logging
 
@@ -23,14 +23,6 @@ class TransportRequestStatus(Enum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
-
-
-class Location(Enum):
-    """Available locations for transport."""
-
-    EARTH = "Earth"
-    MOON = "Moon"
-    # Add more locations as needed (e.g., MARS = "Mars")
 
 
 @dataclass
@@ -55,7 +47,10 @@ class TransportRequest:
 class TransportationConfig:
     """Configuration for transportation sector."""
 
-    earth_moon_distance_km: float = 384400.0
+    sector_name: str = SectorType.TRANSPORTATION.value
+    earth_moon_distance_km: float = (
+        384400.0  # TODO: Need to create a function to return distance between two planets as inputs if distance not provided by configuration
+    )
     loading_time_steps: int = 24
     he3_request_threshold_kg: float = 1.0
     minimum_fuel_k_sp: int = 5000
@@ -127,16 +122,6 @@ class TransportationSector:
         # Initialize launch counter for metrics
         self.launches_this_step = 0
 
-    @property
-    def stocks(self) -> Dict[str, float]:
-        """Get current stocks (for backwards compatibility)."""
-        return {"rocket_fuel_kg": self._stocks.rocket_fuel_kg}
-
-    @property
-    def internal_stocks(self) -> Dict[str, float]:
-        """Get internal stocks (for backwards compatibility)."""
-        return {"He3_kg": self._stocks.he3_kg}
-
     def handle_transport_request(
         self, requesting_sector: str, payload: Dict[str, float], origin: str, destination: str
     ) -> None:
@@ -172,7 +157,7 @@ class TransportationSector:
             resource: Resource type
             amount: Amount allocated
         """
-        if recipient_sector == "transportation":
+        if recipient_sector == self._config.sector_name:
             if resource == "He3_kg":
                 self._stocks.he3_kg += amount
                 self._fuel_request_pending = False
@@ -186,8 +171,8 @@ class TransportationSector:
         ):
             self.event_bus.publish(
                 EventType.RESOURCE_REQUEST.value,
-                requesting_sector="transportation",
-                resource="He3_kg",
+                requesting_sector=self._config.sector_name,
+                resource="He3_kg",  # TODO: Use enums for resouurce names
                 amount=self._config.he3_request_threshold_kg,
             )
             self._fuel_request_pending = True
@@ -232,7 +217,9 @@ class TransportationSector:
         """
         # Calculate payload weights
         return_payload = request.payload
-        return_payload_kg = sum(return_payload.values()) * 20  # Placeholder weight
+        return_payload_kg = (
+            sum(return_payload.values()) * 20
+        )  # TODO: Placeholder weight. This needs to change and be configurable
         outbound_payload = {}
         outbound_payload_kg = 0.0
 
