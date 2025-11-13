@@ -29,7 +29,7 @@ debug_logger = logging.getLogger(__name__)
 debug_logger.setLevel(logging.INFO)
 
 logging.getLogger('proxima_model.sphere_engine.transportation_sector').setLevel(logging.DEBUG)
-logging.getLogger('proxima_model.sphere_engine.science_sector').setLevel(logging.WARNING)
+logging.getLogger('proxima_model.sphere_engine.science_sector').setLevel(logging.DEBUG)
 logging.getLogger('proxima_model.sphere_engine.manufacturing_sector').setLevel(logging.WARNING)
 logging.getLogger('proxima_model.policy_engine.policy_engine').setLevel(logging.WARNING)
 logging.getLogger('proxima_model.policy_engine.science_policies').setLevel(logging.WARNING)
@@ -38,7 +38,7 @@ logging.getLogger('proxima_model.sphere_engine.construction_sector').setLevel(lo
 logging.getLogger('proxima_model.sphere_engine.equipment_manufacturing_sector').setLevel(logging.DEBUG)
 logging.getLogger('proxima_model.world_system.evaluation_engine').setLevel(logging.WARNING)
 logging.getLogger('proxima_model.components.science_rover').setLevel(logging.WARNING)
-logging.getLogger('proxima_model.components.rocket').setLevel(logging.DEBUG)
+logging.getLogger('proxima_model.components.rocket').setLevel(logging.WARNING)
 
 def parse_args():
     """Parse command-line arguments for runner options."""

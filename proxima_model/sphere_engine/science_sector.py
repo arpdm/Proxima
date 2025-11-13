@@ -98,6 +98,10 @@ class ScienceSector:
                 power_demand += rover.battery_capacity_kWh - rover.current_battery_kWh
 
         return power_demand
+    
+    def control_science_growth_rate(self, growth_rate:float, growth_duration:int):
+        logger_science.info(f"Science Sector Policy Applied for Growth Rate: {growth_rate} within duration of {growth_duration}")
+
 
     def step(self, available_power: float):
         """
