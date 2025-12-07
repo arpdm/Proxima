@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Proxima - Mars Colony Simulation</title>
+    <title>Proxima - A Living World System Model</title>
     <style>
         * {
             margin: 0;
@@ -11,182 +11,527 @@
             box-sizing: border-box;
         }
         
+        :root {
+            --bg-primary: #0a0e27;
+            --bg-secondary: #161b33;
+            --bg-card: #1a1f3a;
+            --text-primary: #e4e6eb;
+            --text-secondary: #a8b3cf;
+            --accent: #4a9eff;
+            --accent-dark: #2d7dd2;
+            --border: #2a3150;
+        }
+        
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             line-height: 1.6;
-            color: #333;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: var(--text-primary);
+            background-color: var(--bg-primary);
         }
         
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 2rem;
+            padding: 0 2rem;
         }
         
+        /* Header */
         header {
-            text-align: center;
-            padding: 4rem 0;
-            color: white;
+            background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            padding: 4rem 0 3rem;
+            border-bottom: 1px solid var(--border);
         }
         
-        header h1 {
-            font-size: 4rem;
+        .logo {
+            font-size: 3rem;
+            font-weight: 700;
             margin-bottom: 1rem;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            background: linear-gradient(135deg, var(--accent) 0%, #6fb1ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
         
-        header p {
+        .tagline {
             font-size: 1.5rem;
-            opacity: 0.9;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            font-weight: 300;
         }
         
-        .content {
-            background: white;
-            border-radius: 12px;
-            padding: 3rem;
+        .mission-statement {
+            max-width: 900px;
+            font-size: 1.1rem;
+            line-height: 1.8;
+            color: var(--text-secondary);
             margin: 2rem 0;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            padding: 2rem;
+            background: var(--bg-card);
+            border-left: 3px solid var(--accent);
+            border-radius: 4px;
         }
         
-        .features {
+        /* Navigation */
+        nav {
+            background: var(--bg-secondary);
+            padding: 1rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        nav ul {
+            list-style: none;
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        nav a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        
+        nav a:hover {
+            color: var(--accent);
+        }
+        
+        /* Sections */
+        section {
+            padding: 4rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        section h2 {
+            font-size: 2rem;
+            margin-bottom: 2rem;
+            color: var(--text-primary);
+        }
+        
+        section h3 {
+            font-size: 1.5rem;
+            margin: 2rem 0 1rem;
+            color: var(--accent);
+        }
+        
+        /* Goals Grid */
+        .goals-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
+            gap: 1.5rem;
             margin: 2rem 0;
         }
         
-        .feature {
+        .goal-card {
+            background: var(--bg-card);
             padding: 1.5rem;
-            border-left: 4px solid #667eea;
-            background: #f7f9fc;
             border-radius: 8px;
+            border: 1px solid var(--border);
+            transition: transform 0.2s, border-color 0.2s;
         }
         
-        .feature h3 {
-            color: #667eea;
+        .goal-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent);
+        }
+        
+        .goal-card h4 {
+            color: var(--accent);
             margin-bottom: 0.5rem;
+            font-size: 1.2rem;
         }
         
-        .cta {
-            text-align: center;
+        .goal-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+        
+        /* Principles List */
+        .principles-list {
+            list-style: none;
+            margin: 2rem 0;
+        }
+        
+        .principles-list li {
+            background: var(--bg-card);
+            padding: 1rem 1.5rem;
+            margin-bottom: 1rem;
+            border-left: 3px solid var(--accent);
+            border-radius: 4px;
+        }
+        
+        .principles-list strong {
+            color: var(--accent);
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+        
+        /* Phases Timeline */
+        .timeline {
+            position: relative;
             margin: 3rem 0;
         }
         
+        .phase {
+            background: var(--bg-card);
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            position: relative;
+        }
+        
+        .phase::before {
+            content: '';
+            position: absolute;
+            left: -20px;
+            top: 2rem;
+            width: 12px;
+            height: 12px;
+            background: var(--accent);
+            border-radius: 50%;
+            border: 3px solid var(--bg-primary);
+        }
+        
+        .phase-title {
+            color: var(--accent);
+            font-size: 1.3rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .phase-duration {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+        
+        .phase ul {
+            margin-left: 1.5rem;
+            color: var(--text-secondary);
+        }
+        
+        .phase ul li {
+            margin-bottom: 0.5rem;
+        }
+        
+        /* Images */
+        .architecture-image {
+            width: 100%;
+            max-width: 800px;
+            margin: 2rem auto;
+            display: block;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        
+        /* Buttons */
         .btn {
             display: inline-block;
-            padding: 1rem 2rem;
+            padding: 0.75rem 1.5rem;
             margin: 0.5rem;
-            background: #667eea;
+            background: var(--accent);
             color: white;
             text-decoration: none;
-            border-radius: 6px;
-            font-weight: bold;
-            transition: transform 0.2s, box-shadow 0.2s;
+            border-radius: 4px;
+            font-weight: 500;
+            transition: background 0.2s, transform 0.2s;
+            border: none;
+            cursor: pointer;
         }
         
         .btn:hover {
+            background: var(--accent-dark);
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
         }
         
         .btn-secondary {
-            background: #764ba2;
+            background: transparent;
+            border: 1px solid var(--accent);
+            color: var(--accent);
         }
         
-        code {
-            background: #f4f4f4;
-            padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-            font-family: 'Courier New', monospace;
+        .btn-secondary:hover {
+            background: var(--accent);
+            color: white;
         }
         
-        pre {
-            background: #282c34;
-            color: #abb2bf;
-            padding: 1.5rem;
+        /* Contact */
+        .contact-info {
+            background: var(--bg-card);
+            padding: 2rem;
             border-radius: 8px;
-            overflow-x: auto;
-            margin: 1rem 0;
+            border: 1px solid var(--border);
+            text-align: center;
         }
         
-        pre code {
-            background: none;
-            color: inherit;
+        .contact-info a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        
+        .contact-info a:hover {
+            text-decoration: underline;
+        }
+        
+        /* Footer */
+        footer {
+            background: var(--bg-secondary);
+            padding: 2rem 0;
+            text-align: center;
+            color: var(--text-secondary);
+            margin-top: 4rem;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .logo {
+                font-size: 2rem;
+            }
+            
+            .tagline {
+                font-size: 1.2rem;
+            }
+            
+            nav ul {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .goals-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🚀 Proxima</h1>
-            <p>Advanced Mars Colony Simulation with AI-Driven Growth</p>
-        </header>
-        
-        <div class="content">
-            <h2>About Proxima</h2>
-            <p>
-                Proxima is a sophisticated agent-based simulation modeling the establishment and growth 
-                of a Mars colony. It features exponential growth algorithms, receding-horizon control, 
-                and machine learning capabilities for optimizing resource allocation and colony expansion.
-            </p>
-            
-            <div class="features">
-                <div class="feature">
-                    <h3>📊 Science Growth Policy</h3>
-                    <p>Implements exponential doubling of science output every 6 months using Model Predictive Control.</p>
-                </div>
-                
-                <div class="feature">
-                    <h3>🔋 Power Management</h3>
-                    <p>Dynamic power allocation between solar panels, batteries, and science rovers with throttling.</p>
-                </div>
-                
-                <div class="feature">
-                    <h3>🤖 AI Integration</h3>
-                    <p>Support for Reinforcement Learning, time series forecasting, and anomaly detection.</p>
-                </div>
-                
-                <div class="feature">
-                    <h3>🏗️ Manufacturing Pipeline</h3>
-                    <p>Event-driven logistics with pipeline tracking for rover construction and deployment.</p>
-                </div>
-                
-                <div class="feature">
-                    <h3>📈 Real-time Metrics</h3>
-                    <p>Comprehensive telemetry tracking growth rates, productivity, and resource utilization.</p>
-                </div>
-                
-                <div class="feature">
-                    <h3>🧪 Agent-Based Model</h3>
-                    <p>Built on Mesa framework with modular sphere architecture (Technosphere, Biosphere, etc.).</p>
-                </div>
-            </div>
-            
-            <h2>Quick Start</h2>
-            <pre><code># Clone the repository
-git clone https://github.com/yourusername/Proxima.git
-cd Proxima
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the simulation
-python -m proxima_model.main</code></pre>
-            
-            <h2>Key Features</h2>
-            <ul style="margin: 1rem 0 1rem 2rem;">
-                <li><strong>Exponential Growth Control:</strong> S(t) = S₀ · 2^(t/6) targeting doubling every 6 months</li>
-                <li><strong>Receding-Horizon Planning:</strong> MPC-based rover ordering with lead time anticipation</li>
-                <li><strong>Pipeline Management:</strong> Event-driven manufacturing with capacity constraints</li>
-                <li><strong>ML Ready:</strong> Interfaces for RL agents, LSTM forecasting, and GNN coordination</li>
-            </ul>
-            
-            <div class="cta">
-                <a href="https://github.com/yourusername/Proxima" class="btn">View on GitHub</a>
-                <a href="documentation/policies/science_policies.html" class="btn btn-secondary">Documentation</a>
+    <header>
+        <div class="container">
+            <h1 class="logo">Proxima</h1>
+            <p class="tagline">A Living World System Model</p>
+            <div class="mission-statement">
+                Proxima is a living, evolving world system model designed to explore and enhance the long-term survival of human civilization. It integrates social, economic, technological, environmental, and informational spheres into a dynamic framework that continuously adapts, never resets, and persists as a cumulative record. Its purpose is to provide foresight, test scenarios, and guide policies that strengthen resilience, sustainability, and humanity's chances of thriving across generations and worlds.
             </div>
         </div>
-    </div>
+    </header>
+    
+    <nav>
+        <div class="container">
+            <ul>
+                <li><a href="#goals">Mission Goals</a></li>
+                <li><a href="#charter">Charter</a></li>
+                <li><a href="#phases">Phases</a></li>
+                <li><a href="#architecture">Architecture</a></li>
+                <li><a href="#resources">Resources</a></li>
+                <li><a href="#contact">Contact</a></li>
+            </ul>
+        </div>
+    </nav>
+    
+    <main class="container">
+        <section id="goals">
+            <h2>Mission Goals</h2>
+            <div class="goals-grid">
+                <div class="goal-card">
+                    <h4>Continuity of Civilization</h4>
+                    <p>Extend humanity's survival odds on long time scales through foresight and adaptive modeling.</p>
+                </div>
+                <div class="goal-card">
+                    <h4>Holistic Integration</h4>
+                    <p>Model the interdependencies of the biosphere, technosphere, econosphere, sociosphere, and infosphere.</p>
+                </div>
+                <div class="goal-card">
+                    <h4>Persistent Learning</h4>
+                    <p>Build a system that never resets, preserving accumulated state and knowledge to reveal long-term consequences of actions.</p>
+                </div>
+                <div class="goal-card">
+                    <h4>Transparency & Accessibility</h4>
+                    <p>Provide a publicly accessible interface where global communities can observe the model's progress and insights.</p>
+                </div>
+                <div class="goal-card">
+                    <h4>Collaborative Global Effort</h4>
+                    <p>Ensure contributions from diverse disciplines, cultures, and perspectives to capture the full spectrum of human experience.</p>
+                </div>
+                <div class="goal-card">
+                    <h4>Policy Innovation</h4>
+                    <p>Use reinforcement learning and system identification to extract new policy pathways from simulation outcomes.</p>
+                </div>
+                <div class="goal-card">
+                    <h4>Applied Experimentation</h4>
+                    <p>Test concepts of interplanetary governance and sustainability beginning with lunar base development (World System Beta) and scaling to Earth-level integration (World System Alpha).</p>
+                </div>
+            </div>
+        </section>
+        
+        <section id="charter">
+            <h2>Proxima Charter</h2>
+            
+            <h3>Principles</h3>
+            <ul class="principles-list">
+                <li>
+                    <strong>Persistence</strong>
+                    The system evolves continuously, never restarting from zero.
+                </li>
+                <li>
+                    <strong>Adaptability</strong>
+                    Policies, dynamics, and structures reform in response to new information.
+                </li>
+                <li>
+                    <strong>Transparency</strong>
+                    All progress remains open and observable through a public platform.
+                </li>
+                <li>
+                    <strong>Interdisciplinarity</strong>
+                    Contributions span sciences, engineering, philosophy, and humanities.
+                </li>
+                <li>
+                    <strong>Equity & Diversity</strong>
+                    Ensure representation of multiple cultures, demographics, and worldviews.
+                </li>
+            </ul>
+            
+            <h3>Core Functions</h3>
+            <div class="goals-grid">
+                <div class="goal-card">
+                    <h4>Model Integration</h4>
+                    <p>Interconnect spheres (Sociosphere, Econosphere, Technosphere, Biosphere, Infosphere).</p>
+                </div>
+                <div class="goal-card">
+                    <h4>Scenario Testing</h4>
+                    <p>Explore climate, technological, political, and economic futures.</p>
+                </div>
+                <div class="goal-card">
+                    <h4>Policy Evolution</h4>
+                    <p>Derive policies via reinforcement learning and validate them through simulation.</p>
+                </div>
+                <div class="goal-card">
+                    <h4>Survival Metrics</h4>
+                    <p>Track odds of long-term survival as a central barometer of civilization health.</p>
+                </div>
+                <div class="goal-card">
+                    <h4>Guidance & Action</h4>
+                    <p>Translate simulation outcomes into clear, actionable strategies for governments, organizations, and communities.</p>
+                </div>
+                <div class="goal-card">
+                    <h4>Cross-Sector Partnerships</h4>
+                    <p>Collaborate with nonprofit and for-profit entities to drive sustainable innovation.</p>
+                </div>
+            </div>
+        </section>
+        
+        <section id="phases">
+            <h2>Mission Phases</h2>
+            <div class="timeline">
+                <div class="phase">
+                    <div class="phase-title">Phase 1: Foundation and Alignment</div>
+                    <div class="phase-duration">0–2 years</div>
+                    <p>Establish the groundwork for Proxima as a global, collaborative initiative.</p>
+                    <ul>
+                        <li>Draft Proxima Charter outlining principles and goals</li>
+                        <li>Develop core architecture of the World System Model</li>
+                        <li>Launch website and knowledge hub</li>
+                        <li>Form steering council of experts</li>
+                        <li>Secure partnerships with universities and space agencies</li>
+                    </ul>
+                </div>
+                
+                <div class="phase">
+                    <div class="phase-title">Phase 2: Sphere Development & Integration</div>
+                    <div class="phase-duration">2–3 years</div>
+                    <p>Build and connect the foundational spheres.</p>
+                    <ul>
+                        <li>Assemble global teams for each sphere</li>
+                        <li>Develop modular simulation components</li>
+                        <li>Integrate spheres into full world system model</li>
+                        <li>Validation and testing</li>
+                    </ul>
+                </div>
+                
+                <div class="phase">
+                    <div class="phase-title">Phase 3: Continuous Evolution & Transparency</div>
+                    <div class="phase-duration">3–4 years</div>
+                    <p>Scale Proxima into a persistent, evolving model accessible to humanity.</p>
+                    <ul>
+                        <li>Maintain persistent simulation</li>
+                        <li>Create crowdsourced interface for researchers and policymakers</li>
+                        <li>Transparent logging of changes and results</li>
+                        <li>Develop framework for turning results into discrete actions</li>
+                    </ul>
+                </div>
+                
+                <div class="phase">
+                    <div class="phase-title">Phase 4: Scaling to Alpha & Real-World Integration</div>
+                    <div class="phase-duration">4–10 years</div>
+                    <p>Transition from lunar-scale Beta to full Earth-scale (World System Alpha).</p>
+                    <ul>
+                        <li>Expand computing capacity via distributed global clusters</li>
+                        <li>Distill simulation findings into interpretable policies</li>
+                        <li>Pilot policies in testbed regions</li>
+                        <li>Simulate interactions between Earth, Moon, and Mars systems</li>
+                    </ul>
+                </div>
+                
+                <div class="phase">
+                    <div class="phase-title">Phase 5: Legacy & Adaptation</div>
+                    <div class="phase-duration">10+ years</div>
+                    <p>Ensure Proxima evolves beyond its founders, sustaining relevance across generations.</p>
+                    <ul>
+                        <li>Embed Proxima into educational systems</li>
+                        <li>Preserve infosphere with redundancy</li>
+                        <li>Position as both scientific tool and cultural project</li>
+                        <li>Rotate leadership across continents and generations</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+        
+        <section id="architecture">
+            <h2>System Architecture</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+                Proxima integrates multiple spheres into a cohesive world system model, 
+                beginning with World System Beta (lunar development) and scaling to Alpha (Earth).
+            </p>
+            <img src="world_system_beta_architecture.png" alt="World System Beta Architecture" class="architecture-image">
+        </section>
+        
+        <section id="resources">
+            <h2>Resources</h2>
+            <div class="goals-grid">
+                <div class="goal-card">
+                    <h4>Documentation</h4>
+                    <p>Comprehensive technical documentation and architecture guides.</p>
+                    <a href="documentation/world_system_beta_architecture.md" class="btn btn-secondary">View Docs</a>
+                </div>
+                <div class="goal-card">
+                    <h4>Research Paper</h4>
+                    <p>Exploring the Long Future and Survival of Human Civilization</p>
+                    <a href="documentation/Exploring_the_Long_Future_and_Survival_of_Human_Civilization.pdf" class="btn btn-secondary">Read Paper</a>
+                </div>
+                <div class="goal-card">
+                    <h4>GitHub Repository</h4>
+                    <p>Open source code and development updates.</p>
+                    <a href="https://github.com/yourusername/Proxima" class="btn btn-secondary">View on GitHub</a>
+                </div>
+            </div>
+        </section>
+        
+        <section id="contact">
+            <h2>Contact</h2>
+            <div class="contact-info">
+                <p style="margin-bottom: 1rem;">Interested in contributing to Proxima or learning more?</p>
+                <p><strong>Arpi Derm</strong></p>
+                <p><a href="mailto:arpiderm@gmail.com">arpiderm@gmail.com</a></p>
+            </div>
+        </section>
+    </main>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 Proxima Project. Building humanity's long-term survival model.</p>
+        </div>
+    </footer>
 </body>
 </html>
