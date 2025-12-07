@@ -335,7 +335,7 @@ With each phase/component, the world system will have:
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
-| World System Can Expand - | Phase 2 | 🚧 |
+| World System Can Expand - | Phase 2 | ✅ |
 | World System Can Import From World System Alpha | Phase 2 | ✅ |
 | World System Has Nuclear Power | Phase 3 | 🚧 |
 | World System Has Rockets for transortation of cargo | Phase 2 | ✅ |
