@@ -38,7 +38,9 @@ class ScienceProductionRate(Policy):
         self.sectors = [SectorType.SCIENCE.value]
         self.policy_function = "control_science_growth_rate"
         self.growth_rate = 2
-        self.growth_duration_t = 24*60 # hours * days
+        self.growth_duration_t = (
+            24 * 180
+        )  # hours * days #TODO: These can be configurable through policy config in database
 
     def apply(self, engine: "PolicyEngine", evaluation_result: "EvaluationResult") -> Dict[str, Any]:
         """

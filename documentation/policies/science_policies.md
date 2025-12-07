@@ -223,3 +223,38 @@ def order_rovers(t, S0, peff, L=1, beta=0.1,
 - **Full MPC Implementation**: Implement the complete optimization formulation with $Q$ and $R$ matrices for more sophisticated control.
 
 This policy ensures exponential growth in science output while maintaining a robust, adaptive planning mechanism.
+
+## 8. ML/DL Additions
+
+1. Reinforcement Learning (RL) for Adaptive Control
+Use Case: Replace the simple receding-horizon controller with an RL agent that learns optimal rover ordering policies.
+
+```python
+from stable_baselines3 import PPO, SAC
+import gymnasium as gym
+```
+
+2. Time Series Forecasting for Demand Prediction
+Use Case: Predict future science production rates and power demands more accurately.
+
+3. Anomaly Detection for Rover Failures
+Use Case: Predict when rovers are likely to fail based on usage patterns. (IsolationForest)
+
+4. Multi-Armed Bandit for Task Prioritization
+Use Case: If rovers can do different science tasks, use contextual bandits to learn which tasks yield most value.
+
+5. Graph Neural Networks for Rover Coordination
+Use Case: If rovers interact or share resources, use GNNs to optimize coordination.
+
+```python
+import torch
+import torch.nn as nn
+from torch_geometric.nn import GCNConv
+```
+
+6. Imitation Learning for Policy Initialization
+Use Case: Bootstrap RL with expert demonstrations (your current heuristic policy).
+
+```python
+from imitation.algorithms import bc
+```
