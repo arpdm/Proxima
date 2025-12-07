@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proxima - Mars Colony Simulation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        header {
+            text-align: center;
+            padding: 4rem 0;
+            color: white;
+        }
+        
+        header h1 {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        header p {
+            font-size: 1.5rem;
+            opacity: 0.9;
+        }
+        
+        .content {
+            background: white;
+            border-radius: 12px;
+            padding: 3rem;
+            margin: 2rem 0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin: 2rem 0;
+        }
+        
+        .feature {
+            padding: 1.5rem;
+            border-left: 4px solid #667eea;
+            background: #f7f9fc;
+            border-radius: 8px;
+        }
+        
+        .feature h3 {
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+        
+        .cta {
+            text-align: center;
+            margin: 3rem 0;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 1rem 2rem;
+            margin: 0.5rem;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #764ba2;
+        }
+        
+        code {
+            background: #f4f4f4;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        pre {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 1.5rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+        
+        pre code {
+            background: none;
+            color: inherit;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 Proxima</h1>
+            <p>Advanced Mars Colony Simulation with AI-Driven Growth</p>
+        </header>
+        
+        <div class="content">
+            <h2>About Proxima</h2>
+            <p>
+                Proxima is a sophisticated agent-based simulation modeling the establishment and growth 
+                of a Mars colony. It features exponential growth algorithms, receding-horizon control, 
+                and machine learning capabilities for optimizing resource allocation and colony expansion.
+            </p>
+            
+            <div class="features">
+                <div class="feature">
+                    <h3>📊 Science Growth Policy</h3>
+                    <p>Implements exponential doubling of science output every 6 months using Model Predictive Control.</p>
+                </div>
+                
+                <div class="feature">
+                    <h3>🔋 Power Management</h3>
+                    <p>Dynamic power allocation between solar panels, batteries, and science rovers with throttling.</p>
+                </div>
+                
+                <div class="feature">
+                    <h3>🤖 AI Integration</h3>
+                    <p>Support for Reinforcement Learning, time series forecasting, and anomaly detection.</p>
+                </div>
+                
+                <div class="feature">
+                    <h3>🏗️ Manufacturing Pipeline</h3>
+                    <p>Event-driven logistics with pipeline tracking for rover construction and deployment.</p>
+                </div>
+                
+                <div class="feature">
+                    <h3>📈 Real-time Metrics</h3>
+                    <p>Comprehensive telemetry tracking growth rates, productivity, and resource utilization.</p>
+                </div>
+                
+                <div class="feature">
+                    <h3>🧪 Agent-Based Model</h3>
+                    <p>Built on Mesa framework with modular sphere architecture (Technosphere, Biosphere, etc.).</p>
+                </div>
+            </div>
+            
+            <h2>Quick Start</h2>
+            <pre><code># Clone the repository
+git clone https://github.com/yourusername/Proxima.git
+cd Proxima
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the simulation
+python -m proxima_model.main</code></pre>
+            
+            <h2>Key Features</h2>
+            <ul style="margin: 1rem 0 1rem 2rem;">
+                <li><strong>Exponential Growth Control:</strong> S(t) = S₀ · 2^(t/6) targeting doubling every 6 months</li>
+                <li><strong>Receding-Horizon Planning:</strong> MPC-based rover ordering with lead time anticipation</li>
+                <li><strong>Pipeline Management:</strong> Event-driven manufacturing with capacity constraints</li>
+                <li><strong>ML Ready:</strong> Interfaces for RL agents, LSTM forecasting, and GNN coordination</li>
+            </ul>
+            
+            <div class="cta">
+                <a href="https://github.com/yourusername/Proxima" class="btn">View on GitHub</a>
+                <a href="documentation/policies/science_policies.html" class="btn btn-secondary">Documentation</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
