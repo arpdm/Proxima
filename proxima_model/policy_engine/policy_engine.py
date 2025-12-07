@@ -1,95 +1,157 @@
-from typing import Dict, Any, List, Optional, Protocol
+"""
+policy_engine.py
 
+PROXIMA LUNAR SIMULATION - POLICY ENGINE
 
-class Policy(Protocol):
-    """Policy protocol for pluggable policies."""
+PURPOSE:
+========
+Extensible policy engine that centralizes scoring and applies operational policies
+to the simulation world. Manages dynamic throttling and other adaptive behaviors
+based on world system metrics.
 
-    id: str
-    name: str
-    enabled: bool
+ARCHITECTURE:
+=============
+- Policy Protocol: Interface for pluggable policies
+- PolicyEngine: Central manager for policy registration and application
+- Built-in Policies: Pre-configured policies like dust coverage throttling
+"""
 
-    def apply(self, engine: "PolicyEngine") -> Dict[str, Any]: ...
+from __future__ import annotations
+from typing import Dict, Any, List, Optional
+import logging
 
+from proxima_model.world_system.evaluation_engine import EvaluationResult
+from proxima_model.policy_engine.policy_protocol import Policy
+from proxima_model.policy_engine.environmental_policies import DustCoverageThrottlePolicy
+from proxima_model.policy_engine.science_policies import ScienceProductionRate
 
-class DustCoverageThrottlePolicy:
-    """
-    Throttle science and manufacturing based on Dust Coverage indicator.
-    Keeps operations above a minimum floor to avoid total shutdown.
-    """
-
-    id = "PLCY-DUST-THROTTLE"
-    name = "Dust Coverage Throttling"
-    enabled = True
-
-    def __init__(self, metric_id: str = "IND-DUST-COV", min_throttle: float = 0.2, sectors: Optional[List[str]] = None):
-        self.metric_id = metric_id
-        self.min_throttle = float(min_throttle)
-        self.sectors = sectors or ["science", "manufacturing"]
-
-    def apply(self, engine: "PolicyEngine") -> Dict[str, Any]:
-        score = engine.score(self.metric_id)
-        throttle = max(self.min_throttle, score)
-
-        effects = {"metric_id": self.metric_id, "score": score, "throttle": throttle, "applied_to": []}
-
-        for sname in self.sectors:
-            sector = engine.world.sectors.get(sname)
-            if sector and hasattr(sector, "set_throttle_factor"):
-                sector.set_throttle_factor(throttle)
-                effects["applied_to"].append(sname)
-
-        return {self.id: effects}
+logger = logging.getLogger(__name__)
 
 
 class PolicyEngine:
-    """Extensible policy engine that centralizes scoring and applies policies."""
+    """
+    Extensible policy engine that centralizes scoring and applies policies.
+
+    How it operates:
+    -----------------
+    1.  The engine holds a list of registered policies (e.g., DustCoverageThrottlePolicy).
+    2.  On each simulation step, the WorldSystem calls `apply_policies` with the
+        complete `EvaluationResult` for that step.
+    3.  The engine iterates through all enabled policies and calls their `apply` method,
+        passing the `EvaluationResult`.
+    4.  Each policy contains its own logic to analyze the metrics and scores within
+        the `EvaluationResult` and determine what actions to take.
+    5.  Actions are executed by calling methods on the simulation world, which is
+        accessible to the policy via the engine instance (`engine.world`).
+    6.  The engine collects and returns a dictionary of the effects from all
+        applied policies.
+    """
 
     def __init__(self, world):
+        """
+        Initialize policy engine with simulation world.
+
+        Args:
+            world: The simulation world object (WorldSystem)
+        """
         self.world = world
-        self._policies: List[Policy] = [
-            DustCoverageThrottlePolicy(),  # default policy
-        ]
+        self._policies: List[Policy] = [DustCoverageThrottlePolicy(), ScienceProductionRate()]
 
-    # Scoring utility shared by all policies
-    def score(self, metric_id: str) -> float:
-        """Return 0..1 score from current metric vs thresholds. 1=good."""
-        mdef = next((m for m in self.world.metric_definitions if m.get("id") == metric_id), None)
-        if not mdef:
-            return 1.0
-        cur = float(self.world.get_performance_metric(metric_id))
-        mtype = mdef.get("type", "positive")
-        low = float(mdef.get("threshold_low", 0.0))
-        high = float(mdef.get("threshold_high", 1.0))
-        span = high - low if high != low else 1.0
-        score = (cur - low) / span if mtype == "positive" else (high - cur) / span
-        return max(0.0, min(1.0, score))
-
-    # Policy registry management
     def add_policy(self, policy: Policy) -> None:
+        """
+        Register a new policy with the engine.
+
+        Args:
+            policy: The policy object to add (must implement Policy protocol)
+        """
+        if not hasattr(policy, "id") or not hasattr(policy, "apply"):
+            raise ValueError("Policy must implement Policy protocol (id, name, enabled, apply)")
         self._policies.append(policy)
 
+    def remove_policy(self, policy_id: str) -> bool:
+        """
+        Remove a policy from the engine.
+
+        Args:
+            policy_id: The ID of the policy to remove
+
+        Returns:
+            True if policy was found and removed, False otherwise
+        """
+        original_length = len(self._policies)
+        self._policies = [p for p in self._policies if getattr(p, "id", None) != policy_id]
+        return len(self._policies) < original_length
+
     def enable_policy(self, policy_id: str, enabled: bool = True) -> bool:
-        for p in self._policies:
-            if getattr(p, "id", None) == policy_id:
-                p.enabled = enabled
+        """
+        Enable or disable a policy by its ID.
+
+        Args:
+            policy_id: The ID of the policy to enable/disable
+            enabled: Whether to enable (True) or disable (False) the policy
+
+        Returns:
+            True if the policy was found and updated, False otherwise
+        """
+        for policy in self._policies:
+            if getattr(policy, "id", None) == policy_id:
+                policy.enabled = enabled
                 return True
         return False
 
+    def get_policy(self, policy_id: str) -> Optional[Policy]:
+        """
+        Get a policy by its ID.
+
+        Args:
+            policy_id: The ID of the policy to retrieve
+
+        Returns:
+            The policy object or None if not found
+        """
+        return next((p for p in self._policies if getattr(p, "id", None) == policy_id), None)
+
     def list_policies(self) -> List[Dict[str, Any]]:
+        """
+        List all registered policies and their status.
+
+        Returns:
+            List of dictionaries summarizing each policy
+        """
         return [
-            {"id": getattr(p, "id", None), "name": getattr(p, "name", None), "enabled": getattr(p, "enabled", False)}
+            {
+                "id": getattr(p, "id", None),
+                "name": getattr(p, "name", "Unknown"),
+                "enabled": getattr(p, "enabled", False),
+            }
             for p in self._policies
         ]
 
-    # Apply all enabled policies and return aggregated effects
-    def apply_policies(self) -> Dict[str, Any]:
+    def apply_policies(self, evaluation_result: EvaluationResult) -> Dict[str, Any]:
+        """
+        Apply all enabled policies using the provided evaluation result.
+
+        Args:
+            evaluation_result: The complete evaluation result for the current step.
+
+        Returns:
+            Dictionary of effects from all applied policies, keyed by policy ID.
+        """
         effects: Dict[str, Any] = {}
+
         for policy in self._policies:
-            if getattr(policy, "enabled", False):
-                try:
-                    res = policy.apply(self)
-                    if isinstance(res, dict):
-                        effects.update(res)
-                except Exception as e:
-                    effects[getattr(policy, "id", "unknown")] = {"error": str(e)}
+            if not getattr(policy, "enabled", False):
+                continue
+
+            try:
+                # Pass the evaluation_result directly to the policy
+                result = policy.apply(self, evaluation_result)
+                if isinstance(result, dict):
+                    # Use policy ID for namespacing effects
+                    effects[policy.id] = result
+            except Exception as e:
+                policy_id = getattr(policy, "id", "unknown")
+                effects[policy_id] = {"error": str(e)}
+                logger.error(f"Error applying policy {policy_id}: {e}", exc_info=True)
+
         return effects

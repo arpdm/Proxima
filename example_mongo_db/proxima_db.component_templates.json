@@ -1,0 +1,104 @@
+[{
+  "_id": "comp_science_rover",
+  "name": "Science Rover",
+  "type": "rover",
+  "subtype": "science_rover",
+  "sphere": "Technosphere",
+  "config": {
+    "power_usage_kWh": 1,
+    "science_generation": 0.5,
+    "battery_capacity_kWh": 20
+  },
+  "children": []
+},
+{
+  "_id": "comp_power_gen",
+  "type": "power_generator",
+  "subtype": "solar",
+  "config": {
+    "power_capacity_kwh": 5,
+    "efficiency": 0.5,
+    "availability": 0.5
+  }
+},
+{
+  "_id": "comp_power_storage",
+  "type": "power_storage",
+  "subtype": "LI_BATTERY",
+  "config": {
+    "min_operational_cap_kwh": 3,
+    "max_operational_cap_kwh": 100,
+    "initial_charge_kwh": 20
+  }
+},
+{
+  "_id": "comp_fuel_gen_rocket",
+  "name": "Rocket Fuel Generator",
+  "type": "fuel_gen",
+  "subtype": "liquid_rocket_fuel",
+  "config": {
+    "efficiency": 0.5,
+    "thermal_GWh_per_kg": 163.9,
+    "kwh_per_kg_prop": 22.8,
+    "he3_kg_per_hour": 5
+  }
+},
+{
+  "_id": "comp_rocket",
+  "type": "orbital_rocket",
+  "subtype": "liquidEngine",
+  "config": {
+    "prop_usage_kg_per_payload_kg": 21.4,
+    "carrying_capacity_kg": 22800,
+    "max_speed_km_k": 5300
+  }
+},
+{
+  "_id": "comp_isru_robot",
+  "name": "ISRU Robot",
+  "type": "isru",
+  "subtype": "robot",
+  "sphere": "Technosphere",
+  "config": {
+    "max_power_usage_kWh": 65,
+    "ice_extraction_power_kWh": 5,
+    "ice_extraction_output_kg": 20,
+    "regolith_extraction_power_kWh": 15,
+    "regolith_extraction_output_kg": 100,
+    "he3_regolith_processing_throughput_tons_per_step": 100,
+    "he3_extraction_power_kWh": 40,
+    "efficiency": 0.9,
+    "processing_time_t": 3,
+    "isru_modes": [
+      "ICE_EXTRACTION",
+      "REGOLITH_EXTRACTION",
+      "HE3_GENERATION",
+      "INACTIVE"
+    ]
+  }
+},
+{
+  "_id": "printing_robot",
+  "name": "Printing Robot",
+  "type": "printing_robot",
+  "subtype": "shell",
+  "sphere": "Technosphere",
+  "config": {
+    "max_power_usage_kWh": 65,
+    "efficiency": 0.9,
+    "processing_time_t": 80,
+    "regolith_usage_kg": 200
+  }
+},
+{
+  "_id": "assembly_robot",
+  "name": "Assebly Robot",
+  "type": "assembly_robot",
+  "subtype": "builder",
+  "sphere": "Technosphere",
+  "config": {
+    "max_power_usage_kWh": 85,
+    "efficiency": 0.8,
+    "processing_time_t": 50
+  }
+}]

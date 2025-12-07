@@ -18,34 +18,6 @@ Throughout the development of World System Beta, the following objectives are to
 ## Constraints
 The initial world system Beta is constrained to plans and operations defined as part of Artemis program. This is to provide a controlled environment that has some realistic odds of success.
 
-# Case Studies
-
-This section covers case studies based on real events and historical records on Earth. The goal is to identify major success and failure cases, analyze them, form patterns, and use the results to define a set of goals and policies for World System Beta.  
-
-### Grid Fragility and Cascading Failures
-- **2003 Northeast Blackout (USA/Canada):** A single transmission line sag + alarm failure → cascade → 50M people lost power.
-- **2021 Texas Winter Storm (ERCOT):** Weather stress + poor infrastructure + no grid interconnection → statewide outage.
-
-### Weather and Climate Vulnerability
-- **Hurricane Maria (2017, Puerto Rico):** Centralized infrastructure destroyed → weeks without power.
-- **Wildfires in California:** Sparked by grid lines; rolling blackouts implemented to reduce risk.
-
-### Centralization and Monopolization
-- Many nations (e.g., South Africa’s **Eskom**) struggle due to centralized, politicized, monopolistic utilities.
-- High dependency leads to fragile socio-political links.
-
-### Underinvestment in Storage and Buffering
-- Most grids (even advanced ones) underinvest in storage: Germany, USA, Japan.
-- Over-reliance on real-time generation leads to waste or shortages.
-
-### Technology Lock-In & Transition Delay
-- Fossil fuel investment inertia → slow clean energy adoption despite cost parity.
-- Nuclear stagnation due to regulation & public distrust.
-
-### Equity and Access Disparities
-- Energy poverty in rural India and sub-Saharan Africa: over 800 million people lack electricity.
-- Urban slums often lack reliable energy despite proximity to infrastructure.
-
 # Functional Description
 ## Simulation Functions and Capabilities
 
@@ -56,25 +28,25 @@ This section defines the simulation’s functional contract—what **Proxima** c
 ### Core Agent Functions
 
 - **Operational modes:** Each agent implements one or more mutually exclusive operational modes (e.g., idle, active, maintenance, fault-handling). At any time, exactly one mode is active; mode transitions follow defined preconditions and safety checks.  
-- **Single-mode execution:** While executing, an agent performs the key function mapped to its current mode. Concurrency within an agent is internal (e.g., monitoring), but external behavior is represented by a single active mode.  
 - **Mode control vs. goals:** Agents are goal-agnostic—they do not store or reason about global world-system goals or priorities. Mode changes are commanded by their sector’s scheduler/policy layer, which interprets goals and translates them into local assignments.  
 - **Task interface:** Agents receive tasks with inputs, required resources, and acceptance criteria; they return status, outputs, and telemetry (including health and consumption metrics).  
 - **Lifetime & health:** Each agent has a lifetime and health state (e.g., age, wear, fault counters). End-of-life or degraded health triggers policy-driven actions (derating, maintenance, swap-out, retirement).  
 
 ---
 
-### 1.1.2 Goals Injections and Updates
+### Goals Injections and Updates
 
 - **Parametric goals:** World-system goals are expressed in parametric form (metric, target/bounds, horizon, weight), enabling versioning, comparison, and optimization.  
 - **External updates:** Authorized external actors (human or supervisory policy engine) may inject new goals or modify existing ones at runtime. All changes are timestamped, versioned, and auditable.  
-- **Goal interpretation:** The world system translates global goals into sector-level priority vectors using observed state, constraints, and policy, resolving tradeoffs across sectors.  
-- **Scheduling & assignment:** Each sector applies its prioritization and scheduling policies (e.g., priority-weighted scheduling, earliest-deadline-first, resource-aware dispatch) to allocate tasks and set agent modes to meet goals under constraints (power, comms, spares, health).  
+- **Goal interpretation:** The world system translates global goals into sector-level policies.
+- **Scheduling & assignment:** Each sector applies uses the applied policies to meet the goals to assign concrete tasks to its agents.
 - **Closed-loop adaptation:** Sectors periodically recompute priorities based on goal deviation and performance. Policies may adapt automatically (auto-mode) or be updated manually (manual-mode) with immediate effect.  
 
 ---
 
 ### System Performance Monitoring Against Goals
-*(Content TBD)*
+
+System performance is continuously monitored by the **Evaluation Engine** at each simulation step. The engine aggregates metric contributions from all active sectors to maintain a live state of system-wide performance indicators. These indicators are then compared against predefined **Performance Goals** to calculate a normalized score (0.0 to 1.0) and determine a status (e.g., "within" or "outside" limits). The resulting `EvaluationResult`, containing all metrics, scores, and statuses, provides a comprehensive, data-driven snapshot of goal attainment that informs the `Policy Engine` and other adaptive systems.
 
 ---
 
@@ -84,7 +56,7 @@ This section defines the simulation’s functional contract—what **Proxima** c
 ---
 
 ### Policy Injection
-- Policy engine and prioritization
+*(Content TBD)*
 
 ---
 
@@ -131,15 +103,6 @@ This section defines how the world system progresses through stages using explic
 *(Content TBD)*
 
 
-## World System Beta Functions
-
-The World System Beta is expected to perform the following functions throughout different phases of development, in ways that directly support the objectives defined in the problem background.
-
-- **Energy Production:** The model supports energy production through various means.  
-- **Store Energy:** The model stores energy in batteries for scenarios when energy needs exceed maximum generation capacity.  
-- **ISRU:** The model supports regolith processing and Helium-3 generation, contributing to the economy and growth.  
-- **Science:** The model supports the generation of science output using Lunar Terrain Vehicles (LTVs).
-
 ## World System Goals and Policy Definitions
 
 This section defines the contract between strategy and execution in Proxima. It specifies how high-level goals are declared, governed, and prioritized, and how policies translate those goals into actionable guidance for sectors and agents. Detailed goals, policies and metrics are defined in \([Goals and Policies Spreadsheet Document](https://docs.google.com/spreadsheets/d/1DJ1qMmEId6VD6TH9aABLoQtjdzCsc1FVIo08yIPi0ic/edit?gid=808380489#gid=808380489)).
@@ -180,217 +143,55 @@ Simulation loop controller that builds the config, instantiates World System, ru
 
 Figure 3 Proxima Model Operation Flow
 
+## Evaluation Engine
+Provides centralized metric evaluation, scoring, and performance tracking. Decoupled from WorldSystem for better separation of concerns.
+
+## Policy Engine
+
+Extensible policy engine that centralizes scoring and applies operational policies to the simulation world. Manages dynamic throttling and other adaptive behaviors based on world system metrics.
+
+- **Policy Protocol:** Interface for pluggable policies
+- **PolicyEngine:** Central manager for policy registration and application
+- **Built-in Policies:** Pre-configured policies like dust coverage throttling
+
+## Sectors
+
+For creating a new sector, refer to [World System](./sectors/world_system.md) documentation.
+
+| Sector                        | Documentation Link                                                      |
+| ----------------------------- | ----------------------------------------------------------------------- |
+| Construction Sector           | [View Documentation](./sectors/construction_sector.md)                  |
+| Energy Sector                 | [View Documentation](./sectors/energy_sector.md)                        |
+| Equipment Manufacturing Sector| [View Documentation](./sectors/equipment_manufacturing_sector.md)       |
+| Manufacturing Sector          | [View Documentation](./sectors/manufacturing_sector.md)                 |
+| Science Sector                | [View Documentation](./sectors/science_sector.md)                       |
+| Transportation Sector         | [View Documentation](./sectors/transportation_sector.md)                |
+
+
 # Dynamical Architecture
 
-## Dynamics
+This section covers the dynamical aspects of the world system. The dynamics might be world system equations identified as a result of policy flow and system identification, or may be equations used for various world system functional operations.
 
-### Agent Evolution with Resource Production and Environmental Side-effects
+For each scenario, the dynamics are assessed against Proxima Model equations with hollistic view defined in the [Exploring the Long Future and Survival of Human Civilization](Exploring_the_Long_Future_and_Survival_of_Human_Civilization.pdf)
 
-**ICE Extraction Agents**
+## Dynamics 
 
-```math
-X^{(\mathrm{ICE})}_t = A_{\mathrm{ICE}} \, X^{(\mathrm{ICE})}_{t-1} + B_{\mathrm{ICE}} \, P^{(\mathrm{ICE})}_t + C_{\mathrm{ICE}} \, E^{(\mathrm{ICE})}_t
-```
+TBD - Needs to be added
 
-Where:
+# Policies
 
-```math
-X^{(\mathrm{ICE})}_t =
-\begin{bmatrix}
-H_2 \\
-O_2 \\
-E_{\text{dust}} \\
-E_{\text{surface}}
-\end{bmatrix}
-```
+The simulation includes an adaptive **Policy Engine** that applies operational policies based on real-time system performance. These policies can dynamically adjust sector parameters to mitigate risks or optimize for specific goals.
 
-**Explanation:**  
-- Models **state update** for ICE extraction agents mining lunar ice for hydrogen and oxygen.  
-- $A_{\mathrm{ICE}}$: persistence/decay from previous timestep.  
-- $B_{\mathrm{ICE}}$: effect of **policies** (extraction rate, dust suppression, energy allocation).  
-- $C_{\mathrm{ICE}}$: effect of **external events** (equipment failure, impacts).  
-- Tracks both **outputs** (H₂, O₂) and **side-effects** (dust, surface degradation).
+| Policy Category          | Documentation Link                                         |
+| ------------------------ | -------------------------------------------------------    |
+| Environmental Policies   | [View Environmental Policies](./policies/environmental_policies.md) |
+| Science Policies         | [View Science Policies](./policies/science_policies.md)    |
+| Manufacturing Policies   |                                                            |
+| Economic Policies        |                                                            |
 
----
+# Proxima Capabilities
 
-**Regolith Extraction Agents**
-
-```math
-X^{(\mathrm{REG})}_t = A_{\mathrm{REG}} \, X^{(\mathrm{REG})}_{t-1} + B_{\mathrm{REG}} \, P^{(\mathrm{REG})}_t + C_{\mathrm{REG}} \, E^{(\mathrm{REG})}_t
-```
-
-Where:
-
-```math
-X^{(\mathrm{REG})}_t =
-\begin{bmatrix}
-\mathrm{He}_3 \\
-\mathrm{Metal} \\
-E_{\text{dust}} \\
-E_{\text{surface}}
-\end{bmatrix}
-```
-
-**Explanation:**  
-- Similar to ICE extraction but for **regolith mining** (producing helium-3 and metals).  
-- Includes same **environmental impact tracking** variables for aggregation.
-
----
-
-### Science Metric as Technology Unlock Driver
-
-```math
-S_t = S_{t-1} + \eta_{\mathrm{SCI}} \cdot r_{\mathrm{SCI}}(t) - \delta_{\mathrm{SCI}} \, S_{t-1}
-```
-
-Unlock condition:
-
-```math
-S_t \geq S_{\mathrm{fusion}} \quad \Rightarrow \quad \text{Fusion technology unlocked}
-```
-
-**Explanation:**  
-- $S_t$: cumulative science score.  
-- $\eta_{\mathrm{SCI}}$: science efficiency per rover-hour/mission.  
-- $r_{\mathrm{SCI}}(t)$: science rate at time \(t\).  
-- $\delta_{\mathrm{SCI}}$: knowledge decay rate.  
-- Crossing $S_{\mathrm{fusion}}$ unlocks helium-3 fusion tech.
-
----
-
-### World System State Aggregation
-
-```math
-X^{(\mathrm{WSB})}_t = \omega_{\mathrm{ICE}} \, X^{(\mathrm{ICE})}_t + \omega_{\mathrm{REG}} \, X^{(\mathrm{REG})}_t + \omega_{\mathrm{SCI}} \, S_t
-```
-
-Extension of the manuscript’s:
-
-```math
-X^{(\mathrm{WS})}_t = \sum_{i=1}^N \omega_i \, X^{(i)}_t
-```
-
-**Explanation:**  
-- Aggregates ICE, REG, and SCI states into one composite lunar system state.  
-- Weights $\omega$ represent subsystem importance.
-
----
-
-### Environmental Impact – Lunar Specialization
-
-```math
-E^{(\mathrm{Lunar})}_t = \gamma_1 E^{(\mathrm{Lunar})}_{t-1} + \gamma_2 \left( E_{\text{dust}} + E_{\text{surface}} \right) + \gamma_3 N_t - \gamma_4 P_{\mathrm{mitigation},t}
-```
-
-**Explanation:**  
-- $E^{(\mathrm{Lunar})}_t$: total environmental impact index.  
-- $\gamma_1$: persistence of previous damage.  
-- $\gamma_2$: impact of dust and surface degradation.  
-- $\gamma_3 N_t$: effect of number of active agents/missions.  
-- $\gamma_4 P_{\mathrm{mitigation},t}$: mitigation policy effects.
-
----
-
-
-
-## Policies
-
-### Manufacturing Sector Priority Management Policy
-
-The Priority-as-Token Deficit Round Robin (DRR) scheduler is used to fairly allocate simulation “turns” among manufacturing tasks based on their assigned priorities. Each task earns tokens at a rate equal to its priority when it is runnable, and only runnable tasks can accumulate tokens (no banking while blocked). At each simulation step, the task with the highest token balance is selected to run, with a round-robin pointer breaking ties. After a task runs and produces work, a fixed number of tokens is spent from its balance. This approach ensures that over time, the share of turns each task receives is proportional to its priority, while still guaranteeing that lower-priority tasks get opportunities to run if they remain available. In our manufacturing sector, this DRR mechanism drives the selection of operational modes for ISRU extractors and generators, balancing He3 production, metal processing, water extraction, regolith mining, and electrolysis according to dynamic mission priorities.
-
-**Sets and variables:**
-
-* t = 0,1,2,... (step index)
-* i ∈ 𝒯 = {He3, Metal, Water, Regolith, Electrolysis}
-* p_i(t) ≥ 0  (priority = tokens earned per step)
-* DC_i(t) ≥ 0 (deficit / token bank)
-* A_i(t) ∈ {0,1} (availability)
-* s(t) ∈ 𝒯 ∪ {∅} (selected task)
-* Y_i(t) ∈ {0,1} (work flag)
-* τ > 0 (token cost per turn; typically τ=1)
-
-#### 1) Token Top-Up (No Banking While Blocked)
-
-```math
-DC_i^{+}(t) =
-\begin{cases}
-DC_i(t) + p_i(t), & \text{if } A_i(t)=1 \text{ and } p_i(t) > 0, \\
-0, & \text{otherwise}.
-\end{cases}
-```
-
-**Description:** If a task is runnable (`A_i(t)=1`) and has positive priority, it earns tokens equal to its priority. If it’s blocked or has zero priority, its token balance is reset to 0.
-
----
-
-#### 2) Candidate Set and Winner (Max-Deficit; RR for Ties)
-$$
-\mathcal{C}(t) = \{\, i \in \mathcal{T} \mid A_i(t)=1,\ DC_i^{+}(t) > 0 \,\}
-$$
-
-$$
-DC^\star(t) = \max_{i \in \mathcal{C}(t)} DC_i^{+}(t)
-$$
-
-$$
-\mathcal{W}(t) = \{\, i \in \mathcal{C}(t) \mid DC_i^{+}(t) \ge DC^\star(t) - \varepsilon \,\}
-$$
-
-$$
-s(t) \in \mathcal{W}(t) \quad \text{(tie broken by round-robin)}
-$$
-
-**Description:** The scheduler selects from runnable tasks with positive tokens. The task(s) with the highest token balance form the winner set, and ties are broken using a round-robin pointer.
-
----
-
-#### 3) Token Spending (Per Turn, Only If Work Occurred)
-$$
-DC_{s(t)}(t+1) = \max\left(0,\, DC_{s(t)}^{+}(t) - \tau \cdot Y_{s(t)}(t)\right)
-$$
-
-$$
-DC_{j \ne s(t)}(t+1) = DC_{j}^{+}(t)
-$$
-
-**Description:** If the selected task completed work (`Y_{s(t)}=1`), it spends a fixed number of tokens `τ`. Non-selected tasks keep their updated balances.
-
----
-
-#### 4) Inactive Shortcut
-
-$$
-\sum_{i \in \mathcal{T}} p_i(t) = 0 \ \Longrightarrow\ \text{sector inactive at step } t
-$$
-
-**Description:** If all task priorities are zero, the manufacturing sector becomes inactive for that step, and no scheduling occurs.
-
----
-
-#### 5) Availability Example
-
-$$
-A_i(t) = \mathbf{1} \left[ \text{agents}(i) \land \mathbf{x}(t) \ge \mathbf{r}_i \land B(t) > 0 \right]
-$$
-
-**Description:** A task is considered available if its agents exist, the current stock `x(t)` meets or exceeds its resource requirements `r_i`, and there is positive power budget `B(t)`.
-
----
-
-#### 6) Long-Run Fairness
-
-$$
-\lim_{T \to \infty} \frac{1}{T} \sum_{t=1}^{T} \mathbf{1}[\,s(t)=i\,]
-= \frac{p_i}{\sum_{j \in \mathcal{T}} p_j}
-$$
-
-**Description:** Over a long horizon, the proportion of turns assigned to each task converges to its priority share. This ensures fair allocation of simulation time proportional to priorities.
-
-
-## 6. Proxima Capabilities
-
-### 6.1. Phases
+## Phases
 
 With each phase/component, the world system will have:
 
@@ -411,138 +212,162 @@ With each phase/component, the world system will have:
 11. Perform sensitivity analysis
 12. Apply adaptive policy control and re-enforcement learning.
 
-**Phase Goals**
 
-| Phase  | Goal |
-| ------ | ---- |
-| Phase 1 [X] | Base infrastructure for simulation and expansion. |
-| Phase 2 [] | World system can grow.<br>Stress testing capabilities are in place, including Monte Carlo. Post-processing capabilities are added. Host mongo DB server. Host Proxima UI Engine with mongodb linkage.|
-| Phase 3 [] | Incorporate Econosphere.<br>Add fidelity in environmental effects of operations (this will require deep research). |
-| Phase 4 []| Incorporate Sociosphere |
-| Phase 5 []| Incorporate human psychosis. |
-| Phase 6 []| Incorporate Governance. Consolidate adaptive & control-informed strategies into a governance layer. Formalize learned policies and thresholds.<br>- Fuzzy Logic Systems<br>- Rule-Based Systems with adaptive thresholds<br>- Game Theory + Policy Evaluation |
-| Phase 7 []| World system can advance. |
-| Phase 8 []| Run system identification to fit surrogate models.<br>Translate ABM dynamics to differential equations.<br>Predict future behavior & design model-driven policies. |
-| Phase 9 []| World System can adapt. |
-| Phase 10 []| Cislunar policy definition. Explore how external policy forces (e.g., Earth-based governance) influence the internal dynamics of the World System Beta.<br><br>How centralized mandates affect autonomy<br>- Control-based resistance or adaptation strategies<br>- Energy governance under Earth-imposed restrictions |
-| Phase 11 []| Develop a formal policy framework. Establish robust guidelines for decision-making, decentralized governance, and ethical constraints.<br>- Policy Synthesis Engine: aggregates lessons across phases<br>- Decision Tree Learning: derived from simulation logs<br>- Ethics & Constraint Engines: embed safety boundaries<br>- Policy Provenance Logs: ensure transparency and traceability |
 
----
-
-### 6.2. Data Infrastructure
-
-| Capability | Development Phase |
-| ---------- | ----------------- |
-| Mongo DB non-relational database used for defining the world system, configuring the world system, and running different experiments. | Phase 1 |
-| Logger can save time-series data. | Phase 1 |
-| Logger can take snapshot of currently running world system state. | Phase 1 |
-| Logger can store system goals. | Phase 1 |
-| Logger can store policies. | Phase 1 |
-| Logger can store disturbance scenarios. | Phase 2 |
-| Logger can store world system agents. | Phase 1 |
-| Logger can store environment. | Phase 1 |
-| Logger can store world system advancement mission profiles. | |
-| Logger | Phase 3 |
-| Logger logs time series data to CSV or HDF5 | Phase 1 |
-| Logger will save time-series data with skipping steps defined | Phase 1 |
+| Phase  | Goal | Status |
+| ------ | ---- | ------ |
+| Phase 1 | Base infrastructure for simulation and expansion. | ✅ |
+| Phase 2 | World system can grow.<br>Stress testing capabilities are in place, including Monte Carlo. Post-processing capabilities are added. Host mongo DB server. Host Proxima UI Engine with mongodb linkage.| 🚧 |
+| Phase 3 | Incorporate Econosphere.<br>Add fidelity in environmental effects of operations (this will require deep research). |  |
+| Phase 4 | Incorporate Sociosphere |  |
+| Phase 5 | Incorporate human psychosis. |  |
+| Phase 6 | Incorporate Governance. Consolidate adaptive & control-informed strategies into a governance layer. Formalize learned policies and thresholds.<br>- Fuzzy Logic Systems<br>- Rule-Based Systems with adaptive thresholds<br>- Game Theory + Policy Evaluation |  |
+| Phase 7 | World system can advance. |  |
+| Phase 8 | Run system identification to fit surrogate models.<br>Translate ABM dynamics to differential equations.<br>Predict future behavior & design model-driven policies. |  |
+| Phase 9 | World System can adapt. |  |
+| Phase 10 | Cislunar policy definition. Explore how external policy forces (e.g., Earth-based governance) influence the internal dynamics of the World System Beta.<br><br>How centralized mandates affect autonomy<br>- Control-based resistance or adaptation strategies<br>- Energy governance under Earth-imposed restrictions |  |
+| Phase 11 | Develop a formal policy framework. Establish robust guidelines for decision-making, decentralized governance, and ethical constraints.<br>- Policy Synthesis Engine: aggregates lessons across phases<br>- Decision Tree Learning: derived from simulation logs<br>- Ethics & Constraint Engines: embed safety boundaries<br>- Policy Provenance Logs: ensure transparency and traceability |  |
 
 ---
 
-### 6.3. World System Configurator
+## Data Infrastructure
 
-| Capability | Development Phase |
-| ---------- | ----------------- |
-| Mongo DB non-relational database used for defining the world system, configuring the world system, and running different experiments. | Phase 1 |
-| Based on introductions of new configuration, the configurator is able to initialize the new changes and allow world system to implement it while running. | Phase 2 |
+| Capability | Development Phase | Status |
+| ---------- | ----------------- | ------ |
+| Mongo DB non-relational database used for defining the world system, configuring the world system, and running different experiments. | Phase 1 | ✅ |
+| Logger can save time-series data. | Phase 1 | ✅ |
+| Logger can take snapshot of currently running world system state. | Phase 1 | ✅ |
+| Logger can store system goals. | Phase 1 | ✅ |
+| Logger can store policies. | Phase 1 | ✅ |
+| Logger can store disturbance scenarios. |  |  |
+| Logger can store world system agents. | Phase 1 | ✅ |
+| Logger can store environment. | Phase 1 | ✅ |
+| Logger can store world system advancement mission profiles. | |  |
+| Logger logs time series data to CSV or HDF5 | Phase 1 | ✅ |
+| Logger will save time-series data with skipping steps defined | Phase 1 | ✅ |
+| Logger logs on local server every DT Time | Phase 2  | ✅ |
+| Logger logs on hosted server every DT Time | Phase 2 | ✅ |
 
----
-
-### 6.4. Launcher
-
-| Capability | Development Phase |
-| ---------- | ----------------- |
-| Launcher can construct world system | Phase 1 |
-| Launcher can run data logger | Phase 1 |
-| Launcher can run User Interface | Phase 1 |
-| Launcher can run simulation in continuous run mode | Phase 1 |
-| Launcher can run simulation with time-limit | Phase 1 |
-| Every time the simulation is paused and resumed, the launcher will start a new CSV file logging (in continuous run mode). | Phase 1 |
-
----
-
-### 6.5. UI Engine
-
-| Capability | Development Phase |
-| ---------- | ----------------- |
-| The UI can pause and resume simulation | Phase 1 |
-| The UI can introduce disturbance events | |
-| The UI can update goals | |
-| The UI can update policies | |
-| The UI can add behavior and events from predefined list of behaviors and events | |
-| The UI can show live simulation data | Phase 1 |
-| The UI can show time-series plots | Phase 1 |
-| The UI can configure which parameters to plot | Phase 1 |
 
 ---
 
-### 6.6. Simulation
+## World System Configurator
 
-| Capability | Development Phase |
-| ---------- | ----------------- |
-| The simulation can run Monte Carlo | Phase 2 |
-| The simulation can run scenario-discovery | |
-| The simulation can run scenarios (defined in database) | |
-| The simulation can support stochastic runs | |
-| The simulation can resume from existing world system state | |
+| Capability | Development Phase | Status |
+| ---------- | ----------------- | ------ |
+| Mongo DB non-relational database used for defining the world system, configuring the world system, and running different experiments. | Phase 1 | ✅ |
+| Based on introductions of new configuration, the configurator is able to initialize the new changes and allow world system to implement it while running. | Phase 2 | 🚧 |
 
 ---
 
-### 6.7. Policy Engine
+## Launcher
 
-| Capability | Development Phase |
-| ---------- | ----------------- |
-| Base infrastructure policies for science, energy, and economy. Not closed loop. | Phase 1 |
-| Bio-Inspired algorithms | |
-
----
-
-### 6.8. Complexity Engine
-
-| Capability | Development Phase |
-| ---------- | ----------------- |
-| Chaos Analysis | |
-| Lyapunov exponent / bifurcation detection | |
-| Sensitivity mapping | |
-| Dynamic policy tuning | |
-| Structural optimization of world system | |
+| Capability | Development Phase | Status |
+| ---------- | ----------------- | ------ |
+| Launcher can construct world system | Phase 1 | ✅ |
+| Launcher can run data logger | Phase 1 | ✅ |
+| Launcher can run User Interface | Phase 1 | ✅ |
+| Launcher can run simulation in continuous run mode | Phase 1 | ✅ |
+| Launcher can run simulation with time-limit | Phase 1 | ✅ |
+| Every time the simulation is paused and resumed, the launcher will start a new CSV file logging (in continuous run mode). | Phase 1 | ✅ |
 
 ---
 
-### 6.9. Event Engine
+## UI Engine
 
-| Capability | Development Phase |
-| ---------- | ----------------- |
-| *(No entries provided)* | |
-
----
-
-### 6.10. Post Processor
-
-| Capability | Development Phase |
-| ---------- | ----------------- |
-| The post processor can analyze simulation logs | |
-| The post processor can compute system metrics | |
-| The post processor can generate summaries and comparative metrics | |
-| The processor can feed data to complexity engine with derived inputs | |
-| The post processor can analyze Monte Carlo runs and generate necessary statistics/plots. | |
+| Capability | Development Phase | Status |
+| ---------- | ----------------- | ------ |
+| The UI can pause and resume simulation | Phase 1 | ✅ |
+| The UI can introduce disturbance events | |  |
+| The UI can update goals | |  |
+| The UI can update policies | |  |
+| The UI can add behavior and events from predefined list of behaviors and events | |  |
+| The UI can show live simulation data | Phase 1 | ✅ |
+| The UI can show time-series plots | Phase 1 | ✅ |
+| The UI can configure which parameters to plot | Phase 1 | ✅ |
+| The Read only version of the UI is hosted on Cloud Runner | Phase 2 | ✅ |
 
 ---
 
-## Appendix A: Tools and Techniques
+## Simulation
 
-| Tool | Use Case |
-| ---- | -------- |
-| Mesa 3.0 | |
-| SimPy | |
+| Capability | Development Phase | Status |
+| ---------- | ----------------- | ------ |
+| The simulation can run Monte Carlo | Phase 2 | 🚧 |
+| The simulation can run scenario-discovery | |  |
+| The simulation can run scenarios (defined in database) | |  |
+| The simulation can support stochastic runs | Phase 2| 🚧 |
+| The simulation can resume from existing world system state | Phase 2 | 🚧 |
+
+---
+
+## Policy Engine
+
+| Capability | Development Phase | Status |
+| ---------- | ----------------- | ------ |
+| Base infrastructure policies for science, energy, and economy. Not closed loop. | Phase 1 | ✅ |
+| Growth policities | Phase 2 | 🚧 |
+| Bio-Inspired algorithms | |  |
+
+---
+
+## Complexity Engine
+
+| Capability | Development Phase | Status |
+| ---------- | ----------------- | ------ |
+| Chaos Analysis |  |  |
+| Lyapunov exponent / bifurcation detection | Phase 2 | 🚧 |
+| Sensitivity Analysis Platform | Phase 2 | 🚧 |
+| Dynamic policy tuning | |  |
+| Structural optimization of world system | |  |
+
+---
+
+## Event Engine
+
+| Capability | Development Phase | Status |
+| ---------- | ----------------- | ------ |
+| *(No entries provided)* | |  |
+
+---
+
+## Model
+
+| Capability | Development Phase | Status |
+| ---------- | ----------------- | ------ |
+| World System Can Expand - | Phase 2 | ✅ |
+| World System Can Import From World System Alpha | Phase 2 | ✅ |
+| World System Has Nuclear Power | Phase 3 | 🚧 |
+| World System Has Rockets for transortation of cargo | Phase 2 | ✅ |
+| World System Has Assembly Robots and 3D Printing Robots | Phase 2 | ✅ |
+| Calculate contribution of each metric to sector | Phase 2 | 🚧 |
+
+---
+
+## Post Processor
+
+| Capability | Development Phase | Status |
+| ---------- | ----------------- | ------ |
+| The post processor can analyze simulation logs - Post Processing Infrastructure | Phase 2 | 🚧 |
+| The post processor can compute system metrics | |  |
+| The post processor can generate summaries and comparative metrics | |  |
+| The processor can feed data to complexity engine with derived inputs | Phase 2 | 🚧 |
+| The post processor can analyze Monte Carlo runs and generate necessary statistics/plots. (1) Feature Scoring (2) Heat Maps (3) Random Forest Feature Importance (4) Pair Scatter Plots (5) Time Series | Phase 2 | 🚧  |
+
+---
+
+# Appendix A: Tools and Techniques
+
+| Tool | Use Case | 
+| ---- | -------- | 
+| Mesa 3.0 | | 
+| SimPy | | 
 | Plotly \| Dash | |
 
+-------------
+
+# REFERENCES
+
+## ISRU EXTRACTION and PROCESSIGN
+
+- https://spacenews.com/interlune-plans-to-gather-scarce-lunar-helium-3-for-quantum-computing-on-earth/ 

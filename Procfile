@@ -1,0 +1,1 @@
+web: gunicorn --bind :$PORT proxima_ui_cloud_runner:app

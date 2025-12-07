@@ -1,75 +1,91 @@
+"""
+Science Rover Component
+
+Configuration:
+1. For any config parameter changed for science rover, must be aligned with __init__ function
+2. For any new data to report, add to report function
+"""
+
 from mesa import Agent
+from enum import Enum
+
+
+class RoverStatus(Enum):
+    """Enumeration of possible rover statuses."""
+
+    IDLE = "idle"
+    OPERATIONAL = "operational"
+    CHARGING = "charging"
+    LOW_BATTERY = "low_battery"
+    THROTTLED = "throttled"
 
 
 class ScienceRover(Agent):
-    def __init__(self, agent_config: dict):
+    """
+    A science rover that operates on battery power, generates science, and recharges
+    from the grid when its battery is too low to operate.
+    """
+
+    def __init__(self, unique_id, model, agent_config: dict):
         """
-        Initializes a Science Rover agent using config dict from the world system builder.
+        Initializes a Science Rover agent.
 
         Args:
+            unique_id: A unique identifier for the agent.
+            model: The model instance the agent belongs to.
             agent_config (dict): Agent-specific configuration.
         """
-        config = agent_config.get("config", agent_config)
+        super().__init__(model)
 
-        # No ID field needed - be consistent with PowerGenerator/PowerStorage
-        self.config = config
-        self.power_usage_kWh = config.get("power_usage_kWh", 0.2)
-        self.science_generation = config.get("science_generation", 0.5)
-        self.battery_capacity_kWh = config.get("battery_capacity_kWh", 20)
-        self.current_battery_kWh = agent_config.get("current_battery_kWh", self.battery_capacity_kWh)
-        self.science_buffer = agent_config.get("science_buffer", 0.0)
-        self.status = agent_config.get("status", "idle")
-        self.location = agent_config.get("location", (0, 0))
-        self.is_operational = False
+        self.config = agent_config.get("config", agent_config)
+        self.unique_id = unique_id
 
-    def is_fully_charged(self) -> bool:
-        return self.current_battery_kWh >= self.battery_capacity_kWh
+        # Configuration Parameters
+        self.power_usage_kWh = float(self.config.get("power_usage_kWh", 0.2))
+        self.science_generation = float(self.config.get("science_generation", 0.5))
+        self.battery_capacity_kWh = float(self.config.get("battery_capacity_kWh", 20))
 
-    def needs_charge(self) -> bool:
-        return self.current_battery_kWh < self.power_usage_kWh
+        # State variables
+        self.current_battery_kWh = float(self.config.get("current_battery_kWh", self.battery_capacity_kWh))
+        self.science_buffer = float(self.config.get("science_buffer", 0.0))
+        self.status = RoverStatus(self.config.get("status", RoverStatus.IDLE.value))
 
     def step(self, available_energy_kWh: float) -> tuple:
         """
-        Run science generation or charge if needed.
+        Defines the rover's behavior for a single simulation step.
+        The rover prioritizes operating. If it cannot, it attempts to charge.
 
         Returns:
-            (float, float): Tuple (power_draw, science_generated)
+            A tuple of (power_draw_from_grid, science_generated).
         """
-        power_draw = 0.0
+        power_draw_from_grid = 0.0
         science_generated = 0.0
 
-        if self.needs_charge():
-            # Fix: Calculate actual charge needed (remaining capacity)
-            charge_needed = self.battery_capacity_kWh - self.current_battery_kWh
-            charge_this_step = min(charge_needed, available_energy_kWh)
-            self.current_battery_kWh += charge_this_step
-
-            # Ensure we don't exceed capacity (safety check)
-            self.current_battery_kWh = min(self.current_battery_kWh, self.battery_capacity_kWh)
-
-            power_draw = charge_this_step
-            self.status = "charging"
-            self.is_operational = False
-            return power_draw, 0.0
-
+        # --- Prioritize operating ---
         if self.current_battery_kWh >= self.power_usage_kWh:
+            # If we have enough power, operate
             self.current_battery_kWh -= self.power_usage_kWh
             self.science_buffer += self.science_generation
             science_generated = self.science_generation
-            self.status = "operational"
-            self.is_operational = True
+            self.status = RoverStatus.OPERATIONAL
         else:
-            self.status = "low_battery"
-            self.is_operational = False
+            # If we can't operate, try to charge ---
+            self.status = RoverStatus.CHARGING
+            charge_needed = self.battery_capacity_kWh - self.current_battery_kWh
+            charge_this_step = min(charge_needed, available_energy_kWh)
 
-        return 0.0, science_generated  # No power drawn from grid when operating
+            self.current_battery_kWh += charge_this_step
+            power_draw_from_grid = charge_this_step
+
+            # If still not enough power to operate after charging, status is low battery
+            if self.current_battery_kWh < self.power_usage_kWh:
+                self.status = RoverStatus.LOW_BATTERY
+
+        return power_draw_from_grid, science_generated
 
     def report(self) -> dict:
         """
         Returns a dictionary of current state for logging or visualization.
-
-        Returns:
-            dict: Status snapshot.
         """
         battery_percentage = (
             (self.current_battery_kWh / self.battery_capacity_kWh) * 100 if self.battery_capacity_kWh > 0 else 0
@@ -80,7 +96,7 @@ class ScienceRover(Agent):
             "battery_percentage": round(battery_percentage, 1),
             "battery_capacity_kWh": self.battery_capacity_kWh,
             "science_buffer": round(self.science_buffer, 2),
-            "status": self.status,
-            "is_operational": self.is_operational,
+            "status": self.status.value,
+            "is_operational": self.status == RoverStatus.OPERATIONAL,
             "type": "science_rover",
         }

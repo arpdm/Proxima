@@ -1,0 +1,18 @@
+Flask==2.3.3
+
+# Web framework
+dash==2.16.1
+dash-bootstrap-components==1.6.0
+dash-ag-grid==31.3.1
+plotly==5.18.0
+
+# Core dependencies  
+pandas==2.2.2
+numpy==1.26.4
+pymongo==4.13
+gunicorn==21.2.0
+
+# Simulation
+mesa==3.0.0
+simpy==4.1.1
+certifi
