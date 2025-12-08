@@ -45,6 +45,9 @@ orjson = "^3.9.15"
 eventlet = "^0.35.2"
 pyyaml = "^6.0.2"
 
+# Analysis
+statsmodels = "^0.14.0"
+
 [tool.black]
 line-length = 120
 target-version = ['py39']
@@ -62,6 +65,7 @@ exclude = '''
 world-system-beta = "proxima_model.world_systems.world_system_beta:main"
 world-system-db-setup = "data_engine.initial_db_setup:main"
 proxima-runner = "runner.proxima_runner:main"
+analyze-timeseries = "complexity_engine.time_series_analyzer:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

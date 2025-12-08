@@ -47,3 +47,11 @@ To achieve #3 following probabily will need to happen:
 
 1. Find different ways to reduce dust coverage. Throttling alone will not be enough as system grows.
 2. Avoid unlimited growth. Growth needs to be controlled based on : (Industrial Dust Coverage Reduction, Resource Depletion, Entropy Index)
+
+#### Analysis Observations
+
+After initial analysis, seems like the rovers are being requested for growth in duplicate amounts. Rovers need to be requested every 4320 steps. It means that in 10000 steps, only two times there needs to be pipeline request. 
+
+Take a better look at the calculation of how many rovers are needed to meet the need for growth. 
+
+Another observation is that even if we have 90 rovers, only 20 of them are operational. So why should we keep asking for more rovers if utilization is low. Maybe the policy needs to be modified so that rovers are requested if utilization is high. otherwise, keep track of the needed rovers vs requested rover to know that we need specific amount for growth but since utilization is low, they are not being requested.

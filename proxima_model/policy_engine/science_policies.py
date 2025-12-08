@@ -50,7 +50,7 @@ class ScienceProductionRate(Policy):
 
         # TODO: This policy can be then using other metrics and policies to make better decisions
         # This policy is for monitoring, so it returns the observed data without applying effects.
-        # TODO: Access to current world system state to evaluate the growth rate 
+        # TODO: Access to current world system state to evaluate the growth rate
         effects = {
             "metric_id": self.metric_id,
             "score": 0,

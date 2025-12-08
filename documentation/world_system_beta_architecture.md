@@ -224,7 +224,7 @@ With each phase/component, the world system will have:
 | Phase 6 | Incorporate Governance. Consolidate adaptive & control-informed strategies into a governance layer. Formalize learned policies and thresholds.<br>- Fuzzy Logic Systems<br>- Rule-Based Systems with adaptive thresholds<br>- Game Theory + Policy Evaluation |  |
 | Phase 7 | World system can advance. |  |
 | Phase 8 | Run system identification to fit surrogate models.<br>Translate ABM dynamics to differential equations.<br>Predict future behavior & design model-driven policies. |  |
-| Phase 9 | World System can adapt. |  |
+| Phase 9 | World System can adapt. Reeinforcement learning + MPC |  |
 | Phase 10 | Cislunar policy definition. Explore how external policy forces (e.g., Earth-based governance) influence the internal dynamics of the World System Beta.<br><br>How centralized mandates affect autonomy<br>- Control-based resistance or adaptation strategies<br>- Energy governance under Earth-imposed restrictions |  |
 | Phase 11 | Develop a formal policy framework. Establish robust guidelines for decision-making, decentralized governance, and ethical constraints.<br>- Policy Synthesis Engine: aggregates lessons across phases<br>- Decision Tree Learning: derived from simulation logs<br>- Ethics & Constraint Engines: embed safety boundaries<br>- Policy Provenance Logs: ensure transparency and traceability |  |
 
@@ -296,7 +296,7 @@ With each phase/component, the world system will have:
 | The simulation can run Monte Carlo | Phase 2 | 🚧 |
 | The simulation can run scenario-discovery | |  |
 | The simulation can run scenarios (defined in database) | |  |
-| The simulation can support stochastic runs | Phase 2| 🚧 |
+| The simulation can support stochastic runs | Phase 2|  ✅ |
 | The simulation can resume from existing world system state | Phase 2 | 🚧 |
 
 ---
@@ -340,7 +340,7 @@ With each phase/component, the world system will have:
 | World System Has Nuclear Power | Phase 3 | 🚧 |
 | World System Has Rockets for transortation of cargo | Phase 2 | ✅ |
 | World System Has Assembly Robots and 3D Printing Robots | Phase 2 | ✅ |
-| Calculate contribution of each metric to sector | Phase 2 | 🚧 |
+| Calculate contribution of each metric to sector | Phase 2 |  ✅ |
 
 ---
 

@@ -233,9 +233,8 @@ class ScienceSector:
         else:
             R_req = 0
 
-        # Step 4: Forecast available rovers R_fore = R_active - Losses + pipeline
-        R_active = operational_count
-        R_fore = R_active - self.expected_losses + self.rovers_in_pipeline
+        # Step 4: Forecast available rovers R_fore = Total Rovers - Losses + pipeline
+        R_fore = self.rover_id_counter - self.expected_losses + self.rovers_in_pipeline
         R_fore = max(0, R_fore)
 
         # Step 5: Calculate order quantity q(t) = max(0, ceil((1+β)*R_req) - R_fore)
@@ -258,7 +257,7 @@ class ScienceSector:
             f"S_target={S_target:.2f}, "
             f"p_eff={p_eff:.3f}, "
             f"R_req={R_req}, "
-            f"R_active={R_active}, "
+            f"R_total={self.rover_id_counter}, "
             f"pipeline={self.rovers_in_pipeline}/{self.max_pipeline_capacity}, "
             f"R_fore={R_fore}, "
             f"order_requested={q}, "
