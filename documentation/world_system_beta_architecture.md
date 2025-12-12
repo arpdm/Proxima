@@ -256,7 +256,7 @@ With each phase/component, the world system will have:
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
 | Mongo DB non-relational database used for defining the world system, configuring the world system, and running different experiments. | Phase 1 | ✅ |
-| Based on introductions of new configuration, the configurator is able to initialize the new changes and allow world system to implement it while running. | Phase 2 | 🚧 |
+| Based on introductions of new configuration, the configurator is able to initialize the new changes and allow world system to implement it while running. | Phase 3 | 🚧 |
 
 ---
 
@@ -348,8 +348,7 @@ With each phase/component, the world system will have:
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
-| The post processor can analyze simulation logs - Post Processing Infrastructure | Phase 2 | 🚧 |
-| The post processor can compute system metrics | |  |
+| The post processor can analyze simulation logs - Post Processing Infrastructure | Phase 2 | ✅ |
 | The post processor can generate summaries and comparative metrics | |  |
 | The processor can feed data to complexity engine with derived inputs | Phase 2 | 🚧 |
 | The post processor can analyze Monte Carlo runs and generate necessary statistics/plots. (1) Feature Scoring (2) Heat Maps (3) Random Forest Feature Importance (4) Pair Scatter Plots (5) Time Series | Phase 2 | 🚧  |
