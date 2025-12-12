@@ -20,14 +20,13 @@ class Requirement:
     content: str
     filepath: str
     folder: str
-    parent: Optional[str] = None  # Parent requirement ID
-    children: List[str] = field(default_factory=list)  # Child requirement IDs
+    parent: Optional[str] = None
+    children: List[str] = field(default_factory=list)
     
     @property
     def folder_category(self) -> str:
         """Extract category from folder structure."""
         parts = Path(self.filepath).parts
-        # Find the top-level category folder (e.g., 0100_system)
         for part in parts:
             if re.match(r'^\d{4}_', part):
                 return part
@@ -62,7 +61,7 @@ def collect_requirements(base_path: str) -> List[Requirement]:
         
         metadata, body = parse_frontmatter(content)
         
-        if 'id' in metadata:  # Only process files with requirement metadata
+        if 'id' in metadata:
             req = Requirement(
                 id=metadata.get('id', 'N/A'),
                 title=metadata.get('title', 'N/A'),
@@ -85,7 +84,6 @@ def build_traceability(requirements: List[Requirement]) -> Dict[str, Requirement
     """Build parent-child relationships between requirements."""
     req_map = {req.id: req for req in requirements}
     
-    # Build children lists
     for req in requirements:
         if req.parent and req.parent in req_map:
             req_map[req.parent].children.append(req.id)
@@ -129,7 +127,6 @@ def get_all_ancestors(req_id: str, req_map: Dict[str, Requirement], visited: Set
 
 def generate_html(requirements: List[Requirement], req_map: Dict[str, Requirement]) -> str:
     """Generate HTML report from requirements."""
-    # Group by folder category
     by_folder = defaultdict(list)
     for req in requirements:
         by_folder[req.folder_category].append(req)
@@ -157,29 +154,65 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
         h2 {
             color: #34495e;
             margin-top: 30px;
-            border-bottom: 2px solid #ecf0f1;
-            padding-bottom: 8px;
         }
-        h3 {
-            color: #7f8c8d;
-            margin-top: 25px;
-        }
-        .toc {
+        .filters {
             background: #f8f9fa;
             padding: 20px;
             border-radius: 5px;
             margin: 20px 0;
+            border: 2px solid #dee2e6;
         }
-        .toc ul {
-            list-style: none;
-            padding-left: 20px;
+        .filter-group {
+            margin: 15px 0;
         }
-        .toc a {
+        .filter-group label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 8px;
+            color: #495057;
+        }
+        .filter-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .filter-btn {
+            padding: 8px 16px;
+            border: 2px solid #3498db;
+            background: white;
             color: #3498db;
-            text-decoration: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.2s;
         }
-        .toc a:hover {
-            text-decoration: underline;
+        .filter-btn:hover {
+            background: #e3f2fd;
+        }
+        .filter-btn.active {
+            background: #3498db;
+            color: white;
+        }
+        .filter-btn.all {
+            border-color: #6c757d;
+            color: #6c757d;
+        }
+        .filter-btn.all.active {
+            background: #6c757d;
+            color: white;
+        }
+        .clear-filters {
+            padding: 10px 20px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .clear-filters:hover {
+            background: #c0392b;
         }
         .summary {
             background: #ecf0f1;
@@ -192,26 +225,16 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 10px;
         }
-        .folder-section {
-            margin: 30px 0;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 8px;
-        }
-        .folder-header {
-            background: #34495e;
-            color: white;
-            padding: 15px;
-            margin: -20px -20px 20px -20px;
-            border-radius: 8px 8px 0 0;
-        }
         .requirement {
             background: white;
             border: 1px solid #ddd;
             border-radius: 5px;
             padding: 20px;
             margin: 20px 0;
-            page-break-inside: avoid;
+            transition: opacity 0.3s;
+        }
+        .requirement.hidden {
+            display: none;
         }
         .req-header {
             background: #3498db;
@@ -223,6 +246,14 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
         .req-id {
             font-size: 1.2em;
             font-weight: bold;
+        }
+        .req-folder-tag {
+            display: inline-block;
+            padding: 4px 8px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+            font-size: 0.8em;
+            margin-top: 5px;
         }
         .metadata {
             display: grid;
@@ -288,35 +319,27 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
         th {
             background: #34495e;
             color: white;
-            position: sticky;
-            top: 0;
         }
         tr:nth-child(even) {
             background: #f8f9fa;
         }
-        .trace-matrix {
-            overflow-x: auto;
+        tr.hidden {
+            display: none;
         }
-        .trace-matrix table {
-            font-size: 0.8em;
+        .trace-list {
+            font-size: 0.85em;
         }
-        .trace-matrix th {
-            writing-mode: vertical-rl;
-            text-orientation: mixed;
-            min-width: 30px;
-        }
-        .trace-cell-yes {
-            background: #27ae60;
-            color: white;
-            text-align: center;
-            font-weight: bold;
-        }
-        .trace-cell-no {
-            background: #ecf0f1;
+        .results-count {
+            padding: 10px;
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            border-radius: 4px;
+            margin: 10px 0;
+            color: #0c5460;
         }
         @media print {
-            .folder-section {
-                page-break-before: always;
+            .filters, .filter-buttons, .clear-filters {
+                display: none;
             }
         }
     </style>
@@ -324,27 +347,47 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
 <body>
     <h1>Requirements Specification</h1>
     
-    <div class="toc">
-        <h2>Table of Contents</h2>
-        <ul>
-            <li><a href="#summary">Summary</a></li>
-            <li><a href="#requirements-table">Requirements Table</a></li>
-            <li><a href="#traceability-matrix">Traceability Matrix</a></li>
-            <li><a href="#by-category">Requirements by Category</a>
-                <ul>
+    <div class="filters">
+        <h3>Filter Requirements</h3>
+        <div class="filter-group">
+            <label>Folder Category:</label>
+            <div class="filter-buttons">
+                <button class="filter-btn all active" onclick="filterByFolder('all')">All</button>
 """
     
     for folder in sorted(by_folder.keys()):
         folder_name = folder.replace('_', ' ').title()
-        html += f'                    <li><a href="#category-{folder}">{folder_name}</a></li>\n'
+        html += f'                <button class="filter-btn" onclick="filterByFolder(\'{folder}\')">{folder_name} ({len(by_folder[folder])})</button>\n'
     
     html += """
-                </ul>
-            </li>
-        </ul>
+            </div>
+        </div>
+        
+        <div class="filter-group">
+            <label>Status:</label>
+            <div class="filter-buttons">
+                <button class="filter-btn all active" onclick="filterByStatus('all')">All</button>
+                <button class="filter-btn" onclick="filterByStatus('draft')">Draft</button>
+                <button class="filter-btn" onclick="filterByStatus('approved')">Approved</button>
+                <button class="filter-btn" onclick="filterByStatus('review')">Review</button>
+            </div>
+        </div>
+        
+        <div class="filter-group">
+            <label>Priority:</label>
+            <div class="filter-buttons">
+                <button class="filter-btn all active" onclick="filterByPriority('all')">All</button>
+                <button class="filter-btn" onclick="filterByPriority('high')">High</button>
+                <button class="filter-btn" onclick="filterByPriority('medium')">Medium</button>
+                <button class="filter-btn" onclick="filterByPriority('low')">Low</button>
+            </div>
+        </div>
+        
+        <button class="clear-filters" onclick="clearAllFilters()">Clear All Filters</button>
+        <div class="results-count" id="results-count"></div>
     </div>
     
-    <div id="summary" class="summary">
+    <div class="summary">
         <h2>Summary</h2>
         <div class="summary-grid">
             <div><strong>Total Requirements:</strong> """ + str(len(requirements)) + """</div>
@@ -352,21 +395,10 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             <div><strong>Approved:</strong> """ + str(sum(1 for r in requirements if r.status == 'approved')) + """</div>
             <div><strong>High Priority:</strong> """ + str(sum(1 for r in requirements if r.priority == 'high')) + """</div>
         </div>
-        <h3>By Category</h3>
-        <div class="summary-grid">
-"""
-    
-    for folder in sorted(by_folder.keys()):
-        folder_name = folder.replace('_', ' ').title()
-        count = len(by_folder[folder])
-        html += f'            <div><strong>{folder_name}:</strong> {count}</div>\n'
-    
-    html += """
-        </div>
     </div>
     
-    <h2 id="requirements-table">Requirements Table</h2>
-    <table>
+    <h2>Requirements Table</h2>
+    <table id="requirements-table">
         <thead>
             <tr>
                 <th>ID</th>
@@ -386,10 +418,14 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
     for req in requirements:
         folder_name = req.folder_category.replace('_', ' ').title()
         parent_link = f'<a href="#req-{req.parent}" class="trace-link">{req.parent}</a>' if req.parent else '-'
-        children_links = ', '.join([f'<a href="#req-{child}" class="trace-link">{child}</a>' for child in req.children]) if req.children else '-'
+        
+        children_links = '-'
+        if req.children:
+            child_list = [f'<a href="#req-{child}" class="trace-link">{child}</a>' for child in req.children]
+            children_links = '<span class="trace-list">' + ', '.join(child_list) + '</span>'
         
         html += f"""
-            <tr>
+            <tr data-folder="{req.folder_category}" data-status="{req.status}" data-priority="{req.priority}">
                 <td><a href="#req-{req.id}" class="trace-link">{req.id}</a></td>
                 <td>{req.title}</td>
                 <td>{req.category}</td>
@@ -406,65 +442,22 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
         </tbody>
     </table>
     
-    <h2 id="traceability-matrix">Traceability Matrix</h2>
-    <div class="trace-matrix">
-        <table>
-            <thead>
-                <tr>
-                    <th>From \ To</th>
+    <h2>Detailed Requirements</h2>
+    <div id="requirements-list">
 """
     
     for req in requirements:
-        html += f'                    <th>{req.id}</th>\n'
-    
-    html += """
-                </tr>
-            </thead>
-            <tbody>
-"""
-    
-    for req_from in requirements:
-        html += f'                <tr>\n                    <th>{req_from.id}</th>\n'
-        descendants = get_all_descendants(req_from.id, req_map)
-        
-        for req_to in requirements:
-            if req_to.id in descendants:
-                html += '                    <td class="trace-cell-yes">✓</td>\n'
-            else:
-                html += '                    <td class="trace-cell-no"></td>\n'
-        
-        html += '                </tr>\n'
-    
-    html += """
-            </tbody>
-        </table>
-    </div>
-    
-    <h2 id="by-category">Requirements by Category</h2>
-"""
-    
-    for folder in sorted(by_folder.keys()):
-        folder_name = folder.replace('_', ' ').title()
-        folder_reqs = by_folder[folder]
+        content_html = markdown.markdown(req.content)
+        ancestors = get_all_ancestors(req.id, req_map)
+        descendants = get_all_descendants(req.id, req_map)
+        folder_name = req.folder_category.replace('_', ' ').title()
         
         html += f"""
-    <div id="category-{folder}" class="folder-section">
-        <div class="folder-header">
-            <h2>{folder_name}</h2>
-            <div>{len(folder_reqs)} requirements</div>
-        </div>
-"""
-        
-        for req in folder_reqs:
-            content_html = markdown.markdown(req.content)
-            ancestors = get_all_ancestors(req.id, req_map)
-            descendants = get_all_descendants(req.id, req_map)
-            
-            html += f"""
-        <div id="req-{req.id}" class="requirement">
+        <div id="req-{req.id}" class="requirement" data-folder="{req.folder_category}" data-status="{req.status}" data-priority="{req.priority}">
             <div class="req-header">
                 <div class="req-id">{req.id}</div>
                 <div>{req.title}</div>
+                <div class="req-folder-tag">{folder_name}</div>
             </div>
             <div class="metadata">
                 <div class="metadata-item">
@@ -493,75 +486,163 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
                 </div>
             </div>
 """
+        
+        if req.parent or req.children or ancestors or descendants:
+            html += '            <div class="traceability">\n                <h4>Traceability</h4>\n'
             
-            if req.parent or req.children or ancestors or descendants:
-                html += '            <div class="traceability">\n                <h4>Traceability</h4>\n'
-                
-                if req.parent:
-                    html += f'                <div class="trace-item"><strong>Parent:</strong> <a href="#req-{req.parent}" class="trace-link">{req.parent}</a>'
-                    if req.parent in req_map:
-                        html += f' - {req_map[req.parent].title}'
-                    html += '</div>\n'
-                
-                if ancestors:
-                    html += '                <div class="trace-item"><strong>All Ancestors:</strong> '
-                    ancestor_links = [f'<a href="#req-{aid}" class="trace-link">{aid}</a>' for aid in reversed(ancestors)]
-                    html += ' → '.join(ancestor_links)
-                    html += '</div>\n'
-                
-                if req.children:
-                    html += '                <div class="trace-item"><strong>Children:</strong> '
-                    child_links = []
-                    for child_id in req.children:
-                        link = f'<a href="#req-{child_id}" class="trace-link">{child_id}</a>'
-                        if child_id in req_map:
-                            link += f' ({req_map[child_id].title})'
-                        child_links.append(link)
-                    html += ', '.join(child_links)
-                    html += '</div>\n'
-                
-                if descendants:
-                    html += f'                <div class="trace-item"><strong>All Descendants:</strong> {len(descendants)} requirement(s)</div>\n'
-                
-                html += '            </div>\n'
+            if req.parent:
+                html += f'                <div class="trace-item"><strong>Parent:</strong> <a href="#req-{req.parent}" class="trace-link">{req.parent}</a>'
+                if req.parent in req_map:
+                    html += f' - {req_map[req.parent].title}'
+                html += '</div>\n'
             
-            html += f"""
+            if ancestors:
+                html += '                <div class="trace-item"><strong>All Ancestors:</strong> '
+                ancestor_links = [f'<a href="#req-{aid}" class="trace-link">{aid}</a>' for aid in reversed(ancestors)]
+                html += ' → '.join(ancestor_links)
+                html += '</div>\n'
+            
+            if req.children:
+                html += '                <div class="trace-item"><strong>Children:</strong> '
+                child_links = []
+                for child_id in req.children:
+                    link = f'<a href="#req-{child_id}" class="trace-link">{child_id}</a>'
+                    if child_id in req_map:
+                        link += f' ({req_map[child_id].title})'
+                    child_links.append(link)
+                html += ', '.join(child_links)
+                html += '</div>\n'
+            
+            if descendants:
+                html += f'                <div class="trace-item"><strong>All Descendants:</strong> {len(descendants)} requirement(s)</div>\n'
+            
+            html += '            </div>\n'
+        
+        html += f"""
             {content_html}
         </div>
 """
-        
-        html += '    </div>\n'
     
     html += """
+    </div>
+    
+    <script>
+        let activeFilters = {
+            folder: 'all',
+            status: 'all',
+            priority: 'all'
+        };
+        
+        function updateFilterButtons(filterType, value) {
+            const buttons = document.querySelectorAll(`.filter-btn[onclick*="${filterType}"]`);
+            buttons.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+        
+        function filterByFolder(folder) {
+            activeFilters.folder = folder;
+            updateFilterButtons('filterByFolder', folder);
+            applyFilters();
+        }
+        
+        function filterByStatus(status) {
+            activeFilters.status = status;
+            updateFilterButtons('filterByStatus', status);
+            applyFilters();
+        }
+        
+        function filterByPriority(priority) {
+            activeFilters.priority = priority;
+            updateFilterButtons('filterByPriority', priority);
+            applyFilters();
+        }
+        
+        function applyFilters() {
+            const requirements = document.querySelectorAll('.requirement');
+            const tableRows = document.querySelectorAll('#requirements-table tbody tr');
+            let visibleCount = 0;
+            
+            requirements.forEach(req => {
+                const folder = req.dataset.folder;
+                const status = req.dataset.status;
+                const priority = req.dataset.priority;
+                
+                const folderMatch = activeFilters.folder === 'all' || folder === activeFilters.folder;
+                const statusMatch = activeFilters.status === 'all' || status === activeFilters.status;
+                const priorityMatch = activeFilters.priority === 'all' || priority === activeFilters.priority;
+                
+                if (folderMatch && statusMatch && priorityMatch) {
+                    req.classList.remove('hidden');
+                    visibleCount++;
+                } else {
+                    req.classList.add('hidden');
+                }
+            });
+            
+            tableRows.forEach(row => {
+                const folder = row.dataset.folder;
+                const status = row.dataset.status;
+                const priority = row.dataset.priority;
+                
+                const folderMatch = activeFilters.folder === 'all' || folder === activeFilters.folder;
+                const statusMatch = activeFilters.status === 'all' || status === activeFilters.status;
+                const priorityMatch = activeFilters.priority === 'all' || priority === activeFilters.priority;
+                
+                if (folderMatch && statusMatch && priorityMatch) {
+                    row.classList.remove('hidden');
+                } else {
+                    row.classList.add('hidden');
+                }
+            });
+            
+            document.getElementById('results-count').textContent = 
+                `Showing ${visibleCount} of """ + str(len(requirements)) + """ requirements`;
+        }
+        
+        function clearAllFilters() {
+            activeFilters = {
+                folder: 'all',
+                status: 'all',
+                priority: 'all'
+            };
+            
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            document.querySelectorAll('.filter-btn.all').forEach(btn => {
+                btn.classList.add('active');
+            });
+            
+            applyFilters();
+        }
+        
+        // Initialize results count
+        applyFilters();
+    </script>
 </body>
 </html>
 """
     return html
 
 def main():
-    # Collect requirements from current directory
     requirements = collect_requirements('.')
     
     print(f"Found {len(requirements)} requirements")
     
-    # Build traceability
     req_map = build_traceability(requirements)
     
-    # Print traceability stats
     with_parents = sum(1 for r in requirements if r.parent)
     with_children = sum(1 for r in requirements if r.children)
     print(f"Requirements with parents: {with_parents}")
     print(f"Requirements with children: {with_children}")
     
-    # Generate HTML
     html_content = generate_html(requirements, req_map)
     
-    # Save HTML
     with open('requirements_report.html', 'w', encoding='utf-8') as f:
         f.write(html_content)
     print("Generated: requirements_report.html")
     
-    # Generate PDF
     HTML(string=html_content).write_pdf('requirements_report.pdf')
     print("Generated: requirements_report.pdf")
 
