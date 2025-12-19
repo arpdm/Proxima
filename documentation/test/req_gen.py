@@ -169,35 +169,34 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             max-width: 1400px;
             margin: 0 auto;
             padding: 20px;
-            color: #2c3e50;
-            background: linear-gradient(135deg, #0d47a1 0%, #1b5e20 100%);
-            background-attachment: fixed;
+            color: #e0e0e0;
+            background: #0a0a0a;
         }
         .container {
-            background: rgba(255, 255, 255, 0.95);
+            background: #1a1a1a;
             border-radius: 8px;
             padding: 30px;
             margin: 20px 0;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
         }
         h1 {
-            color: #0d47a1;
-            border-bottom: 3px solid #4caf50;
+            color: #4fc3f7;
+            border-bottom: 3px solid #2e7d32;
             padding-bottom: 10px;
             margin-bottom: 30px;
             font-weight: 300;
         }
         h2 {
-            color: #1b5e20;
+            color: #81c784;
             margin-top: 30px;
             font-weight: 400;
         }
         .filters {
-            background: #f8f9fa;
+            background: #2a2a2a;
             padding: 20px;
             border-radius: 5px;
             margin: 20px 0;
-            border-left: 4px solid #4caf50;
+            border-left: 4px solid #2e7d32;
         }
         .filter-group {
             margin: 15px 0;
@@ -206,7 +205,7 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             font-weight: bold;
             display: block;
             margin-bottom: 8px;
-            color: #2c3e50;
+            color: #e0e0e0;
         }
         .filter-buttons {
             display: flex;
@@ -215,35 +214,35 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
         }
         .filter-btn {
             padding: 8px 16px;
-            border: 2px solid #0d47a1;
-            background: white;
-            color: #0d47a1;
+            border: 2px solid #4fc3f7;
+            background: #333;
+            color: #4fc3f7;
             border-radius: 4px;
             cursor: pointer;
             font-size: 0.9em;
         }
         .filter-btn:hover {
-            background: #e3f2fd;
+            background: #444;
         }
         .filter-btn.active {
-            background: #0d47a1;
-            color: white;
+            background: #4fc3f7;
+            color: #0a0a0a;
         }
         .filter-btn.all {
-            border-color: #6c757d;
-            color: #6c757d;
+            border-color: #666;
+            color: #666;
         }
         .filter-btn.all.active {
-            background: #6c757d;
-            color: white;
+            background: #666;
+            color: #0a0a0a;
         }
         .filter-btn.none {
-            border-color: #adb5bd;
-            color: #adb5bd;
+            border-color: #888;
+            color: #888;
         }
         .filter-btn.none.active {
-            background: #adb5bd;
-            color: white;
+            background: #888;
+            color: #0a0a0a;
         }
         .clear-filters {
             padding: 10px 20px;
@@ -259,11 +258,11 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             background: #b71c1c;
         }
         .summary {
-            background: #e8f5e8;
+            background: #2a2a2a;
             padding: 15px;
             border-radius: 5px;
             margin: 20px 0;
-            border-left: 4px solid #4caf50;
+            border-left: 4px solid #2e7d32;
         }
         .summary-grid {
             display: grid;
@@ -271,8 +270,8 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             gap: 10px;
         }
         .requirement {
-            background: white;
-            border: 1px solid #ddd;
+            background: #2a2a2a;
+            border: 1px solid #444;
             border-radius: 5px;
             padding: 20px;
             margin: 20px 0;
@@ -294,7 +293,7 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
         .req-folder-tag {
             display: inline-block;
             padding: 4px 8px;
-            background: rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.1);
             border-radius: 3px;
             font-size: 0.8em;
             margin-top: 5px;
@@ -305,7 +304,7 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             gap: 10px;
             margin: 15px 0;
             padding: 10px;
-            background: #f1f8e9;
+            background: #333;
             border-radius: 3px;
         }
         .metadata-item {
@@ -315,13 +314,13 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
         .metadata-label {
             font-weight: bold;
             font-size: 0.85em;
-            color: #558b2f;
+            color: #81c784;
             text-transform: uppercase;
         }
         .traceability {
             margin: 15px 0;
             padding: 10px;
-            background: #fff3cd;
+            background: #333;
             border-left: 4px solid #ffc107;
             border-radius: 3px;
         }
@@ -329,7 +328,7 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             margin: 5px 0;
         }
         .trace-link {
-            color: #0d47a1;
+            color: #4fc3f7;
             text-decoration: none;
             font-weight: 500;
         }
@@ -348,7 +347,7 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
         .status-review { background: #1976d2; color: white; }
         .priority-high { color: #d32f2f; font-weight: bold; }
         .priority-medium { color: #f57c00; }
-        .priority-low { color: #7cb342; }
+        .priority-low { color: #81c784; }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -358,14 +357,14 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
         th, td {
             padding: 10px;
             text-align: left;
-            border: 1px solid #ddd;
+            border: 1px solid #444;
         }
         th {
             background: #1b5e20;
             color: white;
         }
         tr:nth-child(even) {
-            background: #f1f8e9;
+            background: #333;
         }
         tr.hidden {
             display: none;
@@ -375,15 +374,16 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
         }
         .results-count {
             padding: 10px;
-            background: #e3f2fd;
-            border: 1px solid #bbdefb;
+            background: #333;
+            border: 1px solid #444;
             border-radius: 4px;
             margin: 10px 0;
-            color: #0d47a1;
+            color: #e0e0e0;
         }
         @media print {
             body {
                 background: white;
+                color: black;
             }
             .container {
                 background: white;
@@ -391,6 +391,27 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             }
             .filters, .filter-buttons, .clear-filters {
                 display: none;
+            }
+            .requirement, .summary, .filters {
+                background: white;
+                color: black;
+            }
+            .req-header {
+                background: #f0f0f0;
+                color: black;
+            }
+            .metadata {
+                background: #f9f9f9;
+            }
+            .traceability {
+                background: #fff3cd;
+            }
+            table th {
+                background: #f0f0f0;
+                color: black;
+            }
+            table tr:nth-child(even) {
+                background: #f9f9f9;
             }
         }
     </style>
@@ -753,7 +774,7 @@ def main():
     
     html_content = generate_html(requirements, req_map)
     
-    with open('requirements.html', 'w', encoding='utf-8') as f:
+    with open('docs/requirements.html', 'w', encoding='utf-8') as f:
         f.write(html_content)
     print("Generated: requirements.html")
     
