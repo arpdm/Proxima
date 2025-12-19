@@ -24,13 +24,32 @@ class Requirement:
     children: List[str] = field(default_factory=list)
     
     @property
-    def folder_category(self) -> str:
-        """Extract category from folder structure."""
+    def folder_levels(self) -> List[str]:
+        """Extract folder hierarchy levels."""
         parts = Path(self.filepath).parts
+        levels = []
         for part in parts:
             if re.match(r'^\d{4}_', part):
-                return part
-        return "uncategorized"
+                levels.append(part)
+        return levels
+    
+    @property
+    def folder_level_1(self) -> str:
+        """Top-level folder (e.g., 0100_system)."""
+        levels = self.folder_levels
+        return levels[0] if len(levels) > 0 else "uncategorized"
+    
+    @property
+    def folder_level_2(self) -> str:
+        """Second-level folder (e.g., 0101_subsystem)."""
+        levels = self.folder_levels
+        return levels[1] if len(levels) > 1 else "none"
+    
+    @property
+    def folder_level_3(self) -> str:
+        """Third-level folder (e.g., 010101_component)."""
+        levels = self.folder_levels
+        return levels[2] if len(levels) > 2 else "none"
 
 def parse_frontmatter(content: str) -> Dict[str, str]:
     """Extract YAML frontmatter from markdown content."""
@@ -127,9 +146,15 @@ def get_all_ancestors(req_id: str, req_map: Dict[str, Requirement], visited: Set
 
 def generate_html(requirements: List[Requirement], req_map: Dict[str, Requirement]) -> str:
     """Generate HTML report from requirements."""
-    by_folder = defaultdict(list)
+    # Group by folder levels
+    by_level_1 = defaultdict(list)
+    by_level_2 = defaultdict(list)
+    by_level_3 = defaultdict(list)
+    
     for req in requirements:
-        by_folder[req.folder_category].append(req)
+        by_level_1[req.folder_level_1].append(req)
+        by_level_2[req.folder_level_2].append(req)
+        by_level_3[req.folder_level_3].append(req)
     
     html = """
 <!DOCTYPE html>
@@ -199,6 +224,14 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
         }
         .filter-btn.all.active {
             background: #6c757d;
+            color: white;
+        }
+        .filter-btn.none {
+            border-color: #adb5bd;
+            color: #adb5bd;
+        }
+        .filter-btn.none.active {
+            background: #adb5bd;
             color: white;
         }
         .clear-filters {
@@ -350,14 +383,46 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
     <div class="filters">
         <h3>Filter Requirements</h3>
         <div class="filter-group">
-            <label>Folder Category:</label>
+            <label>System Level:</label>
             <div class="filter-buttons">
-                <button class="filter-btn all active" onclick="filterByFolder('all')">All</button>
+                <button class="filter-btn all active" onclick="filterByLevel('level1', 'all')">All</button>
 """
     
-    for folder in sorted(by_folder.keys()):
-        folder_name = folder.replace('_', ' ').title()
-        html += f'                <button class="filter-btn" onclick="filterByFolder(\'{folder}\')">{folder_name} ({len(by_folder[folder])})</button>\n'
+    for level1 in sorted(by_level_1.keys()):
+        level1_name = level1.replace('_', ' ').title()
+        html += f'                <button class="filter-btn" onclick="filterByLevel(\'level1\', \'{level1}\')">{level1_name} ({len(by_level_1[level1])})</button>\n'
+    
+    html += """
+            </div>
+        </div>
+        
+        <div class="filter-group">
+            <label>Subsystem Level:</label>
+            <div class="filter-buttons">
+                <button class="filter-btn all active" onclick="filterByLevel('level2', 'all')">All</button>
+                <button class="filter-btn none active" onclick="filterByLevel('level2', 'none')">None</button>
+"""
+    
+    for level2 in sorted(by_level_2.keys()):
+        if level2 != "none":
+            level2_name = level2.replace('_', ' ').title()
+            html += f'                <button class="filter-btn" onclick="filterByLevel(\'level2\', \'{level2}\')">{level2_name} ({len(by_level_2[level2])})</button>\n'
+    
+    html += """
+            </div>
+        </div>
+        
+        <div class="filter-group">
+            <label>Component Level:</label>
+            <div class="filter-buttons">
+                <button class="filter-btn all active" onclick="filterByLevel('level3', 'all')">All</button>
+                <button class="filter-btn none active" onclick="filterByLevel('level3', 'none')">None</button>
+"""
+    
+    for level3 in sorted(by_level_3.keys()):
+        if level3 != "none":
+            level3_name = level3.replace('_', ' ').title()
+            html += f'                <button class="filter-btn" onclick="filterByLevel(\'level3\', \'{level3}\')">{level3_name} ({len(by_level_3[level3])})</button>\n'
     
     html += """
             </div>
@@ -404,7 +469,9 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
                 <th>ID</th>
                 <th>Title</th>
                 <th>Category</th>
-                <th>Folder</th>
+                <th>System</th>
+                <th>Subsystem</th>
+                <th>Component</th>
                 <th>Status</th>
                 <th>Priority</th>
                 <th>Owner</th>
@@ -416,7 +483,9 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
 """
     
     for req in requirements:
-        folder_name = req.folder_category.replace('_', ' ').title()
+        level1_name = req.folder_level_1.replace('_', ' ').title()
+        level2_name = req.folder_level_2.replace('_', ' ').title() if req.folder_level_2 != "none" else "-"
+        level3_name = req.folder_level_3.replace('_', ' ').title() if req.folder_level_3 != "none" else "-"
         parent_link = f'<a href="#req-{req.parent}" class="trace-link">{req.parent}</a>' if req.parent else '-'
         
         children_links = '-'
@@ -425,11 +494,13 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             children_links = '<span class="trace-list">' + ', '.join(child_list) + '</span>'
         
         html += f"""
-            <tr data-folder="{req.folder_category}" data-status="{req.status}" data-priority="{req.priority}">
+            <tr data-level1="{req.folder_level_1}" data-level2="{req.folder_level_2}" data-level3="{req.folder_level_3}" data-status="{req.status}" data-priority="{req.priority}">
                 <td><a href="#req-{req.id}" class="trace-link">{req.id}</a></td>
                 <td>{req.title}</td>
                 <td>{req.category}</td>
-                <td>{folder_name}</td>
+                <td>{level1_name}</td>
+                <td>{level2_name}</td>
+                <td>{level3_name}</td>
                 <td><span class="status status-{req.status}">{req.status}</span></td>
                 <td class="priority-{req.priority}">{req.priority}</td>
                 <td>{req.owner}</td>
@@ -450,14 +521,21 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
         content_html = markdown.markdown(req.content)
         ancestors = get_all_ancestors(req.id, req_map)
         descendants = get_all_descendants(req.id, req_map)
-        folder_name = req.folder_category.replace('_', ' ').title()
+        level1_name = req.folder_level_1.replace('_', ' ').title()
+        level2_name = req.folder_level_2.replace('_', ' ').title() if req.folder_level_2 != "none" else ""
+        level3_name = req.folder_level_3.replace('_', ' ').title() if req.folder_level_3 != "none" else ""
+        folder_tag = f"{level1_name}"
+        if level2_name:
+            folder_tag += f" > {level2_name}"
+        if level3_name:
+            folder_tag += f" > {level3_name}"
         
         html += f"""
-        <div id="req-{req.id}" class="requirement" data-folder="{req.folder_category}" data-status="{req.status}" data-priority="{req.priority}">
+        <div id="req-{req.id}" class="requirement" data-level1="{req.folder_level_1}" data-level2="{req.folder_level_2}" data-level3="{req.folder_level_3}" data-status="{req.status}" data-priority="{req.priority}">
             <div class="req-header">
                 <div class="req-id">{req.id}</div>
                 <div>{req.title}</div>
-                <div class="req-folder-tag">{folder_name}</div>
+                <div class="req-folder-tag">{folder_tag}</div>
             </div>
             <div class="metadata">
                 <div class="metadata-item">
@@ -528,7 +606,9 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
     
     <script>
         let activeFilters = {
-            folder: 'all',
+            level1: 'all',
+            level2: 'all',
+            level3: 'all',
             status: 'all',
             priority: 'all'
         };
@@ -539,9 +619,9 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             event.target.classList.add('active');
         }
         
-        function filterByFolder(folder) {
-            activeFilters.folder = folder;
-            updateFilterButtons('filterByFolder', folder);
+        function filterByLevel(level, value) {
+            activeFilters[level] = value;
+            updateFilterButtons('filterByLevel', value);
             applyFilters();
         }
         
@@ -563,15 +643,19 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             let visibleCount = 0;
             
             requirements.forEach(req => {
-                const folder = req.dataset.folder;
+                const level1 = req.dataset.level1;
+                const level2 = req.dataset.level2;
+                const level3 = req.dataset.level3;
                 const status = req.dataset.status;
                 const priority = req.dataset.priority;
                 
-                const folderMatch = activeFilters.folder === 'all' || folder === activeFilters.folder;
+                const level1Match = activeFilters.level1 === 'all' || level1 === activeFilters.level1;
+                const level2Match = activeFilters.level2 === 'all' || (activeFilters.level2 === 'none' && level2 === 'none') || level2 === activeFilters.level2;
+                const level3Match = activeFilters.level3 === 'all' || (activeFilters.level3 === 'none' && level3 === 'none') || level3 === activeFilters.level3;
                 const statusMatch = activeFilters.status === 'all' || status === activeFilters.status;
                 const priorityMatch = activeFilters.priority === 'all' || priority === activeFilters.priority;
                 
-                if (folderMatch && statusMatch && priorityMatch) {
+                if (level1Match && level2Match && level3Match && statusMatch && priorityMatch) {
                     req.classList.remove('hidden');
                     visibleCount++;
                 } else {
@@ -580,15 +664,19 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             });
             
             tableRows.forEach(row => {
-                const folder = row.dataset.folder;
+                const level1 = row.dataset.level1;
+                const level2 = row.dataset.level2;
+                const level3 = row.dataset.level3;
                 const status = row.dataset.status;
                 const priority = row.dataset.priority;
                 
-                const folderMatch = activeFilters.folder === 'all' || folder === activeFilters.folder;
+                const level1Match = activeFilters.level1 === 'all' || level1 === activeFilters.level1;
+                const level2Match = activeFilters.level2 === 'all' || (activeFilters.level2 === 'none' && level2 === 'none') || level2 === activeFilters.level2;
+                const level3Match = activeFilters.level3 === 'all' || (activeFilters.level3 === 'none' && level3 === 'none') || level3 === activeFilters.level3;
                 const statusMatch = activeFilters.status === 'all' || status === activeFilters.status;
                 const priorityMatch = activeFilters.priority === 'all' || priority === activeFilters.priority;
                 
-                if (folderMatch && statusMatch && priorityMatch) {
+                if (level1Match && level2Match && level3Match && statusMatch && priorityMatch) {
                     row.classList.remove('hidden');
                 } else {
                     row.classList.add('hidden');
@@ -601,7 +689,9 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
         
         function clearAllFilters() {
             activeFilters = {
-                folder: 'all',
+                level1: 'all',
+                level2: 'all',
+                level3: 'all',
                 status: 'all',
                 priority: 'all'
             };
@@ -611,6 +701,10 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             });
             
             document.querySelectorAll('.filter-btn.all').forEach(btn => {
+                btn.classList.add('active');
+            });
+            
+            document.querySelectorAll('.filter-btn.none').forEach(btn => {
                 btn.classList.add('active');
             });
             
@@ -639,12 +733,10 @@ def main():
     
     html_content = generate_html(requirements, req_map)
     
-    with open('requirements_report.html', 'w', encoding='utf-8') as f:
+    with open('requirements.html', 'w', encoding='utf-8') as f:
         f.write(html_content)
     print("Generated: requirements_report.html")
     
-    HTML(string=html_content).write_pdf('requirements_report.pdf')
-    print("Generated: requirements_report.pdf")
 
 if __name__ == '__main__':
     main()
