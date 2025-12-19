@@ -169,23 +169,35 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             max-width: 1400px;
             margin: 0 auto;
             padding: 20px;
-            color: #333;
+            color: #2c3e50;
+            background: linear-gradient(135deg, #0d47a1 0%, #1b5e20 100%);
+            background-attachment: fixed;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            padding: 30px;
+            margin: 20px 0;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
         h1 {
-            color: #2c3e50;
-            border-bottom: 3px solid #3498db;
+            color: #0d47a1;
+            border-bottom: 3px solid #4caf50;
             padding-bottom: 10px;
+            margin-bottom: 30px;
+            font-weight: 300;
         }
         h2 {
-            color: #34495e;
+            color: #1b5e20;
             margin-top: 30px;
+            font-weight: 400;
         }
         .filters {
             background: #f8f9fa;
             padding: 20px;
             border-radius: 5px;
             margin: 20px 0;
-            border: 2px solid #dee2e6;
+            border-left: 4px solid #4caf50;
         }
         .filter-group {
             margin: 15px 0;
@@ -194,7 +206,7 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             font-weight: bold;
             display: block;
             margin-bottom: 8px;
-            color: #495057;
+            color: #2c3e50;
         }
         .filter-buttons {
             display: flex;
@@ -203,19 +215,18 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
         }
         .filter-btn {
             padding: 8px 16px;
-            border: 2px solid #3498db;
+            border: 2px solid #0d47a1;
             background: white;
-            color: #3498db;
+            color: #0d47a1;
             border-radius: 4px;
             cursor: pointer;
             font-size: 0.9em;
-            transition: all 0.2s;
         }
         .filter-btn:hover {
             background: #e3f2fd;
         }
         .filter-btn.active {
-            background: #3498db;
+            background: #0d47a1;
             color: white;
         }
         .filter-btn.all {
@@ -236,7 +247,7 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
         }
         .clear-filters {
             padding: 10px 20px;
-            background: #e74c3c;
+            background: #d32f2f;
             color: white;
             border: none;
             border-radius: 4px;
@@ -245,13 +256,14 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             margin-top: 10px;
         }
         .clear-filters:hover {
-            background: #c0392b;
+            background: #b71c1c;
         }
         .summary {
-            background: #ecf0f1;
+            background: #e8f5e8;
             padding: 15px;
             border-radius: 5px;
             margin: 20px 0;
+            border-left: 4px solid #4caf50;
         }
         .summary-grid {
             display: grid;
@@ -264,13 +276,12 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             border-radius: 5px;
             padding: 20px;
             margin: 20px 0;
-            transition: opacity 0.3s;
         }
         .requirement.hidden {
             display: none;
         }
         .req-header {
-            background: #3498db;
+            background: linear-gradient(90deg, #0d47a1, #1b5e20);
             color: white;
             padding: 10px;
             margin: -20px -20px 15px -20px;
@@ -294,7 +305,7 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             gap: 10px;
             margin: 15px 0;
             padding: 10px;
-            background: #f8f9fa;
+            background: #f1f8e9;
             border-radius: 3px;
         }
         .metadata-item {
@@ -304,7 +315,7 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
         .metadata-label {
             font-weight: bold;
             font-size: 0.85em;
-            color: #7f8c8d;
+            color: #558b2f;
             text-transform: uppercase;
         }
         .traceability {
@@ -318,7 +329,7 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             margin: 5px 0;
         }
         .trace-link {
-            color: #3498db;
+            color: #0d47a1;
             text-decoration: none;
             font-weight: 500;
         }
@@ -332,12 +343,12 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             font-size: 0.85em;
             font-weight: bold;
         }
-        .status-draft { background: #f39c12; color: white; }
-        .status-approved { background: #27ae60; color: white; }
-        .status-review { background: #3498db; color: white; }
-        .priority-high { color: #e74c3c; font-weight: bold; }
-        .priority-medium { color: #f39c12; }
-        .priority-low { color: #95a5a6; }
+        .status-draft { background: #f57c00; color: white; }
+        .status-approved { background: #388e3c; color: white; }
+        .status-review { background: #1976d2; color: white; }
+        .priority-high { color: #d32f2f; font-weight: bold; }
+        .priority-medium { color: #f57c00; }
+        .priority-low { color: #7cb342; }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -350,11 +361,11 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             border: 1px solid #ddd;
         }
         th {
-            background: #34495e;
+            background: #1b5e20;
             color: white;
         }
         tr:nth-child(even) {
-            background: #f8f9fa;
+            background: #f1f8e9;
         }
         tr.hidden {
             display: none;
@@ -364,13 +375,20 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
         }
         .results-count {
             padding: 10px;
-            background: #d1ecf1;
-            border: 1px solid #bee5eb;
+            background: #e3f2fd;
+            border: 1px solid #bbdefb;
             border-radius: 4px;
             margin: 10px 0;
-            color: #0c5460;
+            color: #0d47a1;
         }
         @media print {
+            body {
+                background: white;
+            }
+            .container {
+                background: white;
+                box-shadow: none;
+            }
             .filters, .filter-buttons, .clear-filters {
                 display: none;
             }
@@ -378,108 +396,109 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
     </style>
 </head>
 <body>
-    <h1>Requirements Specification</h1>
-    
-    <div class="filters">
-        <h3>Filter Requirements</h3>
-        <div class="filter-group">
-            <label>System Level:</label>
-            <div class="filter-buttons">
-                <button class="filter-btn all active" onclick="filterByLevel('level1', 'all')">All</button>
+    <div class="container">
+        <h1>Requirements Specification</h1>
+        
+        <div class="filters">
+            <h3>Filter Requirements</h3>
+            <div class="filter-group">
+                <label>System Level:</label>
+                <div class="filter-buttons">
+                    <button class="filter-btn all active" onclick="filterByLevel('level1', 'all')">All</button>
 """
     
     for level1 in sorted(by_level_1.keys()):
         level1_name = level1.replace('_', ' ').title()
-        html += f'                <button class="filter-btn" onclick="filterByLevel(\'level1\', \'{level1}\')">{level1_name} ({len(by_level_1[level1])})</button>\n'
+        html += f'                    <button class="filter-btn" onclick="filterByLevel(\'level1\', \'{level1}\')">{level1_name} ({len(by_level_1[level1])})</button>\n'
     
     html += """
+                </div>
             </div>
-        </div>
-        
-        <div class="filter-group">
-            <label>Subsystem Level:</label>
-            <div class="filter-buttons">
-                <button class="filter-btn all active" onclick="filterByLevel('level2', 'all')">All</button>
-                <button class="filter-btn none active" onclick="filterByLevel('level2', 'none')">None</button>
+            
+            <div class="filter-group">
+                <label>Subsystem Level:</label>
+                <div class="filter-buttons">
+                    <button class="filter-btn all active" onclick="filterByLevel('level2', 'all')">All</button>
+                    <button class="filter-btn none active" onclick="filterByLevel('level2', 'none')">None</button>
 """
     
     for level2 in sorted(by_level_2.keys()):
         if level2 != "none":
             level2_name = level2.replace('_', ' ').title()
-            html += f'                <button class="filter-btn" onclick="filterByLevel(\'level2\', \'{level2}\')">{level2_name} ({len(by_level_2[level2])})</button>\n'
+            html += f'                    <button class="filter-btn" onclick="filterByLevel(\'level2\', \'{level2}\')">{level2_name} ({len(by_level_2[level2])})</button>\n'
     
     html += """
+                </div>
             </div>
-        </div>
-        
-        <div class="filter-group">
-            <label>Component Level:</label>
-            <div class="filter-buttons">
-                <button class="filter-btn all active" onclick="filterByLevel('level3', 'all')">All</button>
-                <button class="filter-btn none active" onclick="filterByLevel('level3', 'none')">None</button>
+            
+            <div class="filter-group">
+                <label>Component Level:</label>
+                <div class="filter-buttons">
+                    <button class="filter-btn all active" onclick="filterByLevel('level3', 'all')">All</button>
+                    <button class="filter-btn none active" onclick="filterByLevel('level3', 'none')">None</button>
 """
     
     for level3 in sorted(by_level_3.keys()):
         if level3 != "none":
             level3_name = level3.replace('_', ' ').title()
-            html += f'                <button class="filter-btn" onclick="filterByLevel(\'level3\', \'{level3}\')">{level3_name} ({len(by_level_3[level3])})</button>\n'
+            html += f'                    <button class="filter-btn" onclick="filterByLevel(\'level3\', \'{level3}\')">{level3_name} ({len(by_level_3[level3])})</button>\n'
     
     html += """
+                </div>
+            </div>
+            
+            <div class="filter-group">
+                <label>Status:</label>
+                <div class="filter-buttons">
+                    <button class="filter-btn all active" onclick="filterByStatus('all')">All</button>
+                    <button class="filter-btn" onclick="filterByStatus('draft')">Draft</button>
+                    <button class="filter-btn" onclick="filterByStatus('approved')">Approved</button>
+                    <button class="filter-btn" onclick="filterByStatus('review')">Review</button>
+                </div>
+            </div>
+            
+            <div class="filter-group">
+                <label>Priority:</label>
+                <div class="filter-buttons">
+                    <button class="filter-btn all active" onclick="filterByPriority('all')">All</button>
+                    <button class="filter-btn" onclick="filterByPriority('high')">High</button>
+                    <button class="filter-btn" onclick="filterByPriority('medium')">Medium</button>
+                    <button class="filter-btn" onclick="filterByPriority('low')">Low</button>
+                </div>
+            </div>
+            
+            <button class="clear-filters" onclick="clearAllFilters()">Clear All Filters</button>
+            <div class="results-count" id="results-count"></div>
+        </div>
+        
+        <div class="summary">
+            <h2>Summary</h2>
+            <div class="summary-grid">
+                <div><strong>Total Requirements:</strong> """ + str(len(requirements)) + """</div>
+                <div><strong>Draft:</strong> """ + str(sum(1 for r in requirements if r.status == 'draft')) + """</div>
+                <div><strong>Approved:</strong> """ + str(sum(1 for r in requirements if r.status == 'approved')) + """</div>
+                <div><strong>High Priority:</strong> """ + str(sum(1 for r in requirements if r.priority == 'high')) + """</div>
             </div>
         </div>
         
-        <div class="filter-group">
-            <label>Status:</label>
-            <div class="filter-buttons">
-                <button class="filter-btn all active" onclick="filterByStatus('all')">All</button>
-                <button class="filter-btn" onclick="filterByStatus('draft')">Draft</button>
-                <button class="filter-btn" onclick="filterByStatus('approved')">Approved</button>
-                <button class="filter-btn" onclick="filterByStatus('review')">Review</button>
-            </div>
-        </div>
-        
-        <div class="filter-group">
-            <label>Priority:</label>
-            <div class="filter-buttons">
-                <button class="filter-btn all active" onclick="filterByPriority('all')">All</button>
-                <button class="filter-btn" onclick="filterByPriority('high')">High</button>
-                <button class="filter-btn" onclick="filterByPriority('medium')">Medium</button>
-                <button class="filter-btn" onclick="filterByPriority('low')">Low</button>
-            </div>
-        </div>
-        
-        <button class="clear-filters" onclick="clearAllFilters()">Clear All Filters</button>
-        <div class="results-count" id="results-count"></div>
-    </div>
-    
-    <div class="summary">
-        <h2>Summary</h2>
-        <div class="summary-grid">
-            <div><strong>Total Requirements:</strong> """ + str(len(requirements)) + """</div>
-            <div><strong>Draft:</strong> """ + str(sum(1 for r in requirements if r.status == 'draft')) + """</div>
-            <div><strong>Approved:</strong> """ + str(sum(1 for r in requirements if r.status == 'approved')) + """</div>
-            <div><strong>High Priority:</strong> """ + str(sum(1 for r in requirements if r.priority == 'high')) + """</div>
-        </div>
-    </div>
-    
-    <h2>Requirements Table</h2>
-    <table id="requirements-table">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Title</th>
-                <th>Category</th>
-                <th>System</th>
-                <th>Subsystem</th>
-                <th>Component</th>
-                <th>Status</th>
-                <th>Priority</th>
-                <th>Owner</th>
-                <th>Parent</th>
-                <th>Children</th>
-            </tr>
-        </thead>
-        <tbody>
+        <h2>Requirements Table</h2>
+        <table id="requirements-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th>System</th>
+                    <th>Subsystem</th>
+                    <th>Component</th>
+                    <th>Status</th>
+                    <th>Priority</th>
+                    <th>Owner</th>
+                    <th>Parent</th>
+                    <th>Children</th>
+                </tr>
+            </thead>
+            <tbody>
 """
     
     for req in requirements:
@@ -494,27 +513,27 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             children_links = '<span class="trace-list">' + ', '.join(child_list) + '</span>'
         
         html += f"""
-            <tr data-level1="{req.folder_level_1}" data-level2="{req.folder_level_2}" data-level3="{req.folder_level_3}" data-status="{req.status}" data-priority="{req.priority}">
-                <td><a href="#req-{req.id}" class="trace-link">{req.id}</a></td>
-                <td>{req.title}</td>
-                <td>{req.category}</td>
-                <td>{level1_name}</td>
-                <td>{level2_name}</td>
-                <td>{level3_name}</td>
-                <td><span class="status status-{req.status}">{req.status}</span></td>
-                <td class="priority-{req.priority}">{req.priority}</td>
-                <td>{req.owner}</td>
-                <td>{parent_link}</td>
-                <td>{children_links}</td>
-            </tr>
+                <tr data-level1="{req.folder_level_1}" data-level2="{req.folder_level_2}" data-level3="{req.folder_level_3}" data-status="{req.status}" data-priority="{req.priority}">
+                    <td><a href="#req-{req.id}" class="trace-link">{req.id}</a></td>
+                    <td>{req.title}</td>
+                    <td>{req.category}</td>
+                    <td>{level1_name}</td>
+                    <td>{level2_name}</td>
+                    <td>{level3_name}</td>
+                    <td><span class="status status-{req.status}">{req.status}</span></td>
+                    <td class="priority-{req.priority}">{req.priority}</td>
+                    <td>{req.owner}</td>
+                    <td>{parent_link}</td>
+                    <td>{children_links}</td>
+                </tr>
 """
     
     html += """
-        </tbody>
-    </table>
-    
-    <h2>Detailed Requirements</h2>
-    <div id="requirements-list">
+            </tbody>
+        </table>
+        
+        <h2>Detailed Requirements</h2>
+        <div id="requirements-list">
 """
     
     for req in requirements:
@@ -531,57 +550,57 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
             folder_tag += f" > {level3_name}"
         
         html += f"""
-        <div id="req-{req.id}" class="requirement" data-level1="{req.folder_level_1}" data-level2="{req.folder_level_2}" data-level3="{req.folder_level_3}" data-status="{req.status}" data-priority="{req.priority}">
-            <div class="req-header">
-                <div class="req-id">{req.id}</div>
-                <div>{req.title}</div>
-                <div class="req-folder-tag">{folder_tag}</div>
-            </div>
-            <div class="metadata">
-                <div class="metadata-item">
-                    <span class="metadata-label">Category</span>
-                    <span>{req.category}</span>
+            <div id="req-{req.id}" class="requirement" data-level1="{req.folder_level_1}" data-level2="{req.folder_level_2}" data-level3="{req.folder_level_3}" data-status="{req.status}" data-priority="{req.priority}">
+                <div class="req-header">
+                    <div class="req-id">{req.id}</div>
+                    <div>{req.title}</div>
+                    <div class="req-folder-tag">{folder_tag}</div>
                 </div>
-                <div class="metadata-item">
-                    <span class="metadata-label">Status</span>
-                    <span class="status status-{req.status}">{req.status}</span>
+                <div class="metadata">
+                    <div class="metadata-item">
+                        <span class="metadata-label">Category</span>
+                        <span>{req.category}</span>
+                    </div>
+                    <div class="metadata-item">
+                        <span class="metadata-label">Status</span>
+                        <span class="status status-{req.status}">{req.status}</span>
+                    </div>
+                    <div class="metadata-item">
+                        <span class="metadata-label">Priority</span>
+                        <span class="priority-{req.priority}">{req.priority}</span>
+                    </div>
+                    <div class="metadata-item">
+                        <span class="metadata-label">Owner</span>
+                        <span>{req.owner}</span>
+                    </div>
+                    <div class="metadata-item">
+                        <span class="metadata-label">Verification</span>
+                        <span>{req.verify}</span>
+                    </div>
+                    <div class="metadata-item">
+                        <span class="metadata-label">Source</span>
+                        <span>{req.source}</span>
+                    </div>
                 </div>
-                <div class="metadata-item">
-                    <span class="metadata-label">Priority</span>
-                    <span class="priority-{req.priority}">{req.priority}</span>
-                </div>
-                <div class="metadata-item">
-                    <span class="metadata-label">Owner</span>
-                    <span>{req.owner}</span>
-                </div>
-                <div class="metadata-item">
-                    <span class="metadata-label">Verification</span>
-                    <span>{req.verify}</span>
-                </div>
-                <div class="metadata-item">
-                    <span class="metadata-label">Source</span>
-                    <span>{req.source}</span>
-                </div>
-            </div>
 """
         
         if req.parent or req.children or ancestors or descendants:
-            html += '            <div class="traceability">\n                <h4>Traceability</h4>\n'
+            html += '                <div class="traceability">\n                    <h4>Traceability</h4>\n'
             
             if req.parent:
-                html += f'                <div class="trace-item"><strong>Parent:</strong> <a href="#req-{req.parent}" class="trace-link">{req.parent}</a>'
+                html += f'                    <div class="trace-item"><strong>Parent:</strong> <a href="#req-{req.parent}" class="trace-link">{req.parent}</a>'
                 if req.parent in req_map:
                     html += f' - {req_map[req.parent].title}'
                 html += '</div>\n'
             
             if ancestors:
-                html += '                <div class="trace-item"><strong>All Ancestors:</strong> '
+                html += '                    <div class="trace-item"><strong>All Ancestors:</strong> '
                 ancestor_links = [f'<a href="#req-{aid}" class="trace-link">{aid}</a>' for aid in reversed(ancestors)]
                 html += ' → '.join(ancestor_links)
                 html += '</div>\n'
             
             if req.children:
-                html += '                <div class="trace-item"><strong>Children:</strong> '
+                html += '                    <div class="trace-item"><strong>Children:</strong> '
                 child_links = []
                 for child_id in req.children:
                     link = f'<a href="#req-{child_id}" class="trace-link">{child_id}</a>'
@@ -592,16 +611,17 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
                 html += '</div>\n'
             
             if descendants:
-                html += f'                <div class="trace-item"><strong>All Descendants:</strong> {len(descendants)} requirement(s)</div>\n'
+                html += f'                    <div class="trace-item"><strong>All Descendants:</strong> {len(descendants)} requirement(s)</div>\n'
             
-            html += '            </div>\n'
+            html += '                </div>\n'
         
         html += f"""
-            {content_html}
-        </div>
+                {content_html}
+            </div>
 """
     
     html += """
+        </div>
     </div>
     
     <script>
@@ -720,7 +740,7 @@ def generate_html(requirements: List[Requirement], req_map: Dict[str, Requiremen
     return html
 
 def main():
-    requirements = collect_requirements('.')
+    requirements = collect_requirements('requirements')
     
     print(f"Found {len(requirements)} requirements")
     
@@ -735,7 +755,7 @@ def main():
     
     with open('requirements.html', 'w', encoding='utf-8') as f:
         f.write(html_content)
-    print("Generated: requirements_report.html")
+    print("Generated: requirements.html")
     
 
 if __name__ == '__main__':
