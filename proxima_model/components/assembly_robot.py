@@ -5,10 +5,18 @@ Handles assembly of world system modules from structural shells and equipment
 
 from mesa import Agent
 from enum import Enum
+from dataclasses import dataclass
+
 import logging
 
 logger = logging.getLogger(__name__)
 
+@dataclass
+class AssemblyRobotConstants:
+
+    MAX_POWER_USAGE_KWH = 50.0
+    EFFICIENCY = 0.9
+    ASSEMBLY_TIME_H = 60
 
 class AssemblyRobotMode(Enum):
     """Assembly robot operational modes."""
@@ -27,9 +35,9 @@ class AssemblyRobot(Agent):
         self.config = config.get("config")
 
         # Characteristics
-        self.max_power_usage_kWh = float(self.config.get("max_power_usage_kWh", 40.0))
-        self.efficiency = float(self.config.get("efficiency", 0.9))
-        self.assembly_time_steps = int(self.config.get("assembly_time_t", 60))
+        self.max_power_usage_kWh = float(self.config.get("max_power_usage_kWh", AssemblyRobotConstants.MAX_POWER_USAGE_KWH)) * model.time_scale
+        self.efficiency = float(self.config.get("efficiency", AssemblyRobotConstants.EFFICIENCY))
+        self.assembly_time_steps = int(self.config.get("assembly_time_h", AssemblyRobotConstants.ASSEMBLY_TIME_H) / model.time_scale)
 
         # State
         self.mode = AssemblyRobotMode.IDLE

@@ -93,7 +93,7 @@ class WorldSystemConfig:
     """Complete world system configuration."""
 
     sim_time: int
-    delta_t: float
+    time_scale: float # Hours Per Step
     p_need: float = 2.0
     agents_config: Dict[str, Any] = field(default_factory=dict)
     metrics: List[Dict[str, Any]] = field(default_factory=list)
@@ -105,7 +105,7 @@ class WorldSystemConfig:
         """Validate world system configuration."""
         if self.sim_time <= 0:
             raise ValueError("sim_time must be positive")
-        if self.delta_t <= 0:
+        if self.time_scale <= 0:
             raise ValueError("delta_t must be positive")
 
 
@@ -529,8 +529,8 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
 
     # Build base configuration
     config = {
-        "sim_time": experiment.get("simulation_time_steps", experiment.get("simulation_time_stapes")),
-        "delta_t": experiment.get("time_step_duration_hours"),
+        "sim_time": experiment.get("simulation_time_steps"),
+        "hours_per_step": experiment.get("hours_per_time_step"),
         "p_need": 2.0,
         "agents_config": {},
         "metrics": environment.get("metrics", []),

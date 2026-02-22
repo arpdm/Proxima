@@ -55,7 +55,7 @@ class PolicyEngine:
             world: The simulation world object (WorldSystem)
         """
         self.world = world
-        self._policies: List[Policy] = [DustCoverageThrottlePolicy(), ScienceProductionRate()]
+        self._policies: List[Policy] = [DustCoverageThrottlePolicy(), ScienceProductionRate(self.world)]
 
     def add_policy(self, policy: Policy) -> None:
         """

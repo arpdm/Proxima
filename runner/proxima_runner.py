@@ -29,16 +29,17 @@ debug_logger = logging.getLogger(__name__)
 debug_logger.setLevel(logging.INFO)
 
 logging.getLogger('proxima_model.sphere_engine.transportation_sector').setLevel(logging.WARNING)
-logging.getLogger('proxima_model.sphere_engine.science_sector').setLevel(logging.WARNING)
+logging.getLogger('proxima_model.sphere_engine.science_sector').setLevel(logging.INFO)
 logging.getLogger('proxima_model.sphere_engine.manufacturing_sector').setLevel(logging.WARNING)
 logging.getLogger('proxima_model.policy_engine.policy_engine').setLevel(logging.WARNING)
 logging.getLogger('proxima_model.policy_engine.science_policies').setLevel(logging.WARNING)
-logging.getLogger('proxima_model.world_system.world_system').setLevel(logging.WARNING)
-logging.getLogger('proxima_model.sphere_engine.construction_sector').setLevel(logging.DEBUG)
+logging.getLogger('proxima_model.world_system.world_system').setLevel(logging.INFO)
+logging.getLogger('proxima_model.sphere_engine.construction_sector').setLevel(logging.INFO)
 logging.getLogger('proxima_model.sphere_engine.equipment_manufacturing_sector').setLevel(logging.WARNING)
 logging.getLogger('proxima_model.world_system.evaluation_engine').setLevel(logging.WARNING)
 logging.getLogger('proxima_model.components.science_rover').setLevel(logging.WARNING)
 logging.getLogger('proxima_model.components.rocket').setLevel(logging.WARNING)
+logging.getLogger('proxima_model.components.assembly_robot').setLevel(logging.WARNING)
 
 def parse_args():
     """Parse command-line arguments for runner options."""
@@ -65,8 +66,9 @@ class ProximaRunner:
 
         # Load experiment configuration from DB
         exp_config = self.local_db.find_by_id("experiments", self.config.experiment)
-        self.sim_time = exp_config.get("simulation_time_stapes", None)
+        self.sim_time = exp_config.get("simulation_time_steps", None)
         self.ws_id = exp_config["world_system_id"]
+        self.time_scale_h_per_step = exp_config["hours_per_time_step"]
         self.exp_id = exp_config["_id"]
 
         # Setup logging and simulation state

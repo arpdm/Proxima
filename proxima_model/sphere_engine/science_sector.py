@@ -126,7 +126,7 @@ class ScienceSector:
 
         power_demand = 0.0
         for rover in self.science_rovers:
-            if rover.current_battery_kWh < rover.power_usage_kWh:
+            if rover.current_battery_kWh < rover.power_usage_kWh_per_step:
                 power_demand += rover.battery_capacity_kWh - rover.current_battery_kWh
 
         return power_demand
@@ -136,8 +136,8 @@ class ScienceSector:
         Set the science sector growth policy parameters.
 
         Args:
-            growth_rate: Target growth rate (1/doubling_months)
-            growth_duration: Duration over which to measure growth (months)
+            growth_rate: Target growth rate (1/doubling_steps)
+            growth_duration: Duration over which to measure growth
         """
         self.growth_duration_sp = growth_duration  # Steps
         self.growth_rate_sp = growth_rate
@@ -167,7 +167,7 @@ class ScienceSector:
             return
 
         # Get measurements from growth rate duration setpoint
-        window_start = max(0, len(self.science_history) - self.growth_duration_sp)
+        window_start = int(max(0, len(self.science_history) - self.growth_duration_sp))
         start_month, S_0_new = self.science_history[window_start]
         current_month, S_current = self.science_history[-1]
 
@@ -321,7 +321,7 @@ class ScienceSector:
         self.science_history.append((self.model.steps, self.step_science_generated))
 
         # Keep only the 2x the measurement window to avoid unbounded growth
-        max_history_length = self.growth_duration_sp * 2
+        max_history_length = int(self.growth_duration_sp * 2)
         if len(self.science_history) > max_history_length:
             self.science_history = self.science_history[-max_history_length:]
 
@@ -351,8 +351,10 @@ class ScienceSector:
                 contribution_type = contrib.get("contribution_type")
 
                 if metric_id and contribution_type == "predefined":
+                    # Scale contribution by time_scale to match scaled decay
+                    scaled_contribution_value = value_per_agent * self.model.time_scale
                     # Calculate total contribution for this metric
-                    total_contribution = operational_count * value_per_agent
+                    total_contribution = operational_count * scaled_contribution_value
                     metric_map[metric_id] = total_contribution
 
         return metric_map

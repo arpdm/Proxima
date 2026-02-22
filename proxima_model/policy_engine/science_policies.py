@@ -26,6 +26,7 @@ class ScienceProductionRate(Policy):
 
     def __init__(
         self,
+        world_model,
         metric_id: str = None,
     ):
         """
@@ -40,7 +41,7 @@ class ScienceProductionRate(Policy):
         self.growth_rate = 2
         self.growth_duration_t = (
             24 * 180
-        )  # hours * days #TODO: These can be configurable through policy config in database
+        ) / world_model.time_scale # hours * days #TODO: These can be configurable through policy config in database
 
     def apply(self, engine: "PolicyEngine", evaluation_result: "EvaluationResult") -> Dict[str, Any]:
         """

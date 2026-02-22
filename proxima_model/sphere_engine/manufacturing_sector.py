@@ -355,6 +355,7 @@ class ManufacturingSector:
                 TaskType.REGOLITH: "REGOLITH_EXTRACTION",
             }
 
+            # TODO: Fix this to be smart and search for available robot.
             if task_type in mode_mapping and robot_index < len(self.isru_robots):
                 mode = mode_mapping[task_type]
                 self.isru_robots[robot_index].set_operational_mode(mode)
@@ -465,7 +466,8 @@ class ManufacturingSector:
             # TODO: Add contribution type as an enum to metrics
             if metric_id and contribution_type == "predefined":
                 operational_count = sum(1 for r in self.isru_robots if r.status == ISRUStatus.OPERATIONAL)
-                metric_map[metric_id] = operational_count * value
+                # Scale contribution by time_scale to match scaled decay
+                metric_map[metric_id] = operational_count * value * self.model.time_scale
 
         return metric_map
 

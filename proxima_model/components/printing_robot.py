@@ -28,9 +28,9 @@ class PrintingRobot(Agent):
         self.config = config.get("config")
 
         # Characteristics
-        self.max_power_usage_kWh = float(self.config.get("max_power_usage_kWh", 65.0))
+        self.max_power_usage_step = float(self.config.get("max_power_usage_kWh", 65.0)) * model.time_scale
         self.efficiency = float(self.config.get("efficiency", 0.9))
-        self.processing_time_steps = int(self.config.get("processing_time_t", 80))
+        self.processing_time_steps = int(self.config.get("processing_time_h", 80) / model.time_scale)
         self.regolith_usage_kg = float(self.config.get("regolith_usage_kg", 200.0))
 
         # State
@@ -61,7 +61,7 @@ class PrintingRobot(Agent):
 
     def get_power_demand(self) -> float:
         """Get current power demand."""
-        return self.max_power_usage_kWh if self.mode == PrintingRobotMode.PRINTING else 0.0
+        return self.max_power_usage_step if self.mode == PrintingRobotMode.PRINTING else 0.0
 
     def step(self) -> dict:
         """

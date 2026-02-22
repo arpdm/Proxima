@@ -41,12 +41,19 @@ class ScienceRover(Agent):
         self.unique_id = unique_id
 
         # Configuration Parameters
-        self.power_usage_kWh = float(self.config.get("power_usage_kWh", 0.2))
+        # Power consumption per step (kWh/step) = hourly rate (kWh/h) * hours per step
+        self.power_usage_kWh_per_step = float(self.config.get("power_usage_kWh", 0.2)) * model.time_scale
         self.science_generation = float(self.config.get("science_generation", 0.5))
-        self.battery_capacity_kWh = float(self.config.get("battery_capacity_kWh", 20))
+
+        # Battery capacity scales too - represents energy available per step
+        self.battery_capacity_kWh = float(self.config.get("battery_capacity_kWh", 20)) * model.time_scale
+
+        # Initial charge also scales
+        initial_charge_config = float(self.config.get("current_battery_kWh", self.battery_capacity_kWh))
+        self.current_battery_kWh = initial_charge_config * model.time_scale if initial_charge_config > 0 else self.battery_capacity_kWh
 
         # State variables
-        self.current_battery_kWh = float(self.config.get("current_battery_kWh", self.battery_capacity_kWh))
+        self.current_battery_kWh = self.current_battery_kWh  # Already set above with time_scale applied
         self.science_buffer = float(self.config.get("science_buffer", 0.0))
         self.status = RoverStatus(self.config.get("status", RoverStatus.IDLE.value))
 
@@ -62,9 +69,9 @@ class ScienceRover(Agent):
         science_generated = 0.0
 
         # --- Prioritize operating ---
-        if self.current_battery_kWh >= self.power_usage_kWh:
+        if self.current_battery_kWh >= self.power_usage_kWh_per_step:
             # If we have enough power, operate
-            self.current_battery_kWh -= self.power_usage_kWh
+            self.current_battery_kWh -= self.power_usage_kWh_per_step
             self.science_buffer += self.science_generation
             science_generated = self.science_generation
             self.status = RoverStatus.OPERATIONAL
@@ -78,7 +85,7 @@ class ScienceRover(Agent):
             power_draw_from_grid = charge_this_step
 
             # If still not enough power to operate after charging, status is low battery
-            if self.current_battery_kWh < self.power_usage_kWh:
+            if self.current_battery_kWh < self.power_usage_kWh_per_step:
                 self.status = RoverStatus.LOW_BATTERY
 
         return power_draw_from_grid, science_generated

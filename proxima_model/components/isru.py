@@ -47,7 +47,6 @@ class ISRUConfig:
     # Common parameters
     max_power_usage_kWh: float = 65.0
     efficiency: float = 0.9
-    processing_time_t: int = 3
     isru_modes: List[str] = field(
         default_factory=lambda: ["ICE_EXTRACTION", "REGOLITH_EXTRACTION", "HE3_GENERATION", "INACTIVE"]
     )
@@ -56,8 +55,6 @@ class ISRUConfig:
         """Validate configuration after initialization."""
         if not (0 < self.efficiency <= 1):
             raise ValueError(f"Efficiency must be between 0 and 1, got {self.efficiency}")
-        if self.processing_time_t < 0:
-            raise ValueError("Processing time must be non-negative")
 
 
 @dataclass
@@ -80,6 +77,12 @@ class ISRUAgent(Agent):
 
         # Create configuration dataclass from dict
         self.config = ISRUConfig(**{k: v for k, v in config.items() if k in ISRUConfig.__dataclass_fields__})
+
+        # Apply time scales to throughput and output rates - Scaled to hours/step
+        self.config.ice_extraction_power_kWh *= model.time_scale
+        self.config.regolith_extraction_power_kWh *= model.time_scale
+        self.config.he3_extraction_power_kWh *= model.time_scale
+        self.config.he3_regolith_processing_throughput_tons_per_step *= model.time_scale
 
         # Agent identification
         self.agent_type = "isru_robot"

@@ -44,7 +44,7 @@ class Rocket(Agent):
 
         self.prop_usage_kg_per_payload_kg = float(config.get("prop_usage_kg_per_payload_kg", 21.4))
         self.carrying_capacity_kg = float(config.get("carrying_capacity_equipment", 22800))
-        self.max_speed_km_h = float(config.get("max_speed_km_h", 5300))
+        self.max_speed_km_step = float(config.get("max_speed_km_h", 5300)) * model.time_scale
 
         # ===== Configuration =====
 
@@ -69,8 +69,8 @@ class Rocket(Agent):
         propellant_outbound = outbound_payload_kg * self.prop_usage_kg_per_payload_kg
         propellant_return = return_payload_kg * self.prop_usage_kg_per_payload_kg
         total_propellant_needed = propellant_outbound + propellant_return
-        trip_duration_hours = int(flight_distance_km / self.max_speed_km_h)
-        return total_propellant_needed, trip_duration_hours
+        trip_duration_steps = int(flight_distance_km / self.max_speed_km_step)
+        return total_propellant_needed, trip_duration_steps
 
     def commit_round_trip(
         self,
