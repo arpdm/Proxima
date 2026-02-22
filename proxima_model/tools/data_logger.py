@@ -139,6 +139,7 @@ class DataLogger:
         log_dir: str = "log_files",
         log_to_csv: bool = True,
         log_to_db: bool = True,
+        clear_existing_logs: bool = True,
     ):
         """
         Initialize data logger with configuration.
@@ -168,11 +169,23 @@ class DataLogger:
         self._log_path.mkdir(parents=True, exist_ok=True)
 
         # Generate CSV filename with timestamp
-        timestamp = datetime.now(timezone.utc).timestamp()
-        self._csv_path = self._log_path / f"simlog_{experiment_id}_{timestamp}.csv"
+        self._set_csv_path()
 
-        # Clear existing logs for this experiment
-        self._clear_existing_logs()
+        # Clear existing logs for this experiment (optional)
+        if clear_existing_logs:
+            self._clear_existing_logs()
+
+    def _set_csv_path(self) -> None:
+        """Set a new CSV path based on current log directory and time."""
+        timestamp = datetime.now(timezone.utc).timestamp()
+        self._csv_path = self._log_path / f"simlog_{self._config.experiment_id}_{timestamp}.csv"
+
+    def rotate_log_dir(self, log_dir: str) -> None:
+        """Rotate the logger to a new directory for a new run."""
+        self._log_path = Path(log_dir)
+        self._log_path.mkdir(parents=True, exist_ok=True)
+        self._records.clear()
+        self._set_csv_path()
 
     def _clear_existing_logs(self) -> None:
         """Clear existing logs for this experiment from database."""

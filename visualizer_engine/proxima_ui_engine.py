@@ -311,7 +311,66 @@ class ProximaUI:
             ]
         )
 
-        return self._create_card("Simulation Control", [buttons, inputs], "mb-5")
+        monte_carlo_controls = dbc.Row(
+            [
+                dbc.Col(
+                    [
+                        dbc.Label("MC Steps per Run", style={"color": "#e0e0e0", "marginBottom": "8px"}),
+                        dbc.Input(
+                            id="mc-steps-per-run",
+                            type="number",
+                            value=100,
+                            min=1,
+                            step=1,
+                            style={
+                                "backgroundColor": self.theme.bg_tertiary,
+                                "border": f"1px solid {self.theme.border}",
+                                "color": "#e0e0e0",
+                                "padding": "10px",
+                            },
+                        ),
+                    ],
+                    width=4,
+                ),
+                dbc.Col(
+                    [
+                        dbc.Label("MC Number of Runs", style={"color": "#e0e0e0", "marginBottom": "8px"}),
+                        dbc.Input(
+                            id="mc-num-runs",
+                            type="number",
+                            value=10,
+                            min=1,
+                            step=1,
+                            style={
+                                "backgroundColor": self.theme.bg_tertiary,
+                                "border": f"1px solid {self.theme.border}",
+                                "color": "#e0e0e0",
+                                "padding": "10px",
+                            },
+                        ),
+                    ],
+                    width=4,
+                ),
+                dbc.Col(
+                    [
+                        dbc.Label("Monte Carlo", style={"color": "#e0e0e0", "marginBottom": "8px"}),
+                        dbc.Button(
+                            "Start Monte Carlo",
+                            id="btn-start-monte-carlo",
+                            color="primary",
+                            outline=True,
+                            className="w-100",
+                        ),
+                    ],
+                    width=4,
+                    style={"display": "flex", "flexDirection": "column", "justifyContent": "flex-end"},
+                ),
+            ],
+            className="mt-3",
+            align="end",
+        )
+
+        return self._create_card("Simulation Control", [buttons, inputs, monte_carlo_controls], "mb-5")
 
     def _metric_status_and_control(self):
         """Metric status and control panel"""
@@ -1028,9 +1087,10 @@ class ProximaUI:
                 Output("btn-start-continuous", "disabled"),
                 [
                     Input(f"btn-{action}", "n_clicks")
-                    for action in ["start-continuous", "start-limited", "pause", "resume", "stop"]
+                    for action in ["start-continuous", "start-limited", "pause", "resume", "stop", "start-monte-carlo"]
                 ]
                 + [Input("step-delay", "value"), Input("max-steps", "value")],
+                [State("mc-steps-per-run", "value"), State("mc-num-runs", "value")],
                 prevent_initial_call=False,
             )
             def handle_controls(*args):
@@ -1045,6 +1105,7 @@ class ProximaUI:
                     "btn-pause": "pause",
                     "btn-resume": "resume",
                     "btn-stop": "stop",
+                    "btn-start-monte-carlo": "start_monte_carlo",
                     "step-delay": "set_delay",
                 }
 
@@ -1052,9 +1113,17 @@ class ProximaUI:
                     action = commands[button_id]
                     kwargs = {}
                     if action == "set_delay":
-                        kwargs["delay"] = args[-2]
+                        kwargs["delay"] = args[-4]
                     elif action == "start_limited":
-                        kwargs["max_steps"] = args[-1]
+                        kwargs["max_steps"] = args[-3]
+                    elif action == "start_monte_carlo":
+                        steps_per_run = args[-2]
+                        num_runs = args[-1]
+                        if steps_per_run is not None and num_runs is not None:
+                            kwargs["steps_per_run"] = int(steps_per_run)
+                            kwargs["num_runs"] = int(num_runs)
+                        else:
+                            return dash.no_update
 
                     self.send_command(action, **kwargs)
 
@@ -1298,7 +1367,11 @@ class ProximaUI:
 
     def send_command(self, action: str, **kwargs):
         """Send command to appropriate collection"""
-        collection = "startup_commands" if action in ["start_continuous", "start_limited"] else "runtime_commands"
+        collection = (
+            "startup_commands"
+            if action in ["start_continuous", "start_limited", "start_monte_carlo"]
+            else "runtime_commands"
+        )
         command = {"action": action, "timestamp": time.time(), "experiment_id": self.exp_id, **kwargs}
         try:
             self.db.db[collection].insert_one(command)
