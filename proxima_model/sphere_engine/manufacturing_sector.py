@@ -466,8 +466,8 @@ class ManufacturingSector:
             # TODO: Add contribution type as an enum to metrics
             if metric_id and contribution_type == "predefined":
                 operational_count = sum(1 for r in self.isru_robots if r.status == ISRUStatus.OPERATIONAL)
-                # Scale contribution by time_scale to match scaled decay
-                metric_map[metric_id] = operational_count * value * self.model.time_scale
+                # Note: Decay is already scaled by time_scale, contributions use base rates
+                metric_map[metric_id] = operational_count * value
 
         return metric_map
 

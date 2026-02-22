@@ -21,7 +21,7 @@ class FuelGenerator(Agent):
         Args:
             agent_config (dict): Agent-specific configuration. Should contain keys:
         """
-        
+
         super().__init__(model)
 
         config = agent_config.get("config", agent_config)

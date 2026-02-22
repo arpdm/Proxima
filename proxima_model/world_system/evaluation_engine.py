@@ -128,7 +128,9 @@ class EvaluationEngine:
         # Apply contributions to performance metrics
         for metric_id, delta in aggregated_contrib.items():
             current_value = self.get_performance_metric(metric_id)
-            self.set_performance_metric(metric_id, current_value + delta)
+            new_value = current_value + delta
+            logger.debug(f"💨 METRIC {metric_id}: {current_value:.4f} + {delta:.4f} = {new_value:.4f}")
+            self.set_performance_metric(metric_id, new_value)
 
         return aggregated_contrib
 
@@ -141,7 +143,9 @@ class EvaluationEngine:
         """
         if dust_decay_per_step > 0:
             current_dust = self.get_performance_metric("IND-DUST-COV")
-            self.set_performance_metric("IND-DUST-COV", max(0.0, current_dust - dust_decay_per_step))
+            new_dust = max(0.0, current_dust - dust_decay_per_step)
+            logger.debug(f"🌪️ DUST DECAY: {current_dust:.4f} - {dust_decay_per_step:.4f} = {new_dust:.4f}")
+            self.set_performance_metric("IND-DUST-COV", new_dust)
 
     def calculate_score(self, metric_id: str) -> Optional[float]:
         """

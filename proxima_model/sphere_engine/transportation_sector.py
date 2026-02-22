@@ -113,7 +113,7 @@ class TransportationSector:
         for fuel_gen_config in fuel_gen_configs:
             fuel_gen_quantity = fuel_gen_config.get("quantity", 1)
             for _ in range(fuel_gen_quantity):
-                self.fuel_generators.append(FuelGenerator(self.model,fuel_gen_config))
+                self.fuel_generators.append(FuelGenerator(self.model, fuel_gen_config))
 
         # Subscribe to events
         self.event_bus.subscribe(EventType.TRANSPORT_REQUEST.value, self.handle_transport_request)

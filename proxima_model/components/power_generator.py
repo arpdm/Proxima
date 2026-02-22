@@ -15,6 +15,7 @@ class GeneratorType(Enum):
     SOLAR = auto()
     NUCLEAR = auto()
 
+
 @dataclass
 class PowerGeneratorConfig:
     """Configuration for power generator components."""
@@ -48,7 +49,8 @@ class PowerGenerator(Agent):
             self.subtype = GeneratorType.SOLAR  # Fallback to default
 
         self.config = PowerGeneratorConfig(
-            power_capacity_step=config.get("power_capacity_kwh", PowerGeneratorConfig.power_capacity_step) * model.time_scale, # Apply time scale
+            power_capacity_step=config.get("power_capacity_kwh", PowerGeneratorConfig.power_capacity_step)
+            * model.time_scale,  # Apply time scale
             efficiency=config.get("efficiency", PowerGeneratorConfig.efficiency),
             availability=config.get("availability", PowerGeneratorConfig.availability),
         )

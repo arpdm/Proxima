@@ -158,19 +158,23 @@ class ConstructionSector:
                 logger.warning(f"Unknown equipment type {equipment_type} allocated to construction")
 
     def _process_construction_queue(self) -> None:
-        """Process queued construction requests."""
-        active_projects = 0
+        """Process queued construction requests using all available assembly robots."""
 
+        # First, advance all in-progress projects
         for request in self.construction_queue[:]:
-            if active_projects >= self._config.max_concurrent_projects:
-                break
+            if request.status == ConstructionRequestStatus.IN_PROGRESS.value:
+                self._advance_construction_project(request)
 
+        # Then, assign new projects to any idle assembly robots
+        for request in self.construction_queue[:]:
             if request.status == ConstructionRequestStatus.QUEUED.value:
-                if self._start_construction_project(request):
-                    active_projects += 1
-            elif request.status == ConstructionRequestStatus.IN_PROGRESS.value:
-                if self._advance_construction_project(request):
-                    active_projects += 1
+                # Check if there's an available assembly robot
+                available_robot = next((r for r in self.assembly_robots if r.mode == AssemblyRobotMode.IDLE), None)
+                if available_robot:
+                    self._start_construction_project(request)
+                else:
+                    # No idle robots available, stop trying to start new projects
+                    break
 
         # Remove completed requests from queue
         self.construction_queue = [
@@ -312,9 +316,14 @@ class ConstructionSector:
 
     def get_metrics(self) -> Dict[str, Any]:
         """Get current metrics."""
+        from proxima_model.components.assembly_robot import AssemblyRobotMode
+
+        assembly_robots_working = sum(1 for r in self.assembly_robots if r.mode == AssemblyRobotMode.ASSEMBLING)
+
         return {
             "printing_robots": len(self.printing_robots),
             "assembly_robots": len(self.assembly_robots),
+            "assembly_robots_working": assembly_robots_working,
             "queued_requests": len(self.construction_queue),
             "shells_in_stock": self._stocks.shells,
             "regolith_used_kg": self.regolith_used_kg,

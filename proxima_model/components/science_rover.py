@@ -50,7 +50,9 @@ class ScienceRover(Agent):
 
         # Initial charge also scales
         initial_charge_config = float(self.config.get("current_battery_kWh", self.battery_capacity_kWh))
-        self.current_battery_kWh = initial_charge_config * model.time_scale if initial_charge_config > 0 else self.battery_capacity_kWh
+        self.current_battery_kWh = (
+            initial_charge_config * model.time_scale if initial_charge_config > 0 else self.battery_capacity_kWh
+        )
 
         # State variables
         self.current_battery_kWh = self.current_battery_kWh  # Already set above with time_scale applied

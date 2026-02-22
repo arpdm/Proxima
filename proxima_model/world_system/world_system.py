@@ -32,7 +32,7 @@ class WorldSystem(Model):
 
         self.config = config
         self.running = True
-        self.time_scale = self.config.get("hours_per_step", 1) # Hours per timestep
+        self.time_scale = self.config.get("hours_per_step", 1)  # Hours per timestep
 
         logger.info(f"Time Scale is set to {self.time_scale} hours/step")
 
@@ -56,7 +56,7 @@ class WorldSystem(Model):
 
         # Environment dynamics
         # TODO: Create a class for environment dynamis as they will grow
-        self.dust_decay_per_step = float(self.config.get("dust_decay_per_step", 0.0)) * self.time_scale
+        self.dust_decay_per_step = float(self.config.get("dust_decay_per_step", 0.0))
 
         # Initialize policy engine (uses evaluation engine internally)
         self.policy = PolicyEngine(self)

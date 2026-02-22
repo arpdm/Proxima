@@ -965,7 +965,7 @@ class ProximaUI:
             elif prop_id == "btn-default-metrics":
                 # Get a sensible default from each selected category
                 all_metrics = [opt["value"] for opt in (options or [])]
-                return DataFrameProcessor.get_default_metrics(all_metrics)
+                return DataFrameProcessor.get_default_metrics(all_metrics, self.config.experiment_id)
 
             return dash.no_update
 
@@ -1312,7 +1312,7 @@ class ProximaUI:
             return self.app
         else:
             print("🔧 Running in development mode")
-            self.app.run(debug=True, host="0.0.0.0", port=8050)
+            self.app.run(debug=False, host="0.0.0.0", port=8050)
 
 
 if __name__ == "__main__":

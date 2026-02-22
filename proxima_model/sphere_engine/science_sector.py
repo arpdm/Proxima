@@ -275,13 +275,14 @@ class ScienceSector:
             )
 
             # Send event to logistics/manufacturing sector
-            # TODO: Need to send request per item in the pipeline otherwise the algorithm wont be accurate
-            self.event_bus.publish(
-                EventType.CONSTRUCTION_REQUEST.value,
-                requesting_sphere=self.config.get("sector_name"),
-                module_id="comp_science_rover",
-                shell_quantity=1,
-            )
+            # Send separate request for each rover to ensure accurate pipeline tracking
+            for _ in range(q_capped):
+                self.event_bus.publish(
+                    EventType.CONSTRUCTION_REQUEST.value,
+                    requesting_sphere=self.config.get("sector_name"),
+                    module_id="comp_science_rover",
+                    shell_quantity=1,
+                )
 
     def step(self, available_power: float):
         """
@@ -351,10 +352,9 @@ class ScienceSector:
                 contribution_type = contrib.get("contribution_type")
 
                 if metric_id and contribution_type == "predefined":
-                    # Scale contribution by time_scale to match scaled decay
-                    scaled_contribution_value = value_per_agent * self.model.time_scale
                     # Calculate total contribution for this metric
-                    total_contribution = operational_count * scaled_contribution_value
+                    # Note: Decay is already scaled by time_scale, contributions use base rates
+                    total_contribution = operational_count * value_per_agent
                     metric_map[metric_id] = total_contribution
 
         return metric_map

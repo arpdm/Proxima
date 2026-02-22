@@ -217,6 +217,9 @@ class EquipmentManSector:
         quantity = request["quantity"]
         available = self._inventory.get_physical(equipment_type)
 
+        if available <= 0:
+            return quantity
+
         if available >= quantity:
             self.event_bus.publish(
                 EventType.EQUIPMENT_ALLOCATED.value,
@@ -227,8 +230,17 @@ class EquipmentManSector:
             self._inventory.remove(equipment_type, quantity)
             logger.info(f"Allocated {quantity} {equipment_type} to {requesting_sector}")
             return 0
-        else:
-            return quantity - available
+
+        # Partial fulfillment
+        self.event_bus.publish(
+            EventType.EQUIPMENT_ALLOCATED.value,
+            recipient_sector=requesting_sector,
+            equipment_type=equipment_type,
+            quantity=available,
+        )
+        self._inventory.remove(equipment_type, available)
+        logger.info(f"Allocated {available} {equipment_type} to {requesting_sector} (partial)")
+        return quantity - available
 
     def _check_and_request_resupply(self):
         """
@@ -239,12 +251,20 @@ class EquipmentManSector:
         """
         payload_to_request = {}
 
+        backlog_demand = {}
+        for request in self._equipment_backlog:
+            equipment_type = request.get("equipment_type")
+            quantity = request.get("quantity", 0)
+            backlog_demand[equipment_type] = backlog_demand.get(equipment_type, 0) + quantity
+
         for item, min_level in self._minimum_levels.items():
             effective_stock = self._inventory.get_effective(item)
+            backlog_qty = backlog_demand.get(item, 0)
+            target_level = min_level + backlog_qty
 
-            if effective_stock < min_level:
-                # Calculate how many to order to reach the minimum
-                amount_to_order = min_level - effective_stock
+            if effective_stock < target_level:
+                # Calculate how many to order to reach the target
+                amount_to_order = target_level - effective_stock
                 payload_to_request[item] = amount_to_order
 
                 # Update pending orders to reflect the new request

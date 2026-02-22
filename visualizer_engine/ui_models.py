@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, Any, List, Optional, Set
 import pandas as pd
+import yaml
+import os
 
 
 class SectorName(Enum):
@@ -97,7 +99,7 @@ class SectorRegistry:
                 icon="⚡",
                 color="#00FF88",
                 badge_format="⚡ PWR: {total_power_supply_kW:.1f}/{total_power_need_kW:.1f} kW",
-                primary_metrics=["total_power_supply_kW", "total_charge_level_kwh"],
+                # primary_metrics=["total_power_supply_kW", "total_charge_level_kwh"],
             ),
             SectorName.SCIENCE.value: SectorConfig(
                 id=SectorName.SCIENCE.value,
@@ -105,7 +107,6 @@ class SectorRegistry:
                 icon="🔬",
                 color="#0dcaf0",
                 badge_format="🔬 SCI: {operational_rovers} rovers | {science_generated:.2f}",
-                primary_metrics=["operational_rovers", "science_generated"],
             ),
             SectorName.MANUFACTURING.value: SectorConfig(
                 id=SectorName.MANUFACTURING.value,
@@ -113,7 +114,6 @@ class SectorRegistry:
                 icon="⚙️",
                 color="#0dcaf0",
                 badge_format="⚙️ MFG: {active_operations} ops | {sector_state}",
-                primary_metrics=["active_operations", "sector_state"],
             ),
             SectorName.EQUIPMENT_MANUFACTURING.value: SectorConfig(
                 id=SectorName.EQUIPMENT_MANUFACTURING.value,
@@ -121,7 +121,7 @@ class SectorRegistry:
                 icon="🔧",
                 color="#8b5cf6",
                 enabled=True,  # Set to False to hide from UI
-                primary_metrics=["production_rate", "inventory_level"],
+                badge_format="🔧 EQ: {equipment_Science_Rover_EQ} rover eq | {equipment_Assembly_Robot_EQ} assembly eq",
             ),
             SectorName.TRANSPORTATION.value: SectorConfig(
                 id=SectorName.TRANSPORTATION.value,
@@ -129,22 +129,20 @@ class SectorRegistry:
                 icon="🚀",
                 color="#f59e0b",
                 enabled=True,
-                primary_metrics=["active_missions", "fuel_level"],
+                badge_format="🚀 TRANS: {rockets} rockets | {queued_requests} queued",
             ),
             SectorName.ENVIRONMENT.value: SectorConfig(
                 id=SectorName.ENVIRONMENT.value,
                 display_name="System",
                 icon="🌍",
                 color="#10b981",
-                primary_metrics=["step", "simulation_time"],
             ),
             SectorName.CONSTRUCTION.value: SectorConfig(
                 id=SectorName.CONSTRUCTION.value,
                 display_name="Construction",
                 icon="🏗️",
                 color="#8b5cf6",
-                badge_format="🏗️ CONST: {shells_in_stock} shells",
-                primary_metrics=["shells_in_stock"],
+                badge_format="🏗️ CONST: {shells_in_stock} shells , Working Assembly: {assembly_robots_working}",
             ),
             SectorName.PERFORMANCE.value: SectorConfig(
                 id=SectorName.PERFORMANCE.value,
@@ -459,6 +457,23 @@ class DataFrameProcessor:
     """Processes log documents into DataFrames."""
 
     @staticmethod
+    def load_experiment_metrics_config() -> Dict[str, Any]:
+        """Load experiment-specific metrics config from YAML file."""
+        config_path = os.path.join(
+            os.path.dirname(__file__), "config", "experiment_metrics.yaml"
+        )
+        
+        if not os.path.exists(config_path):
+            return {"default": {"plot_metrics": []}}
+        
+        try:
+            with open(config_path, "r") as f:
+                return yaml.safe_load(f) or {"default": {"plot_metrics": []}}
+        except Exception as e:
+            print(f"⚠️ Failed to load experiment metrics config: {e}")
+            return {"default": {"plot_metrics": []}}
+
+    @staticmethod
     def flatten_logs_to_dataframe(docs: List[Dict[str, Any]]) -> Optional[pd.DataFrame]:
         """Convert log documents to flattened DataFrame."""
         if not docs:
@@ -527,8 +542,20 @@ class DataFrameProcessor:
         ]
 
     @staticmethod
-    def get_default_metrics(available_columns: List[str]) -> List[str]:
-        """Get default metrics for initial selection."""
+    def get_default_metrics(available_columns: List[str], experiment_id: str = "default") -> List[str]:
+        """Get default metrics for initial selection, prioritizing experiment config."""
+        # Load experiment-specific config
+        config = DataFrameProcessor.load_experiment_metrics_config()
+        experiment_config = config.get(experiment_id) or config.get("default")
+        
+        if experiment_config and experiment_config.get("plot_metrics"):
+            # Use experiment-specific metrics, filter to available columns
+            configured_metrics = experiment_config.get("plot_metrics", [])
+            chosen = [m for m in configured_metrics if m in available_columns]
+            if chosen:
+                return chosen[:8]  # Max 8 metrics on plot
+        
+        # Fallback to hardcoded defaults
         preferred = [
             "energy_total_power_supply_kw",
             "energy_total_charge_level_kwh",

@@ -93,7 +93,7 @@ class WorldSystemConfig:
     """Complete world system configuration."""
 
     sim_time: int
-    time_scale: float # Hours Per Step
+    time_scale: float  # Hours Per Step
     p_need: float = 2.0
     agents_config: Dict[str, Any] = field(default_factory=dict)
     metrics: List[Dict[str, Any]] = field(default_factory=list)
