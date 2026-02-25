@@ -293,7 +293,7 @@ With each phase/component, the world system will have:
 
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
-| The simulation can run Monte Carlo | Phase 2 | 🚧 |
+| The simulation can run Monte Carlo | Phase 2 | ✅ |
 | The simulation can run scenario-discovery | |  |
 | The simulation can run scenarios (defined in database) | |  |
 | The simulation can support stochastic runs | Phase 2|  ✅ |
@@ -316,8 +316,8 @@ With each phase/component, the world system will have:
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
 | Chaos Analysis |  |  |
-| Lyapunov exponent / bifurcation detection | Phase 2 | 🚧 |
-| Sensitivity Analysis Platform | Phase 2 | 🚧 |
+| Lyapunov exponent / bifurcation detection | Phase 2 | ✅ |
+| Sensitivity Analysis Platform | Phase 3 | |
 | Dynamic policy tuning | |  |
 | Structural optimization of world system | |  |
 
@@ -350,8 +350,7 @@ With each phase/component, the world system will have:
 | ---------- | ----------------- | ------ |
 | The post processor can analyze simulation logs - Post Processing Infrastructure | Phase 2 | ✅ |
 | The post processor can generate summaries and comparative metrics | |  |
-| The processor can feed data to complexity engine with derived inputs | Phase 2 | 🚧 |
-| The post processor can analyze Monte Carlo runs and generate necessary statistics/plots. (1) Feature Scoring (2) Heat Maps (3) Random Forest Feature Importance (4) Pair Scatter Plots (5) Time Series | Phase 2 | 🚧  |
+| The post processor can analyze Monte Carlo runs and generate necessary statistics/plots. (1) Feature Scoring (2) Heat Maps (3) Random Forest Feature Importance (4) Pair Scatter Plots (5) Time Series | Phase 3 | 🚧  |
 
 ---
 

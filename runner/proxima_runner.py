@@ -7,6 +7,7 @@ import traceback
 import argparse
 import logging
 import os
+from typing import Optional
 
 from dataclasses import dataclass
 
@@ -14,6 +15,7 @@ from data_engine.proxima_db_engine import ProximaDB
 from proxima_model.world_system.world_system_builder import build_world_system_config
 from proxima_model.world_system.world_system import WorldSystem
 from proxima_model.tools.data_logger import DataLogger
+from proxima_model.tools.world_state_manager import SaveGameManager
 from proxima_model.world_system.world_system_defs import get_sector_list, RunnerConfig
 
 
@@ -54,7 +56,7 @@ def parse_args():
 # ==== CONFIG END ====
 
 
-@dataclass(frozen=True)
+@dataclass()
 class ExperimentConfig:
     """Resolved experiment configuration for a run."""
 
@@ -96,6 +98,9 @@ class ProximaRunner:
         self.step_delay = self.config.default_step_delay
         self.step_counter = 0  # For periodic tasks like log flushing
         self.monte_carlo_context = None
+        
+        # Initialize save/load manager
+        self.save_manager = SaveGameManager(self.local_db)
 
     def _load_experiment_config(self) -> ExperimentConfig:
         """Load experiment configuration from the database."""
@@ -110,13 +115,13 @@ class ProximaRunner:
 
     def _build_world_system(self) -> WorldSystem:
         """Create a world system instance for the current experiment."""
-        config = build_world_system_config(self.ws_id, self.exp_id, self.local_db)
+        config = build_world_system_config(self.experiment.ws_id, self.experiment.exp_id, self.local_db)
         return WorldSystem(config, 100)
 
     def run(self, continuous=None):
         """Main simulation runner loop."""
 
-        self.continuous = continuous if continuous is not None else (self.sim_time is None)
+        self.continuous = continuous if continuous is not None else (self.experiment.sim_time is None)
         self.ws = self._build_world_system()
         self.is_running = True
         self.is_paused = False
@@ -147,7 +152,7 @@ class ProximaRunner:
 
     def _should_continue(self):
         """Check if the simulation should continue."""
-        return self.is_running and (self.continuous or self.ws.steps < self.sim_time)
+        return self.is_running and (self.continuous or self.ws.steps < self.experiment.sim_time)
 
     def _perform_simulation_step(self):
         """Perform a single simulation step."""
@@ -199,7 +204,7 @@ class ProximaRunner:
         """Fetch and delete the latest command for this experiment."""
 
         return self.local_db.db[collection].find_one_and_delete(
-            {"experiment_id": self.exp_id}, sort=[("timestamp", -1)]
+            {"experiment_id": self.experiment.exp_id}, sort=[("timestamp", -1)]
         )
 
     def _execute_command(self, command):
@@ -261,7 +266,7 @@ class ProximaRunner:
 
         try:
             command = self.local_db.db["startup_commands"].find_one_and_delete(
-                {"experiment_id": self.exp_id}, sort=[("timestamp", -1)]
+                {"experiment_id": self.experiment.exp_id}, sort=[("timestamp", -1)]
             )
 
             if not command:
@@ -273,13 +278,13 @@ class ProximaRunner:
             if action == "start_continuous":
                 self.run(continuous=True)
             elif action == "start_limited":
-                max_steps = command.get("max_steps", self.sim_time)
-                original_sim_time = self.sim_time
-                self.sim_time = max_steps
+                max_steps = command.get("max_steps", self.experiment.sim_time)
+                original_sim_time = self.experiment.sim_time
+                self.experiment.sim_time = max_steps
                 self.run(continuous=False)
-                self.sim_time = original_sim_time
+                self.experiment.sim_time = original_sim_time
             elif action == "start_monte_carlo":
-                steps_per_run = int(command.get("steps_per_run", self.sim_time or 1))
+                steps_per_run = int(command.get("steps_per_run", self.experiment.sim_time or 1))
                 num_runs = int(command.get("num_runs", 1))
                 self.run_monte_carlo(steps_per_run=steps_per_run, num_runs=num_runs)
             return True
@@ -295,7 +300,7 @@ class ProximaRunner:
             return
 
         mc_session_id = f"mc_{int(time.time())}"
-        original_sim_time = self.sim_time
+        original_sim_time = self.experiment.sim_time
         original_log_dir = self.logger.get_config().log_dir
 
         for run_index in range(1, num_runs + 1):
@@ -303,7 +308,7 @@ class ProximaRunner:
             log_dir = os.path.join(
                 "log_files",
                 "monte_carlo",
-                self.exp_id,
+                self.experiment.exp_id,
                 mc_session_id,
             )
 
@@ -316,13 +321,48 @@ class ProximaRunner:
 
             self.logger.rotate_log_dir(log_dir)
 
-            self.sim_time = steps_per_run
+            self.experiment.sim_time = steps_per_run
             self.run(continuous=False)
 
         self.monte_carlo_context = None
         self.logger.rotate_log_dir(original_log_dir)
-        self.sim_time = original_sim_time
+        self.experiment.sim_time = original_sim_time
 
+    def save_game(self, description: str = "") -> str:
+        """
+        Save is automatic via data logger. This is a no-op for API compatibility.
+        """
+        debug_logger.info("State is automatically saved via periodic logging")
+        return None
+    
+    def load_game(self) -> bool:
+        """
+        Load the latest saved world system state and resume from that point.
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Load latest state from MongoDB
+            latest_state = self.save_manager.load(self.experiment.ws_id)
+            
+            # Apply to current world system
+            self.save_manager.state_manager.apply_state_to_world(self.ws, latest_state)
+            
+            debug_logger.info(f"✅ Loaded and resumed from latest state")
+            return True
+            
+        except Exception as e:
+            debug_logger.error(f"Load game error: {e}")
+            return False
+    
+    def has_save(self) -> bool:
+        """Check if a save exists."""
+        try:
+            self.save_manager.load(self.experiment.ws_id)
+            return True
+        except FileNotFoundError:
+            return False
 
 def main():
     """Entry point for Proxima simulation runner."""
