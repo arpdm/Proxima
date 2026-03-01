@@ -328,7 +328,7 @@ class ConstructionSector:
                         shell_quantity_needed=max(1, int(entry.get("shell_quantity_needed", 0))),
                         equipment_needed=dict(entry.get("equipment_needed", {})),
                         status=status,
-                        equipment_requested=False,  # force fresh equipment request cycle on resume
+                        equipment_requested=bool(entry.get("equipment_requested", False)),
                     )
                     rebuilt_queue.append(req)
                 except Exception as exc:  # skip malformed entries
