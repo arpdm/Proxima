@@ -7,7 +7,6 @@ import traceback
 import argparse
 import logging
 import os
-from typing import Optional
 
 from dataclasses import dataclass
 
@@ -15,7 +14,6 @@ from data_engine.proxima_db_engine import ProximaDB
 from proxima_model.world_system.world_system_builder import build_world_system_config
 from proxima_model.world_system.world_system import WorldSystem
 from proxima_model.tools.data_logger import DataLogger
-from proxima_model.tools.world_state_manager import SaveGameManager
 from proxima_model.world_system.world_system_defs import get_sector_list, RunnerConfig
 
 
@@ -98,9 +96,6 @@ class ProximaRunner:
         self.step_delay = self.config.default_step_delay
         self.step_counter = 0  # For periodic tasks like log flushing
         self.monte_carlo_context = None
-        
-        # Initialize save/load manager
-        self.save_manager = SaveGameManager(self.local_db)
 
     def _load_experiment_config(self) -> ExperimentConfig:
         """Load experiment configuration from the database."""
@@ -328,41 +323,6 @@ class ProximaRunner:
         self.logger.rotate_log_dir(original_log_dir)
         self.experiment.sim_time = original_sim_time
 
-    def save_game(self, description: str = "") -> str:
-        """
-        Save is automatic via data logger. This is a no-op for API compatibility.
-        """
-        debug_logger.info("State is automatically saved via periodic logging")
-        return None
-    
-    def load_game(self) -> bool:
-        """
-        Load the latest saved world system state and resume from that point.
-        
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            # Load latest state from MongoDB
-            latest_state = self.save_manager.load(self.experiment.ws_id)
-            
-            # Apply to current world system
-            self.save_manager.state_manager.apply_state_to_world(self.ws, latest_state)
-            
-            debug_logger.info(f"✅ Loaded and resumed from latest state")
-            return True
-            
-        except Exception as e:
-            debug_logger.error(f"Load game error: {e}")
-            return False
-    
-    def has_save(self) -> bool:
-        """Check if a save exists."""
-        try:
-            self.save_manager.load(self.experiment.ws_id)
-            return True
-        except FileNotFoundError:
-            return False
 
 def main():
     """Entry point for Proxima simulation runner."""

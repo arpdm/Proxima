@@ -553,6 +553,11 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
     science_builder = ScienceSectorBuilder(component_templates)
     config["agents_config"]["science"] = science_builder.build(components_dict.get("science", []))
 
+    # Attach latest science state (if available) so the sector can resume metrics/state.
+    latest_science_state = world_system.get("latest_state", {}).get("sectors", {}).get("science")
+    if latest_science_state:
+        config["agents_config"]["science"]["latest_state"] = latest_science_state
+
     manufacturing_builder = ManufacturingSectorBuilder(component_templates)
     config["agents_config"]["manufacturing"] = manufacturing_builder.build(
         components_dict.get("manufacturing", []), world_system.get("initial_stocks", {})
