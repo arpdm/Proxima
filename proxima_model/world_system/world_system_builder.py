@@ -561,6 +561,11 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
         components_dict.get("manufacturing", []), world_system.get("initial_stocks", {})
     )
 
+    # Attach latest manufacturing state (if available) so the sector can resume metrics/state.
+    latest_manufacturing_state = world_system.get("latest_state", {}).get("sectors", {}).get("manufacturing")
+    if latest_manufacturing_state:
+        config["agents_config"]["manufacturing"]["latest_state"] = latest_manufacturing_state
+
     equipment_builder = EquipmentManufacturingSectorBuilder(component_templates)
     config["agents_config"]["equipment_manufacturing"] = equipment_builder.build(
         components_dict.get("equipmentManufacturing", [])

@@ -90,6 +90,7 @@ class ManufacturingMetrics:
     power_consumed: float = 0.0
     active_operations: int = 0
     operational_robots: int = 0
+    total_robots: int = 0
     sector_state: SectorState = SectorState.ACTIVE
     stocks: Dict[str, float] = field(default_factory=dict)
     metric_contributions: Dict[str, float] = field(default_factory=dict)
@@ -175,6 +176,11 @@ class ManufacturingSector:
 
         # Subscribe to events
         self.event_bus.subscribe(EventType.RESOURCE_REQUEST.value, self.handle_resource_request)
+
+        # Hydrate from latest_state if provided
+        latest_state_mfg = config.get("latest_state") if isinstance(config, dict) else None
+        if latest_state_mfg:
+            self._apply_latest_state(latest_state_mfg)
 
     def _initialize_buffer_targets(self, config: dict) -> Dict[str, BufferTarget]:
         """Initialize buffer targets from configuration."""
@@ -366,6 +372,63 @@ class ManufacturingSector:
         self.robot_throttle = max(0.0, min(1.0, throttle_value))  # Clamp to 0-1
         logger.info(f"Manufacturing sector throttle factor set to: {self.robot_throttle}")
 
+    def _apply_latest_state(self, m_state: Dict[str, any]) -> None:
+        """Restore key manufacturing state from latest_state snapshot."""
+
+        try:
+            state_name = m_state.get("sector_state")
+            if state_name and state_name in SectorState.__members__:
+                self.sector_state = SectorState[state_name]
+        except Exception:
+            pass
+
+        try:
+            self.robot_throttle = float(m_state.get("robot_throttle", self.robot_throttle))
+        except Exception:
+            pass
+
+        stocks_dict = m_state.get("stocks")
+        if isinstance(stocks_dict, dict):
+            self.stocks.update({k: float(v) for k, v in stocks_dict.items()})
+        else:
+            flattened = {
+                k.replace("stock_", ""): float(v)
+                for k, v in m_state.items()
+                if isinstance(k, str) and k.startswith("stock_")
+            }
+            if flattened:
+                self.stocks.update(flattened)
+
+        # Optional: restore buffered resource requests if present
+        buffered = m_state.get("resource_requests")
+        if isinstance(buffered, list):
+            restored: List[ResourceRequest] = []
+            for req in buffered:
+                try:
+                    restored.append(
+                        ResourceRequest(
+                            requesting_sector=req.get("requesting_sector", ""),
+                            resource=req.get("resource", ""),
+                            amount=float(req.get("amount", 0)),
+                        )
+                    )
+                except Exception:
+                    continue
+            if restored:
+                self._resource_request_buffer = restored
+
+        # If saved robot count exceeds current, top up agents from base config (matches science sector pattern)
+        try:
+            saved_total = int(m_state.get("total_robots", 0))
+            missing = saved_total - len(self.isru_robots)
+            if missing > 0 and self._manufacturing_config:
+                base_cfg = self._manufacturing_config[0]
+                agent_config = base_cfg.get("config", {})
+                for _ in range(missing):
+                    self.isru_robots.append(ISRUAgent(self.model, agent_config))
+        except Exception:
+            pass
+
     def get_power_demand(self) -> float:
         """Calculate total power demand from all ISRU operations."""
 
@@ -378,6 +441,7 @@ class ManufacturingSector:
         """Execute manufacturing operations for one simulation step."""
 
         self._current_metrics = ManufacturingMetrics()
+        self._current_metrics.total_robots = len(self.isru_robots)
 
         # Process buffered resource requests first
         self._process_buffered_resource_requests()
@@ -480,7 +544,18 @@ class ManufacturingSector:
                 "power_consumed": self._current_metrics.power_consumed,
                 "active_operations": self._current_metrics.active_operations,
                 "operational_robots": self._current_metrics.operational_robots,
+                "total_robots": len(self.isru_robots),
                 "sector_state": self.sector_state.name,
+                "stocks": self.stocks.copy(),
+                "robot_throttle": self.robot_throttle,
+                "resource_requests": [
+                    {
+                        "requesting_sector": r.requesting_sector,
+                        "resource": r.resource,
+                        "amount": r.amount,
+                    }
+                    for r in self._resource_request_buffer
+                ],
                 **{f"stock_{k}": v for k, v in self.stocks.items()},
                 "metric_contributions": self._create_metric_map(),
             }

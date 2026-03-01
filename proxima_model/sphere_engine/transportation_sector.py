@@ -307,6 +307,28 @@ class TransportationSector:
             if rebuilt_queue:
                 self.transport_queue = rebuilt_queue
 
+        # Top up rockets if latest_state recorded more than config instantiated
+        try:
+            saved_rockets = int(t_state.get("rockets", len(self.rockets)))
+            missing_rockets = saved_rockets - len(self.rockets)
+            if missing_rockets > 0 and self.rocket_configs:
+                base_cfg = self.rocket_configs[0]
+                for _ in range(missing_rockets):
+                    self.rockets.append(Rocket(self.model, base_cfg, self.event_bus))
+        except Exception:
+            pass
+
+        # Top up fuel generators if latest_state recorded more than config instantiated
+        try:
+            saved_fuel_gens = int(t_state.get("fuel_generators", len(self.fuel_generators)))
+            missing_fuel_gens = saved_fuel_gens - len(self.fuel_generators)
+            if missing_fuel_gens > 0 and self.fuel_gen_configs:
+                base_cfg = self.fuel_gen_configs[0]
+                for _ in range(missing_fuel_gens):
+                    self.fuel_generators.append(FuelGenerator(self.model, base_cfg))
+        except Exception:
+            pass
+
         # Rocket states
         rocket_states = t_state.get("rockets_state", [])
         if isinstance(rocket_states, list):

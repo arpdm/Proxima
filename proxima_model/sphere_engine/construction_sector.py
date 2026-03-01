@@ -88,18 +88,18 @@ class ConstructionSector:
 
         # Initialize printing robots
         self.printing_robots: List[PrintingRobot] = []
-        printing_configs = config.get("printing_robots", [])
+        self.printing_configs = config.get("printing_robots", [])
 
-        for robot_config in printing_configs:
+        for robot_config in self.printing_configs:
             quantity = robot_config.get("quantity", 1)
             for _ in range(quantity):
                 self.printing_robots.append(PrintingRobot(self.model, robot_config))
 
         # Initialize assembly robots
         self.assembly_robots: List[AssemblyRobot] = []
-        assembly_configs = config.get("assembly_robots", [])
+        self.assembly_configs = config.get("assembly_robots", [])
 
-        for robot_config in assembly_configs:
+        for robot_config in self.assembly_configs:
             quantity = robot_config.get("quantity", 1)
             for _ in range(quantity):
                 self.assembly_robots.append(AssemblyRobot(self.model, robot_config))
@@ -341,6 +341,27 @@ class ConstructionSector:
             if key.startswith("equipment_"):
                 eq_type = key.replace("equipment_", "")
                 self._state.equipment_stock[eq_type] = int(value)
+
+        # Recreate missing robots if latest_state recorded more than config instantiated
+        try:
+            saved_printing = int(construction_state.get("printing_robots", len(self.printing_robots)))
+            missing_printing = saved_printing - len(self.printing_robots)
+            if missing_printing > 0 and self.printing_configs:
+                base_cfg = self.printing_configs[0]
+                for _ in range(missing_printing):
+                    self.printing_robots.append(PrintingRobot(self.model, base_cfg))
+        except Exception:
+            pass
+
+        try:
+            saved_assembly = int(construction_state.get("assembly_robots", len(self.assembly_robots)))
+            missing_assembly = saved_assembly - len(self.assembly_robots)
+            if missing_assembly > 0 and self.assembly_configs:
+                base_cfg = self.assembly_configs[0]
+                for _ in range(missing_assembly):
+                    self.assembly_robots.append(AssemblyRobot(self.model, base_cfg))
+        except Exception:
+            pass
 
         # Queued requests count is informational only; we can't reconstruct queue without details.
         # Per-step counters reset each run

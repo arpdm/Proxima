@@ -44,16 +44,18 @@ class EnergySector:
         # State container
         self.state = EnergySectorState()
 
-        # Component collections
+        # Component collections (keep base configs for hydration top-up)
+        self.storage_configs = config.get("storages", [])
+        self.generator_configs = config.get("generators", [])
         self.storages: List[PowerStorage] = []
         self.generators: List[PowerGenerator] = []
 
         # Initialize components (preserve original initialization logic)
-        for storage_cfg in config.get("storages", []):
+        for storage_cfg in self.storage_configs:
             for _ in range(storage_cfg.get("quantity", 1)):
                 self.storages.append(PowerStorage(self.model, storage_cfg))
 
-        for gen_cfg in config.get("generators", []):
+        for gen_cfg in self.generator_configs:
             for _ in range(gen_cfg.get("quantity", 1)):
                 self.generators.append(PowerGenerator(self.model, gen_cfg))
 
@@ -106,6 +108,31 @@ class EnergySector:
         self.state.total_state_of_charge = float(
             energy_state.get("total_state_of_charge", self.state.total_state_of_charge)
         )
+
+        # Recreate missing storages/generators if latest_state recorded more than config instantiated
+        try:
+            saved_storage_count = int(energy_state.get("power_storage_count", len(self.storages)))
+            missing_storages = saved_storage_count - len(self.storages)
+            if missing_storages > 0 and self.storage_configs:
+                base_cfg = self.storage_configs[0]
+                for _ in range(missing_storages):
+                    self.storages.append(PowerStorage(self.model, base_cfg))
+        except Exception:
+            pass
+
+        try:
+            saved_generator_count = int(energy_state.get("power_generator_count", len(self.generators)))
+            missing_generators = saved_generator_count - len(self.generators)
+            if missing_generators > 0 and self.generator_configs:
+                base_cfg = self.generator_configs[0]
+                for _ in range(missing_generators):
+                    self.generators.append(PowerGenerator(self.model, base_cfg))
+        except Exception:
+            pass
+
+        # Update counts after potential top-up
+        self.state.power_storage_count = len(self.storages)
+        self.state.power_generator_count = len(self.generators)
 
     def allocate_power(self, sector_demands: Dict[str, float]) -> Dict[str, float]:
         """
