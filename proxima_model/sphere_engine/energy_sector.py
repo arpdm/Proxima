@@ -7,6 +7,7 @@ Simplified energy sector management with integrated power allocation.
 import numpy as np
 from typing import List, Dict, Any
 from enum import Enum
+from dataclasses import dataclass, field
 
 from proxima_model.components.power_generator import PowerGenerator
 from proxima_model.components.power_storage import PowerStorage
@@ -19,12 +20,29 @@ class AllocationMode(Enum):
     EQUAL = "equal"
 
 
+@dataclass
+class EnergySectorState:
+    """State snapshot for the energy sector."""
+
+    power_supplied: float = 0.0
+    power_demanded: float = 0.0
+    power_shortage: float = 0.0
+    total_charge_level_kWh: float = 0.0
+    total_state_of_charge: float = 0.0
+    total_charge_capacity_kWh: float = 0.0
+    power_storage_count: int = 0
+    power_generator_count: int = 0
+
+
 class EnergySector:
     """Simplified energy sector with single-step processing and allocation."""
 
     def __init__(self, model, config, event_bus):
         self.model = model
         self.event_bus = event_bus
+
+        # State container
+        self.state = EnergySectorState()
 
         # Component collections
         self.storages: List[PowerStorage] = []
@@ -39,14 +57,23 @@ class EnergySector:
             for _ in range(gen_cfg.get("quantity", 1)):
                 self.generators.append(PowerGenerator(self.model, gen_cfg))
 
+        # Persist counts
+        self.state.power_storage_count = len(self.storages)
+        self.state.power_generator_count = len(self.generators)
+
         # Current state (moved from MicrogridManager)
-        self.power_supplied = 0.0
-        self.power_demanded = 0.0
-        self.power_shortage = 0.0
+        self.state.power_supplied = 0.0
+        self.state.power_demanded = 0.0
+        self.state.power_shortage = 0.0
 
         # Allocation mode (moved from WorldSystem)
         allocation_mode_str = (config.get("allocation_mode") or "proportional").lower()
         self.allocation_mode = AllocationMode(allocation_mode_str)
+
+        # Hydrate from latest_state if provided
+        latest_state_energy = config.get("latest_state") if isinstance(config, dict) else None
+        if latest_state_energy:
+            self._apply_latest_state(latest_state_energy)
 
     @property
     def total_charge(self) -> float:
@@ -63,6 +90,22 @@ class EnergySector:
         """Calculate overall state of charge."""
         total_cap = self.total_capacity
         return self.total_charge / total_cap if total_cap > 0 else 0
+
+    def _apply_latest_state(self, energy_state: Dict[str, Any]) -> None:
+        """Hydrate energy metrics from latest_state snapshot."""
+
+        self.state.power_supplied = float(energy_state.get("total_power_supply_kW", self.state.power_supplied))
+        self.state.power_demanded = float(energy_state.get("total_power_need_kW", self.state.power_demanded))
+        self.state.power_shortage = float(energy_state.get("power_shortage_kW", self.state.power_shortage))
+        self.state.total_charge_level_kWh = float(
+            energy_state.get("total_charge_level_kWh", self.state.total_charge_level_kWh)
+        )
+        self.state.total_charge_capacity_kWh = float(
+            energy_state.get("total_charge_capacity_kWh", self.state.total_charge_capacity_kWh)
+        )
+        self.state.total_state_of_charge = float(
+            energy_state.get("total_state_of_charge", self.state.total_state_of_charge)
+        )
 
     def allocate_power(self, sector_demands: Dict[str, float]) -> Dict[str, float]:
         """
@@ -104,7 +147,7 @@ class EnergySector:
 
     def step(self, power_demand):
         """Single step: process power demand and return what's available."""
-        self.power_demanded = power_demand
+        self.state.power_demanded = power_demand
 
         # 1. Calculate total power that could be useful
         total_storage_capacity = sum(s.available_capacity for s in self.storages)
@@ -136,8 +179,8 @@ class EnergySector:
                 remaining_demand -= discharged
 
         # 5. Calculate what we actually supplied
-        self.power_supplied = power_from_generation + total_discharged
-        self.power_shortage = max(0, remaining_demand)
+        self.state.power_supplied = power_from_generation + total_discharged
+        self.state.power_shortage = max(0, remaining_demand)
 
         # 6. Charge batteries with excess generation (should be minimal now)
         excess_power = total_generated - power_from_generation
@@ -153,15 +196,22 @@ class EnergySector:
                     consumed = storage.charge(power_to_charge)
                     remaining_excess -= consumed
 
-        return self.power_supplied
+        # Update state of charge metrics
+        self.state.total_charge_level_kWh = self.total_charge
+        self.state.total_charge_capacity_kWh = self.total_capacity
+        self.state.total_state_of_charge = self.total_state_of_charge
+
+        return self.state.power_supplied
 
     def get_metrics(self):
         """Get metrics for logging."""
         return {
-            "total_power_supply_kW": self.power_supplied,
-            "total_power_need_kW": self.power_demanded,
-            "power_shortage_kW": self.power_shortage,
-            "total_charge_level_kWh": self.total_charge,
-            "total_state_of_charge": self.total_state_of_charge,
-            "total_charge_capacity_kWh": self.total_capacity,
+            "total_power_supply_kW": self.state.power_supplied,
+            "total_power_need_kW": self.state.power_demanded,
+            "power_shortage_kW": self.state.power_shortage,
+            "total_charge_level_kWh": self.state.total_charge_level_kWh,
+            "total_state_of_charge": self.state.total_state_of_charge,
+            "total_charge_capacity_kWh": self.state.total_charge_capacity_kWh,
+            "power_storage_count": self.state.power_storage_count,
+            "power_generator_count": self.state.power_generator_count,
         }

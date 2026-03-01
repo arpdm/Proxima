@@ -543,6 +543,11 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
     energy_builder = EnergySectorBuilder(component_templates)
     config["agents_config"]["energy"] = energy_builder.build(components_dict.get("energy", []))
 
+    # Attach latest energy state (if available) so the sector can resume metrics/state.
+    latest_energy_state = world_system.get("latest_state", {}).get("sectors", {}).get("energy")
+    if latest_energy_state:
+        config["agents_config"]["energy"]["latest_state"] = latest_energy_state
+
     science_builder = ScienceSectorBuilder(component_templates)
     config["agents_config"]["science"] = science_builder.build(components_dict.get("science", []))
 
