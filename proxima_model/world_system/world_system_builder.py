@@ -456,21 +456,14 @@ class ConstructionSectorBuilder(ComponentBuilder):
         Returns:
             Dictionary with sector config, printing_robots, and assembly_robots
         """
-        # Import the config class to get default values
-        from proxima_model.sphere_engine.construction_sector import ConstructionConfig
-
-        # Start with defaults from the dataclass
-        default_config = ConstructionConfig()
-
+        # Inline defaults (avoid importing sector dataclass)
         config = {
             "sector_name": "construction",
             "printing_robots": [],
             "assembly_robots": [],
+            "max_concurrent_projects": 3,
+            "shell_storage_capacity": 10,
         }
-
-        # Add all fields from ConstructionConfig with their default values
-        for field_name in default_config.__dataclass_fields__.keys():
-            config[field_name] = getattr(default_config, field_name)
 
         for comp in components:
             # Check if this is a sector configuration (no template_id)
@@ -573,6 +566,11 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
 
     construction_builder = ConstructionSectorBuilder(component_templates)
     config["agents_config"]["construction"] = construction_builder.build(components_dict.get("construction", []))
+
+    # Attach latest construction state (if available) so the sector can resume metrics/state.
+    latest_construction_state = world_system.get("latest_state", {}).get("sectors", {}).get("construction")
+    if latest_construction_state:
+        config["agents_config"]["construction"]["latest_state"] = latest_construction_state
 
     # Build goals configuration
     goals_builder = GoalsSystemBuilder(db)
