@@ -22,6 +22,8 @@ When adding capabilities, dont just give more power generation. Rules can be add
 
 - Each zone has a growth limit (maybe based on entropy index). If a zone reaches the entropy index, another zone must be created. No central governence. Zones can regulate eachother.
 - Lifetime expiration
+- Rsource Depletion Rate
+- Power Deficit Profile Based on Expansion
 
 ## Expansion Policy 001
 
@@ -52,7 +54,6 @@ To achieve #3 following probabily will need to happen:
 
 ### Analysis Observations and Actions
 
-- `TODO` After initial analysis, seems like the rovers are being requested for growth in duplicate amounts. Rovers need to be requested every 4320 steps. It means that in 10000 steps, only two times there needs to be pipeline request. 
 - `TODO` Take a better look at the calculation of how many rovers are needed to meet the need for growth. 
 - `IMPROVEMENT` Another observation is that even if we have 90 rovers, only 20 of them are operational. So why should we keep asking for more rovers if utilization is low. Maybe the policy needs to be modified so that rovers are requested if utilization is high. otherwise, keep track of the needed rovers vs requested rover to know that we need specific amount for growth but since utilization is low, they are not being requested.
 - `IMPROVEMENT` We also need to make sure all assembly robots are used when available.

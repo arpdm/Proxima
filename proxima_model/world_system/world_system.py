@@ -55,7 +55,7 @@ class WorldSystem(Model):
         self.model_metrics: Dict[str, Any] = {"environment": {"step": 0}}
 
         # Environment dynamics
-        # TODO: Create a class for environment dynamis as they will grow
+        # TODO: Create a class for environment dynamics as they will grow
         self.dust_decay_per_step = float(self.config.get("dust_decay_per_step", 0.0))
 
         # Initialize policy engine (uses evaluation engine internally)

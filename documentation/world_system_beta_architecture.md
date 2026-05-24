@@ -297,7 +297,7 @@ With each phase/component, the world system will have:
 | The simulation can run scenario-discovery | |  |
 | The simulation can run scenarios (defined in database) | |  |
 | The simulation can support stochastic runs | Phase 2|  ✅ |
-| The simulation can resume from existing world system state | Phase 2 | 🚧 |
+| The simulation can resume from existing world system state | Phase 2 | ✅ |
 
 ---
 
