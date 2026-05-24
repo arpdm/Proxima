@@ -306,7 +306,7 @@ With each phase/component, the world system will have:
 | Capability | Development Phase | Status |
 | ---------- | ----------------- | ------ |
 | Base infrastructure policies for science, energy, and economy. Not closed loop. | Phase 1 | ✅ |
-| Growth policities | Phase 2 | 🚧 |
+| Growth policities Initiation| Phase 2 | ✅ |
 | Bio-Inspired algorithms | |  |
 
 ---

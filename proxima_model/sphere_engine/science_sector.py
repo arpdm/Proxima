@@ -281,7 +281,7 @@ class ScienceSector:
         # Step 2: Calculate target science rate at horizon S_target(t+H)
         if self._config.S_0 <= 0:
             # Use current rate if S_0 not established yet
-            self._config.S_0 = self.step_science_generated
+            self._config.S_0 = getattr(self, "step_science_generated", 0.0)
 
         S_target = self._config.S_0 * (
             self.growth_rate_sp ** ((t + self._config.planning_horizon_H) / self._config.growth_duration_sp)

@@ -214,7 +214,79 @@ def order_rovers(t, S0, peff, L=1, beta=0.1,
 
 ---
 
-## 7. Future Enhancements
+## 7. Refinement: Utilization-Aware Rover Ordering
+
+### 7.1 Problem Identified
+
+The baseline policy (Sections 1-6) orders rovers based purely on a mathematical growth curve. However, it does **not** account for actual fleet utilization:
+
+- Fleet has 90 rovers total, but only 20 are operational (22% utilization)
+- Policy still orders more rovers to maintain exponential growth
+- Resources are wasted on unused fleet capacity
+
+**Key Insight:** If current rovers are not being fully utilized, ordering new rovers without understanding *why* the current ones are idle is inefficient.
+
+### 7.2 Refinement Mechanism
+
+Add a **utilization gate** to the rover ordering decision:
+
+```
+utilization_ratio = operational_rovers / total_rovers
+
+if utilization_ratio >= threshold (default: 70%):
+    apply standard rover ordering algorithm (Sections 2-6)
+else:
+    reduce growth_rate from 2.0 → 0.5
+    defer rover ordering (track but don't request)
+    log: "Utilization too low, deferring q rovers"
+```
+
+**Result:** The growth algorithm still calculates `rovers_needed_for_growth`, but the policy layer (via `ScienceGrowthUtilizationPolicy`) decides whether to actually order them.
+
+### 7.3 Configuration
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `utilization_threshold` | 0.70 (70%) | Min operational/total ratio to enable full ordering |
+| `reduced_growth_rate` | 0.5 | Growth rate when utilization is low |
+| `normal_growth_rate` | 2.0 | Growth rate when utilization is healthy |
+
+### 7.4 Metrics Exposed
+
+Track the gap between theory and practice:
+
+- `rovers_needed_for_growth`: Calculated demand (from algorithm)
+- `rovers_in_pipeline`: Actually ordered (subject to utilization gate)
+- `utilization_ratio`: Current operational/total
+- **Gap** = `rovers_needed_for_growth` - `rovers_in_pipeline` (diagnostic signal)
+
+When utilization is low, gap > 0, signaling that growth is deferred pending fleet recovery.
+
+### 7.5 Architecture
+
+**Sector** (`science_sector.py`):
+- Pure algorithm: calculates rovers needed
+- Executes decisions: orders rovers based on growth rate set by policy
+
+**Policy** (`science_policies.py`, `ScienceGrowthUtilizationPolicy`):
+- Observes metrics: gets utilization ratio
+- Decides: chooses normal or reduced growth rate
+- Acts: calls `control_science_growth_rate()` on sector
+
+This separation keeps policy logic (decision-making) distinct from execution (sector operations).
+
+### 7.6 Future Refinements
+
+- **Predictive utilization:** Forecast future utilization trends; adjust growth rate preemptively
+- **Differentiated thresholds:** Different sectors have different "healthy" utilization targets
+- **Root cause investigation:** Log why rovers are idle (power deficit? resource bottleneck? failures?)
+- **Cost of idle capacity:** Factor maintenance cost of inactive rovers into growth rate decisions
+
+---
+
+---
+
+## 8. Future Enhancements (ML/DL)
 
 - **Dynamic Productivity Adjustment**: Update $p_{\text{eff}}$ based on real-time rover performance.
 - **Multi-Resource Constraints**: Factor in power, crew, and material availability.
@@ -222,29 +294,22 @@ def order_rovers(t, S0, peff, L=1, beta=0.1,
 - **Variable Lead Times**: Account for different manufacturing speeds or supply chain disruptions.
 - **Full MPC Implementation**: Implement the complete optimization formulation with $Q$ and $R$ matrices for more sophisticated control.
 
-This policy ensures exponential growth in science output while maintaining a robust, adaptive planning mechanism.
+### 8.1 Reinforcement Learning Approaches
 
-## 8. ML/DL Additions
-
-1. Reinforcement Learning (RL) for Adaptive Control
-Use Case: Replace the simple receding-horizon controller with an RL agent that learns optimal rover ordering policies.
+1. **RL for Adaptive Control**: Replace the simple receding-horizon controller with an RL agent that learns optimal rover ordering policies.
 
 ```python
 from stable_baselines3 import PPO, SAC
 import gymnasium as gym
 ```
 
-2. Time Series Forecasting for Demand Prediction
-Use Case: Predict future science production rates and power demands more accurately.
+2. **Time Series Forecasting**: Predict future science production rates and power demands more accurately.
 
-3. Anomaly Detection for Rover Failures
-Use Case: Predict when rovers are likely to fail based on usage patterns. (IsolationForest)
+3. **Anomaly Detection**: Predict when rovers are likely to fail based on usage patterns.
 
-4. Multi-Armed Bandit for Task Prioritization
-Use Case: If rovers can do different science tasks, use contextual bandits to learn which tasks yield most value.
+4. **Multi-Armed Bandit**: If rovers can do different science tasks, use contextual bandits to learn which tasks yield most value.
 
-5. Graph Neural Networks for Rover Coordination
-Use Case: If rovers interact or share resources, use GNNs to optimize coordination.
+5. **Graph Neural Networks**: If rovers interact or share resources, use GNNs to optimize coordination.
 
 ```python
 import torch
@@ -252,8 +317,7 @@ import torch.nn as nn
 from torch_geometric.nn import GCNConv
 ```
 
-6. Imitation Learning for Policy Initialization
-Use Case: Bootstrap RL with expert demonstrations (your current heuristic policy).
+6. **Imitation Learning**: Bootstrap RL with expert demonstrations (your current heuristic policy).
 
 ```python
 from imitation.algorithms import bc
