@@ -75,10 +75,16 @@ class ProximaRunner:
         # Setup database connections
         self.local_db = ProximaDB(uri=self.config.local_uri)
         self.hosted_db = ProximaDB(uri=self.config.hosted_uri) if self.config.hosted_uri else None
-        self.local_db.db.db.logs_simulation.delete_many({})  # Clear old logs
+        self.local_db.db["logs_simulation"].delete_many({})  # Clear old logs
 
         # Load experiment configuration from DB
         self.experiment = self._load_experiment_config()
+
+        # Clear any stale commands left over from a previous session for this experiment.
+        # Without this, a leftover "stop"/"pause" command can be replayed the moment the
+        # simulation starts, immediately halting it again.
+        self.local_db.db["startup_commands"].delete_many({"experiment_id": self.experiment.exp_id})
+        self.local_db.db["runtime_commands"].delete_many({"experiment_id": self.experiment.exp_id})
 
         # Setup logging and simulation state
         self.logger = DataLogger(experiment_id=self.experiment.exp_id, db=self.local_db, ws_id=self.experiment.ws_id)

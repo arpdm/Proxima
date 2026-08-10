@@ -48,10 +48,7 @@ class ScienceProductionRate(Policy):
         Reads the evaluation for the science growth metric and logs it.
         This policy is passive and doesn't apply throttling or other effects.
         """
-
-        # TODO: This policy can be then using other metrics and policies to make better decisions
-        # This policy is for monitoring, so it returns the observed data without applying effects.
-        # TODO: Access to current world system state to evaluate the growth rate
+        
         effects = {
             "metric_id": self.metric_id,
             "score": 0,

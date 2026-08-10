@@ -124,32 +124,29 @@ class ProximaUI:
 
     # ========================= UI COMPONENT BUILDERS ========================
 
-    def _create_card(self, title: str, body_content, class_name: str = "mb-4", min_height: str = None) -> dbc.Card:
-        """Create standardized card component"""
-        
-        card_body_style = {
-            "backgroundColor": self.theme.bg_secondary, 
-            "padding": "20px"
-        }
-        
+    def _create_card(self, title: str, body_content, class_name: str = "mb-4", min_height: str = None) -> html.Div:
+        """Create standardized mission-control panel component"""
+
+        body_style = {"padding": "20px"}
+
         # Add minimum height if specified
         if min_height:
-            card_body_style["minHeight"] = min_height
-            
-        return dbc.Card(
+            body_style["minHeight"] = min_height
+
+        return html.Div(
             [
-                dbc.CardHeader(
-                    title,
-                    style={
-                        "backgroundColor": self.theme.bg_tertiary,
-                        "color": self.theme.text,
-                        "padding": "15px",
-                    },
+                html.Div(
+                    [
+                        html.Div(
+                            [html.Span(className="mc-led mc-led--cyan"), html.Span(title)],
+                            className="mc-panel-title",
+                        ),
+                    ],
+                    className="mc-panel-header",
                 ),
-                dbc.CardBody(body_content, style=card_body_style),
+                html.Div(body_content, className="mc-panel-body", style=body_style),
             ],
-            className=class_name,
-            style={"border": f"1px solid {self.theme.border}"},
+            className=f"mc-panel {class_name}",
         )
 
     def _create_outline_button(self, text: str, id_: str, color: str) -> dbc.Button:
@@ -160,16 +157,17 @@ class ProximaUI:
             id=id_,
             color=color,
             outline=True,
-            className="me-3",
+            className="mc-btn me-3",
             style={"borderColor": color_hex, "color": color_hex},
         )
 
     def _create_sector_table_component(self):
         """Create AG Grid for sector data - simplified"""
+        mono_cell_style = {"color": "var(--mc-text)", "backgroundColor": "transparent", "fontFamily": "var(--mc-font-mono)"}
         col_defs = [
-            {"field": "Sector", "sortable": True, "filter": True, "width": 180},
-            {"field": "Metric", "sortable": True, "filter": True, "flex": 1},
-            {"field": "Value", "sortable": True, "filter": True, "flex": 1},
+            {"field": "Sector", "sortable": True, "filter": True, "width": 180, "cellStyle": mono_cell_style},
+            {"field": "Metric", "sortable": True, "filter": True, "flex": 1, "cellStyle": mono_cell_style},
+            {"field": "Value", "sortable": True, "filter": True, "flex": 1, "cellStyle": mono_cell_style},
         ]
 
         return dag.AgGrid(
@@ -188,8 +186,18 @@ class ProximaUI:
         """Create status badge with appropriate color"""
         color_map = {"within": "success", "outside": "danger", "unknown": "warning"}
         color = color_map.get((status or "").lower(), "secondary")
-        label = status if score is None else f"{status} ({score:.2f})"
-        return dbc.Badge(label, color=color, pill=True, className="ms-1")
+        label = (status or "UNKNOWN").upper() if score is None else f"{(status or '').upper()} ({score:.2f})"
+        return dbc.Badge(
+            label,
+            color=color,
+            pill=False,
+            className="ms-1",
+            style={
+                "fontFamily": "var(--mc-font-mono)",
+                "letterSpacing": "0.5px",
+                "borderRadius": "0",
+            },
+        )
 
     def build_metric_tracker_table(self) -> html.Table:
         """Build metric tracker table"""
@@ -203,10 +211,15 @@ class ProximaUI:
 
         headers = ["Metric", "Id", "Score", "Status", "Current", "Goal"]
         header_style = {
-            "backgroundColor": "rgb(30,40,60)",
-            "color": "#e0e0e0",
-            "border": "1px solid #405070",
-            "padding": "12px",
+            "backgroundColor": "var(--mc-bg-header)",
+            "color": "var(--mc-cyan-bright)",
+            "border": "1px solid var(--mc-border)",
+            "padding": "10px 12px",
+            "fontFamily": "var(--mc-font-body)",
+            "fontWeight": "600",
+            "fontSize": "11px",
+            "letterSpacing": "1.5px",
+            "textTransform": "uppercase",
         }
         header = html.Thead(html.Tr([html.Th(h, style=header_style) for h in headers]))
 
@@ -214,12 +227,14 @@ class ProximaUI:
         rows = []
 
         for i, (metric_id, entry) in enumerate(items):
-            row_bg = "rgb(35,45,65)" if i % 2 == 0 else "rgb(40,50,70)"
+            row_bg = "var(--mc-bg-panel)" if i % 2 == 0 else "var(--mc-bg-panel-alt)"
             cell_style = {
                 "backgroundColor": row_bg,
-                "color": "#e0e0e0",
-                "border": "1px solid #405070",
-                "padding": "10px",
+                "color": "var(--mc-text)",
+                "border": "1px solid var(--mc-border)",
+                "padding": "9px 12px",
+                "fontFamily": "var(--mc-font-mono)",
+                "fontSize": "13px",
             }
 
             goal = entry.get("goal") or {}
@@ -246,8 +261,8 @@ class ProximaUI:
             style={
                 "width": "100%",
                 "borderCollapse": "collapse",
-                "backgroundColor": "rgb(25,35,55)",
-                "color": "#e0e0e0",
+                "backgroundColor": "var(--mc-bg-panel)",
+                "color": "var(--mc-text)",
                 "whiteSpace": "normal",
                 "wordWrap": "break-word",
                 "margin": "15px 0",
@@ -273,37 +288,29 @@ class ProximaUI:
             [
                 dbc.Col(
                     [
-                        dbc.Label("Step Delay (s)", style={"color": "#e0e0e0", "marginBottom": "8px"}),
+                        dbc.Label("Step Delay (s)", className="mc-label d-block"),
                         dbc.Input(
                             id="step-delay",
                             type="number",
                             value=self.config.default_step_delay,
                             min=0.01,
                             step=0.01,
-                            style={
-                                "backgroundColor": self.theme.bg_tertiary,
-                                "border": f"1px solid {self.theme.border}",
-                                "color": "#e0e0e0",
-                                "padding": "10px",
-                            },
+                            className="mc-input",
+                            style={"padding": "10px"},
                         ),
                     ],
                     width=6,
                 ),
                 dbc.Col(
                     [
-                        dbc.Label("Max Steps", style={"color": "#e0e0e0", "marginBottom": "8px"}),
+                        dbc.Label("Max Steps", className="mc-label d-block"),
                         dbc.Input(
                             id="max-steps",
                             type="number",
                             value=self.config.default_max_steps,
                             min=1,
-                            style={
-                                "backgroundColor": self.theme.bg_tertiary,
-                                "border": f"1px solid {self.theme.border}",
-                                "color": "#e0e0e0",
-                                "padding": "10px",
-                            },
+                            className="mc-input",
+                            style={"padding": "10px"},
                         ),
                     ],
                     width=6,
@@ -315,51 +322,44 @@ class ProximaUI:
             [
                 dbc.Col(
                     [
-                        dbc.Label("MC Steps per Run", style={"color": "#e0e0e0", "marginBottom": "8px"}),
+                        dbc.Label("MC Steps per Run", className="mc-label d-block"),
                         dbc.Input(
                             id="mc-steps-per-run",
                             type="number",
                             value=100,
                             min=1,
                             step=1,
-                            style={
-                                "backgroundColor": self.theme.bg_tertiary,
-                                "border": f"1px solid {self.theme.border}",
-                                "color": "#e0e0e0",
-                                "padding": "10px",
-                            },
+                            className="mc-input",
+                            style={"padding": "10px"},
                         ),
                     ],
                     width=4,
                 ),
                 dbc.Col(
                     [
-                        dbc.Label("MC Number of Runs", style={"color": "#e0e0e0", "marginBottom": "8px"}),
+                        dbc.Label("MC Number of Runs", className="mc-label d-block"),
                         dbc.Input(
                             id="mc-num-runs",
                             type="number",
                             value=10,
                             min=1,
                             step=1,
-                            style={
-                                "backgroundColor": self.theme.bg_tertiary,
-                                "border": f"1px solid {self.theme.border}",
-                                "color": "#e0e0e0",
-                                "padding": "10px",
-                            },
+                            className="mc-input",
+                            style={"padding": "10px"},
                         ),
                     ],
                     width=4,
                 ),
                 dbc.Col(
                     [
-                        dbc.Label("Monte Carlo", style={"color": "#e0e0e0", "marginBottom": "8px"}),
+                        dbc.Label("Monte Carlo", className="mc-label d-block"),
                         dbc.Button(
                             "Start Monte Carlo",
                             id="btn-start-monte-carlo",
                             color="primary",
                             outline=True,
-                            className="w-100",
+                            className="mc-btn w-100",
+                            style={"borderColor": "var(--mc-cyan)", "color": "var(--mc-cyan)"},
                         ),
                     ],
                     width=4,
@@ -376,8 +376,29 @@ class ProximaUI:
         """Metric status and control panel"""
         return self._create_card("Metric Status & Scores", html.Div(id="metric-tracker"), "mb-5")
 
+    def _build_metric_options(self, metrics: List[str]) -> List[Dict[str, str]]:
+        """Build dropdown options with category-prefixed labels for a list of metric columns."""
+        options = []
+        for col in metrics:
+            category_name = "OTH"
+            for cat_id, category in self.config.metric_filter_config.categories.items():
+                if any(col.startswith(pattern) for pattern in category.metric_patterns):
+                    category_name = category.icon
+                    break
+
+            label = f"[{category_name}] {col.replace('_', ' ').title()}"
+            options.append({"label": label, "value": col})
+        return options
+
     def _metric_plots(self):
         """Metric plots panel with advanced filtering"""
+        # Pre-populate options/defaults so plots render immediately on first load,
+        # instead of waiting for a button click or a page refresh.
+        df = self.fetch_latest_logs(limit=self.ts_data_count)
+        numeric_cols = DataFrameProcessor.get_numeric_columns(df) if df is not None else []
+        initial_options = self._build_metric_options(numeric_cols)
+        initial_value = DataFrameProcessor.get_default_metrics(numeric_cols, self.config.experiment_id) if numeric_cols else []
+
         selector = html.Div(
             [
                 # Category Filter - Multiple Selection
@@ -387,12 +408,7 @@ class ProximaUI:
                             [
                                 dbc.Label(
                                     "Filter by Categories (select multiple):",
-                                    style={
-                                        "color": "#e0e0e0",
-                                        "marginBottom": "12px",
-                                        "fontSize": "14px",
-                                        "fontWeight": "500",
-                                    },
+                                    className="mc-label d-block mb-3",
                                 ),
                                 html.Div(id="metric-category-buttons", className="mb-3"),
                             ],
@@ -407,24 +423,19 @@ class ProximaUI:
                             [
                                 dbc.Label(
                                     "Select Metrics (from all selected categories):",
-                                    style={
-                                        "color": "#e0e0e0",
-                                        "marginBottom": "12px",
-                                        "fontSize": "14px",
-                                        "fontWeight": "500",
-                                    },
+                                    className="mc-label d-block mb-3",
                                 ),
                                 dcc.Dropdown(
                                     id="metric-selector",
-                                    options=[],
-                                    value=[],
+                                    options=initial_options,
+                                    value=initial_value,
                                     multi=True,
                                     searchable=True,
                                     placeholder="Search and select metrics from any category...",
                                     style={
                                         "marginBottom": "15px",
                                     },
-                                    className="custom-dropdown",
+                                    className="custom-dropdown mc-dropdown",
                                 ),
                             ],
                             width=12,
@@ -444,7 +455,8 @@ class ProximaUI:
                                             size="sm",
                                             color="primary",
                                             outline=True,
-                                            className="me-2",
+                                            className="mc-btn me-2",
+                                            style={"borderColor": "var(--mc-cyan)", "color": "var(--mc-cyan)"},
                                         ),
                                         dbc.Button(
                                             "Clear Selection",
@@ -452,7 +464,8 @@ class ProximaUI:
                                             size="sm",
                                             color="secondary",
                                             outline=True,
-                                            className="me-2",
+                                            className="mc-btn me-2",
+                                            style={"borderColor": "var(--mc-text-dim)", "color": "var(--mc-text-dim)"},
                                         ),
                                         dbc.Button(
                                             "Restore Defaults",
@@ -460,6 +473,8 @@ class ProximaUI:
                                             size="sm",
                                             color="info",
                                             outline=True,
+                                            className="mc-btn",
+                                            style={"borderColor": "var(--mc-amber)", "color": "var(--mc-amber)"},
                                         ),
                                     ],
                                     className="mb-4",
@@ -496,12 +511,12 @@ class ProximaUI:
                 color="primary",
                 outline=False,
                 size="sm",
-                className="me-2 mb-2",
+                className="mc-chip me-2 mb-2",
                 style={
-                    "borderRadius": "20px",
                     "padding": "6px 16px",
-                    "fontSize": "13px",
-                    "fontWeight": "500",
+                    "borderColor": "var(--mc-cyan)",
+                    "backgroundColor": "rgba(79,216,236,0.15)",
+                    "color": "var(--mc-cyan-bright)",
                 },
             )
         ]
@@ -510,16 +525,14 @@ class ProximaUI:
         for sector in table_sectors:
             buttons.append(
                 dbc.Button(
-                    f"{sector.icon} {sector.display_name}",
+                    f"[{sector.icon}] {sector.display_name}",
                     id={"type": "sector-filter", "sector": sector.id},
                     color="secondary",
                     outline=True,
                     size="sm",
-                    className="me-2 mb-2",
+                    className="mc-chip me-2 mb-2",
                     style={
-                        "borderRadius": "20px",
                         "padding": "6px 16px",
-                        "fontSize": "13px",
                         "borderColor": sector.color,
                         "color": sector.color,
                     },
@@ -528,10 +541,7 @@ class ProximaUI:
 
         return html.Div(
             [
-                html.Label(
-                    "Filter by Sector:",
-                    style={"color": "#e0e0e0", "marginBottom": "12px", "fontSize": "14px", "fontWeight": "500"},
-                ),
+                html.Label("Filter by Sector:", className="mc-label d-block mb-3"),
                 html.Div(buttons, className="d-flex flex-wrap"),
             ],
             className="mb-4",
@@ -550,63 +560,82 @@ class ProximaUI:
             badge_components.append(
                 dbc.Badge(
                     id=f"badge-{sector.id}",
-                    pill=True,
+                    pill=False,
                     className="me-3",
                     color=None,
                     style={
+                        "fontFamily": "var(--mc-font-mono)",
                         "fontSize": "13px",
-                        "padding": "8px 12px",
-                        "border": "1px solid #6c757d",
-                        "backgroundColor": "transparent",
-                        "color": "#ffffff",
+                        "padding": "8px 14px",
+                        "border": "1px solid var(--mc-border)",
+                        "borderLeft": "2px solid var(--mc-text-dim)",
+                        "borderRadius": "0",
+                        "backgroundColor": "var(--mc-bg-panel-alt)",
+                        "color": "var(--mc-text)",
                     },
                 )
             )
 
-        return dbc.Card(
+        return html.Div(
             [
-                dbc.CardBody(
+                html.Div(
+                    [html.Span(className="mc-led mc-led--cyan"), html.Span("LUNAR BASE STATUS")],
+                    className="mc-panel-title justify-content-center w-100",
+                    style={
+                        "color": "var(--mc-cyan-bright)",
+                        "fontSize": "12px",
+                        "fontWeight": "600",
+                        "letterSpacing": "2px",
+                        "textTransform": "uppercase",
+                        "marginBottom": "16px",
+                        "justifyContent": "center",
+                    },
+                ),
+                dbc.Row(
                     [
-                        html.H5(
-                            "🌙 LUNAR BASE STATUS",
-                            className="text-center mb-3",
-                            style={"color": "#b8c5d6", "fontSize": "14px", "fontWeight": "600", "letterSpacing": "1px"},
-                        ),
-                        dbc.Row(
-                            [
-                                dbc.Col(
-                                    badge_components,
-                                    width=12,
-                                    className="d-flex align-items-center justify-content-center",
-                                )
-                            ]
-                        ),
-                    ],
-                    style={"padding": "20px"},
-                )
+                        dbc.Col(
+                            badge_components,
+                            width=12,
+                            className="d-flex align-items-center justify-content-center flex-wrap",
+                        )
+                    ]
+                ),
             ],
-            className="mb-4",
-            style={"border": "1px solid #404854", "borderRadius": "12px", "backgroundColor": "transparent"},
+            className="mc-panel mb-4",
+            style={"padding": "20px"},
         )
 
     def _setup_layout(self):
         """Setup main application layout"""
 
         tab_style = {
-            "backgroundColor": self.theme.bg_secondary,
-            "color": "#e0e0e0",
-            "borderColor": "#404040",
+            "backgroundColor": "var(--mc-bg-panel)",
+            "color": "var(--mc-text-dim)",
+            "borderColor": "var(--mc-border)",
             "borderBottomColor": "transparent",
-            "padding": "20px 15px",
+            "borderRadius": "0",
+            "padding": "16px 20px",
             "marginBottom": "0px",
+            "fontFamily": "var(--mc-font-body)",
+            "fontWeight": "600",
+            "fontSize": "13px",
+            "letterSpacing": "2px",
+            "textTransform": "uppercase",
         }
         tab_selected_style = {
-            "backgroundColor": "rgb(50,54,58)",
-            "color": "#ffffff",
-            "fontWeight": "bold",
-            "borderColor": "#404040",
+            "backgroundColor": "var(--mc-bg-header)",
+            "color": "var(--mc-cyan-bright)",
+            "fontWeight": "700",
+            "borderColor": "var(--mc-border-bright)",
+            "borderTop": "2px solid var(--mc-cyan)",
             "borderBottomColor": "transparent",
-            "padding": "20px 20px",
+            "borderRadius": "0",
+            "padding": "16px 20px",
+            "fontFamily": "var(--mc-font-body)",
+            "fontWeight": "700",
+            "fontSize": "13px",
+            "letterSpacing": "2px",
+            "textTransform": "uppercase",
         }
 
         self.app.layout = dbc.Container(
@@ -622,44 +651,103 @@ class ProximaUI:
                 dcc.Interval(id="interval-component", interval=self.update_rate, n_intervals=self.update_cycles),
                 html.Div(
                     [
-                        html.H1(
-                            "🚀 PROXIMA LUNAR COMMAND",
-                            className="text-center mb-2",
+                        html.Div(
+                            [
+                                html.Div(
+                                    [
+                                        html.Span(
+                                            f"ID-{self.exp_id}".upper(),
+                                            style={
+                                                "fontFamily": "var(--mc-font-mono)",
+                                                "color": "var(--mc-text-dim)",
+                                                "fontSize": "13px",
+                                                "letterSpacing": "1px",
+                                            },
+                                        ),
+                                    ],
+                                    style={"flex": "1"},
+                                ),
+                                html.Div(
+                                    [
+                                        html.H1(
+                                            "PROXIMA MISSION CONTROL",
+                                            className="text-center mb-0",
+                                            style={
+                                                "color": "var(--mc-cyan-bright)",
+                                                "fontFamily": "var(--mc-font-display)",
+                                                "fontSize": "28px",
+                                                "fontWeight": "700",
+                                                "letterSpacing": "6px",
+                                                "textShadow": "0 0 18px rgba(79,216,236,0.35)",
+                                            },
+                                        ),
+                                        html.P(
+                                            "LUNAR SURFACE OPERATIONS · REAL-TIME TELEMETRY",
+                                            className="text-center mb-0",
+                                            style={
+                                                "color": "var(--mc-text-dim)",
+                                                "fontSize": "11px",
+                                                "fontWeight": "500",
+                                                "letterSpacing": "3px",
+                                                "marginTop": "4px",
+                                            },
+                                        ),
+                                    ],
+                                    style={"flex": "2", "textAlign": "center"},
+                                ),
+                                html.Div(
+                                    [
+                                        html.Span(className="mc-led mc-led--green"),
+                                        html.Span(
+                                            "LIVE",
+                                            style={
+                                                "fontFamily": "var(--mc-font-mono)",
+                                                "color": "var(--mc-green)",
+                                                "fontSize": "12px",
+                                                "letterSpacing": "2px",
+                                                "marginLeft": "8px",
+                                            },
+                                        ),
+                                    ],
+                                    style={
+                                        "flex": "1",
+                                        "display": "flex",
+                                        "alignItems": "center",
+                                        "justifyContent": "flex-end",
+                                        "gap": "6px",
+                                    },
+                                ),
+                            ],
                             style={
-                                "color": "#e8f4f8",
-                                "paddingTop": "20px",
-                                "fontSize": "32px",
-                                "fontWeight": "300",
-                                "letterSpacing": "2px",
-                                "textShadow": "0 2px 4px rgba(0,0,0,0.5)",
+                                "display": "flex",
+                                "alignItems": "center",
+                                "paddingTop": "18px",
+                                "paddingBottom": "8px",
                             },
-                        ),
-                        html.P(
-                            "Mission Control Dashboard",
-                            className="text-center mb-3",
-                            style={"color": "#9ca3af", "fontSize": "14px", "fontWeight": "400", "letterSpacing": "1px"},
                         ),
                         html.Div(
                             id="status-display",
                             className="mb-4 text-center",
                             style={
-                                "color": "#e0e0e0",
-                                "fontSize": "16px",
-                                "fontWeight": "bold",
+                                "color": "var(--mc-cyan)",
+                                "fontFamily": "var(--mc-font-mono)",
+                                "fontSize": "15px",
+                                "letterSpacing": "1px",
                                 "padding": "10px",
-                                "backgroundColor": "rgba(0,0,0,0.2)",
-                                "borderRadius": "8px",
-                                "border": "1px solid rgba(255,255,255,0.1)",
+                                "backgroundColor": "var(--mc-bg-panel-alt)",
+                                "border": "1px solid var(--mc-border)",
+                                "borderLeft": "3px solid var(--mc-cyan)",
                             },
                         ),
                         self._status_strip(),
                     ],
                     style={
                         "marginBottom": "25px",
-                        "background": "linear-gradient(180deg, rgb(15,19,23) 0%, rgb(25,29,33) 50%, rgb(20,24,28) 100%)",
-                        "borderRadius": "16px",
-                        "padding": "25px",
-                        "border": "1px solid #404854",
+                        "background": "linear-gradient(180deg, rgba(10,19,24,0.95) 0%, rgba(5,9,11,0.98) 100%)",
+                        "borderRadius": "2px",
+                        "padding": "0 25px 25px 25px",
+                        "border": "1px solid var(--mc-border)",
+                        "borderTop": "2px solid var(--mc-cyan)",
                     },
                 ),
                 dcc.Tabs(
@@ -667,7 +755,7 @@ class ProximaUI:
                     value="tab-analysis",
                     children=[
                         dcc.Tab(
-                            label="🔬 Analysis Dashboard",
+                            label="Analysis Dashboard",
                             value="tab-analysis",
                             style=tab_style,
                             selected_style=tab_selected_style,
@@ -682,7 +770,7 @@ class ProximaUI:
                             ],
                         ),
                         dcc.Tab(
-                            label="⚙️ Sector Details",
+                            label="Sector Details",
                             value="tab-summaries",
                             style=tab_style,
                             selected_style=tab_selected_style,
@@ -690,7 +778,7 @@ class ProximaUI:
                                 html.Div(
                                     [
                                         self._create_card(
-                                            "📊 All Sector Data",
+                                            "All Sector Data",
                                             html.Div(
                                                 [self._sector_filter_buttons(), self._sector_table_component],
                                             ),
@@ -701,23 +789,25 @@ class ProximaUI:
                         ),
                     ],
                     style={
-                        "backgroundColor": "rgb(25,25,25)",
+                        "backgroundColor": "var(--mc-bg-panel)",
                         "marginBottom": "25px",
-                        "borderColor": "#404040",
-                        "color": "#e0e0e0",
+                        "borderColor": "var(--mc-border)",
+                        "color": "var(--mc-text)",
                     },
+                    className="mc-tabs-wrapper",
                 ),
             ],
             fluid=True,
             style={
                 "padding": "25px",
-                "backgroundColor": "rgb(15,19,23)",
+                "backgroundColor": "var(--mc-bg-void)",
                 "minHeight": "100vh",
-                "background": "linear-gradient(135deg, rgb(15,19,23) 0%, rgb(25,29,33) 50%, rgb(20,24,28) 100%)",
             },
+            className="mc-app-bg",
         )
 
-        # Inject custom CSS after layout is created
+        # Custom page shell - the mission-control theme itself lives in
+        # visualizer_engine/assets/mission_control.css (auto-loaded by Dash).
         self.app.index_string = """
         <!DOCTYPE html>
         <html>
@@ -726,99 +816,6 @@ class ProximaUI:
                 <title>{%title%}</title>
                 {%favicon%}
                 {%css%}
-                <style>
-                    /* Dark theme for dropdown */
-                    .Select-control {
-                        background-color: rgb(45,49,53) !important;
-                        border: 1px solid #404040 !important;
-                        color: #e0e0e0 !important;
-                    }
-                    .Select-menu-outer {
-                        background-color: rgb(35,39,43) !important;
-                        border: 1px solid #404040 !important;
-                        z-index: 9999 !important;
-                    }
-                    .Select-option {
-                        background-color: rgb(35,39,43) !important;
-                        color: #e0e0e0 !important;
-                        padding: 8px 12px !important;
-                    }
-                    .Select-option:hover {
-                        background-color: rgb(50,54,58) !important;
-                        color: #ffffff !important;
-                    }
-                    .Select-option.is-selected {
-                        background-color: #0d6efd !important;
-                        color: #ffffff !important;
-                    }
-                    .Select-option.is-focused {
-                        background-color: rgb(50,54,58) !important;
-                        color: #ffffff !important;
-                    }
-                    .Select-value-label {
-                        color: #e0e0e0 !important;
-                    }
-                    .Select-placeholder {
-                        color: #9ca3af !important;
-                    }
-                    .Select-input > input {
-                        color: #e0e0e0 !important;
-                    }
-                    .Select-multi-value-wrapper {
-                        color: #e0e0e0 !important;
-                    }
-                    .Select-value {
-                        background-color: #0d6efd !important;
-                        border: 1px solid #0d6efd !important;
-                        color: #ffffff !important;
-                        border-radius: 4px !important;
-                        padding: 2px 8px !important;
-                    }
-                    .Select-value-icon {
-                        border-right: 1px solid rgba(255,255,255,0.3) !important;
-                        padding: 0 5px !important;
-                    }
-                    .Select-value-icon:hover {
-                        background-color: rgba(0,0,0,0.2) !important;
-                        color: #ffffff !important;
-                    }
-                    .Select-clear-zone {
-                        color: #e0e0e0 !important;
-                    }
-                    .Select-clear-zone:hover {
-                        color: #dc3545 !important;
-                    }
-                    .Select-arrow-zone {
-                        color: #e0e0e0 !important;
-                    }
-                    .Select-arrow {
-                        border-color: #e0e0e0 transparent transparent !important;
-                    }
-                    .is-open .Select-arrow {
-                        border-color: transparent transparent #e0e0e0 !important;
-                    }
-                    
-                    /* Additional dropdown improvements */
-                    .Select.is-focused:not(.is-open) > .Select-control {
-                        border-color: #0d6efd !important;
-                        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25) !important;
-                    }
-                    
-                    /* Scrollbar styling for dropdown */
-                    .Select-menu::-webkit-scrollbar {
-                        width: 8px;
-                    }
-                    .Select-menu::-webkit-scrollbar-track {
-                        background: rgb(25,29,33);
-                    }
-                    .Select-menu::-webkit-scrollbar-thumb {
-                        background: rgb(60,64,68);
-                        border-radius: 4px;
-                    }
-                    .Select-menu::-webkit-scrollbar-thumb:hover {
-                        background: rgb(80,84,88);
-                    }
-                </style>
             </head>
             <body>
                 {%app_entry%}
@@ -879,7 +876,7 @@ class ProximaUI:
             for cat_id, category in categories.items():
                 buttons.append(
                     dbc.Button(
-                        f"{category.icon} {category.display_name}",
+                        f"[{category.icon}] {category.display_name}",
                         id={"type": "metric-category", "category": cat_id},
                         color="secondary",
                         outline=True,
@@ -972,17 +969,7 @@ class ProximaUI:
                 filtered_metrics = list(dict.fromkeys(filtered_metrics))
 
             # Create options with category prefixes for clarity
-            options = []
-            for col in filtered_metrics:
-                # Determine which category this metric belongs to
-                category_name = "Other"
-                for cat_id, category in self.config.metric_filter_config.categories.items():
-                    if any(col.startswith(pattern) for pattern in category.metric_patterns):
-                        category_name = f"{category.icon} {category.display_name.split()[0]}"  # Just first word
-                        break
-
-                label = f"[{category_name}] {col.replace('_', ' ').title()}"
-                options.append({"label": label, "value": col})
+            options = self._build_metric_options(filtered_metrics)
 
             # Update button states - show which categories are selected
             outlines = []
@@ -1129,13 +1116,25 @@ class ProximaUI:
 
                 return dash.no_update
 
+    def _status_readout(self, led_class: str, text: str) -> html.Div:
+        """Build a status-display readout with an LED indicator."""
+        return html.Div(
+            [html.Span(className=f"mc-led {led_class}"), html.Span(text)],
+            style={
+                "display": "flex",
+                "alignItems": "center",
+                "justifyContent": "center",
+                "gap": "10px",
+            },
+        )
+
     def _get_dashboard_status(self) -> tuple:
         """Get dashboard status and badge information using sector registry"""
         ws = self.get_world_system_data()
 
         # Determine main status
         if not ws:
-            status = "🔴 OFFLINE - Sol 0"
+            status = self._status_readout("mc-led--red", "OFFLINE - SOL 0")
         else:
             latest_state = ws.get("latest_state", {}) or {}
             sim_status = latest_state.get("simulation_status", {}) or {}
@@ -1144,24 +1143,30 @@ class ProximaUI:
             step = latest_state.get("step", 0)
 
             if is_running and not is_paused:
-                status = f"🟢 OPERATIONAL - Sol {step}"
+                status = self._status_readout("mc-led--green", f"OPERATIONAL - SOL {step}")
             elif is_running and is_paused:
-                status = f"🟡 STANDBY - Sol {step}"
+                status = self._status_readout("mc-led--amber", f"STANDBY - SOL {step}")
             else:
-                status = f"🔴 OFFLINE - Sol {step}"
+                status = self._status_readout("mc-led--red", f"OFFLINE - SOL {step}")
 
-        base_style = {"fontSize": "13px", "padding": "8px 12px", "backgroundColor": "transparent"}
+        base_style = {
+            "fontFamily": "var(--mc-font-mono)",
+            "fontSize": "13px",
+            "padding": "8px 14px",
+            "backgroundColor": "var(--mc-bg-panel-alt)",
+            "borderRadius": "0",
+        }
 
         # If no world system, return defaults
         if not ws:
             badge_sectors = self.config.sector_registry.get_badge_sectors()
             custom_badges = list(self.config.badge_registry.badges.keys())
-            default_style = {**base_style, "border": "1px solid #6c757d", "color": "#6c757d"}
+            default_style = {**base_style, "border": "1px solid var(--mc-border)", "borderLeft": "2px solid var(--mc-text-dim)", "color": "var(--mc-text-dim)"}
 
             results = [status]
             # Add default text for each badge
             for sector in badge_sectors:
-                results.append(f"{sector.icon} -")
+                results.append(f"[{sector.icon}] -")
             for badge_id in custom_badges:
                 badge_cfg = self.config.badge_registry.get_badge(badge_id)
                 results.append(f"{badge_cfg.display_name}: -" if badge_cfg else "-")
@@ -1187,17 +1192,17 @@ class ProximaUI:
                 badge_color = sector_config.color
             except (KeyError, ValueError, TypeError):
                 # Fallback if formatting fails
-                badge_text = f"{sector_config.icon} {sector_config.display_name}: -"
+                badge_text = f"[{sector_config.icon}] {sector_config.display_name}: -"
                 badge_color = "#6c757d"
 
             results.append(badge_text)
-            styles.append({**base_style, "border": f"1px solid {badge_color}", "color": badge_color})
+            styles.append({**base_style, "border": f"1px solid {badge_color}", "borderLeft": f"2px solid {badge_color}", "color": badge_color})
 
         for badge_id, badge_config in self.config.badge_registry.badges.items():
             badge_text = f"{badge_config.display_name}: -"
             badge_color = badge_config.default_color
             results.append(badge_text)
-            styles.append({**base_style, "border": f"1px solid {badge_color}", "color": badge_color})
+            styles.append({**base_style, "border": f"1px solid {badge_color}", "borderLeft": f"2px solid {badge_color}", "color": badge_color})
 
         return tuple(results + styles)
 
@@ -1303,58 +1308,53 @@ class ProximaUI:
 
             fig.update_layout(
                 title={
-                    "text": f"<b>{pretty_name}</b>",
-                    "y": 0.92,
+                    "text": f"<b>{pretty_name.upper()}</b>",
+                    "y": 0.94,
                     "x": 0.5,
                     "xanchor": "center",
-                    "font": {"size": 16, "color": "#ffffff"},
+                    "font": {"size": 13, "color": "#8ff2ff", "family": "Rajdhani, sans-serif"},
                 },
-                margin=dict(l=60, r=30, t=60, b=50),
+                margin=dict(l=55, r=25, t=50, b=45),
                 height=320,
                 showlegend=False,
-                paper_bgcolor="rgba(35,39,43,0.95)",
-                plot_bgcolor="rgba(25,29,33,0.8)",
-                font=dict(color="#e0e0e0", family="Arial, sans-serif"),
+                paper_bgcolor="rgba(11,20,26,0.0)",
+                plot_bgcolor="rgba(5,9,11,0.35)",
+                font=dict(color="#d7f2f6", family="Share Tech Mono, monospace"),
                 xaxis=dict(
-                    title="<b>Step</b>",
-                    gridcolor="rgba(100,100,100,0.3)",
-                    linecolor="rgba(100,100,100,0.5)",
-                    tickfont=dict(size=10, color="#c0c0c0"),
+                    title="STEP",
+                    gridcolor="rgba(79,216,236,0.12)",
+                    linecolor="rgba(79,216,236,0.3)",
+                    tickfont=dict(size=10, color="#6d8991"),
+                    zeroline=False,
                 ),
                 yaxis=dict(
-                    title="<b>Value</b>",
-                    gridcolor="rgba(100,100,100,0.3)",
-                    linecolor="rgba(100,100,100,0.5)",
-                    tickfont=dict(size=10, color="#c0c0c0"),
+                    title="VALUE",
+                    gridcolor="rgba(79,216,236,0.12)",
+                    linecolor="rgba(79,216,236,0.3)",
+                    tickfont=dict(size=10, color="#6d8991"),
                     rangemode="tozero" if not col.startswith("score_") else None,
                     range=[0, 1.05] if col.startswith("score_") else None,
+                    zeroline=False,
                 ),
             )
 
-            graph_card = dbc.Card(
+            graph_card = html.Div(
                 [
-                    dbc.CardBody(
-                        [
-                            dcc.Graph(
-                                figure=fig,
-                                style={"height": "100%", "width": "100%"},
-                                config={
-                                    "displayModeBar": True,
-                                    "displaylogo": False,
-                                    "modeBarButtonsToRemove": ["pan2d", "select2d", "lasso2d", "autoScale2d"],
-                                },
-                            )
-                        ],
+                    html.Div(
+                        dcc.Graph(
+                            figure=fig,
+                            style={"height": "100%", "width": "100%"},
+                            config={
+                                "displayModeBar": True,
+                                "displaylogo": False,
+                                "modeBarButtonsToRemove": ["pan2d", "select2d", "lasso2d", "autoScale2d"],
+                            },
+                        ),
                         style={"padding": "10px"},
                     )
                 ],
-                style={
-                    "height": "100%",
-                    "backgroundColor": "rgb(35,39,43)",
-                    "border": "1px solid #404040",
-                    "borderRadius": "8px",
-                    "boxShadow": "0 2px 4px rgba(0,0,0,0.3)",
-                },
+                className="mc-panel",
+                style={"height": "100%"},
             )
 
             cols.append(dbc.Col(graph_card, width=6, className="mb-4"))
