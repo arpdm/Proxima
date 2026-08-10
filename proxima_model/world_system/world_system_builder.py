@@ -93,7 +93,7 @@ class WorldSystemConfig:
     """Complete world system configuration."""
 
     sim_time: int
-    delta_t: float
+    time_scale: float  # Hours Per Step
     p_need: float = 2.0
     agents_config: Dict[str, Any] = field(default_factory=dict)
     metrics: List[Dict[str, Any]] = field(default_factory=list)
@@ -105,7 +105,7 @@ class WorldSystemConfig:
         """Validate world system configuration."""
         if self.sim_time <= 0:
             raise ValueError("sim_time must be positive")
-        if self.delta_t <= 0:
+        if self.time_scale <= 0:
             raise ValueError("delta_t must be positive")
 
 
@@ -456,21 +456,14 @@ class ConstructionSectorBuilder(ComponentBuilder):
         Returns:
             Dictionary with sector config, printing_robots, and assembly_robots
         """
-        # Import the config class to get default values
-        from proxima_model.sphere_engine.construction_sector import ConstructionConfig
-
-        # Start with defaults from the dataclass
-        default_config = ConstructionConfig()
-
+        # Inline defaults (avoid importing sector dataclass)
         config = {
             "sector_name": "construction",
             "printing_robots": [],
             "assembly_robots": [],
+            "max_concurrent_projects": 3,
+            "shell_storage_capacity": 10,
         }
-
-        # Add all fields from ConstructionConfig with their default values
-        for field_name in default_config.__dataclass_fields__.keys():
-            config[field_name] = getattr(default_config, field_name)
 
         for comp in components:
             # Check if this is a sector configuration (no template_id)
@@ -529,8 +522,8 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
 
     # Build base configuration
     config = {
-        "sim_time": experiment.get("simulation_time_steps", experiment.get("simulation_time_stapes")),
-        "delta_t": experiment.get("time_step_duration_hours"),
+        "sim_time": experiment.get("simulation_time_steps"),
+        "hours_per_step": experiment.get("hours_per_time_step"),
         "p_need": 2.0,
         "agents_config": {},
         "metrics": environment.get("metrics", []),
@@ -550,24 +543,54 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
     energy_builder = EnergySectorBuilder(component_templates)
     config["agents_config"]["energy"] = energy_builder.build(components_dict.get("energy", []))
 
+    # Attach latest energy state (if available) so the sector can resume metrics/state.
+    latest_energy_state = world_system.get("latest_state", {}).get("sectors", {}).get("energy")
+    if latest_energy_state:
+        config["agents_config"]["energy"]["latest_state"] = latest_energy_state
+
     science_builder = ScienceSectorBuilder(component_templates)
     config["agents_config"]["science"] = science_builder.build(components_dict.get("science", []))
+
+    # Attach latest science state (if available) so the sector can resume metrics/state.
+    latest_science_state = world_system.get("latest_state", {}).get("sectors", {}).get("science")
+    if latest_science_state:
+        config["agents_config"]["science"]["latest_state"] = latest_science_state
 
     manufacturing_builder = ManufacturingSectorBuilder(component_templates)
     config["agents_config"]["manufacturing"] = manufacturing_builder.build(
         components_dict.get("manufacturing", []), world_system.get("initial_stocks", {})
     )
 
+    # Attach latest manufacturing state (if available) so the sector can resume metrics/state.
+    latest_manufacturing_state = world_system.get("latest_state", {}).get("sectors", {}).get("manufacturing")
+    if latest_manufacturing_state:
+        config["agents_config"]["manufacturing"]["latest_state"] = latest_manufacturing_state
+
     equipment_builder = EquipmentManufacturingSectorBuilder(component_templates)
     config["agents_config"]["equipment_manufacturing"] = equipment_builder.build(
         components_dict.get("equipmentManufacturing", [])
     )
 
+    # Attach latest equipment manufacturing state (if available) so the sector can resume metrics/state.
+    latest_equipment_state = world_system.get("latest_state", {}).get("sectors", {}).get("equipment_manufacturing")
+    if latest_equipment_state:
+        config["agents_config"]["equipment_manufacturing"]["latest_state"] = latest_equipment_state
+
     transportation_builder = TransportationSectorBuilder(component_templates)
     config["agents_config"]["transportation"] = transportation_builder.build(components_dict.get("transportation", []))
 
+    # Attach latest transportation state (if available) so the sector can resume metrics/state.
+    latest_transportation_state = world_system.get("latest_state", {}).get("sectors", {}).get("transportation")
+    if latest_transportation_state:
+        config["agents_config"]["transportation"]["latest_state"] = latest_transportation_state
+
     construction_builder = ConstructionSectorBuilder(component_templates)
     config["agents_config"]["construction"] = construction_builder.build(components_dict.get("construction", []))
+
+    # Attach latest construction state (if available) so the sector can resume metrics/state.
+    latest_construction_state = world_system.get("latest_state", {}).get("sectors", {}).get("construction")
+    if latest_construction_state:
+        config["agents_config"]["construction"]["latest_state"] = latest_construction_state
 
     # Build goals configuration
     goals_builder = GoalsSystemBuilder(db)

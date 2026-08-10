@@ -7,7 +7,7 @@ Manages rocket fleet, fuel generation, and transport requests between Earth and 
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import List, Dict, Optional, Any
-from proxima_model.components.rocket import Rocket
+from proxima_model.components.rocket import Rocket, MissionPhase
 from proxima_model.components.fuel_generator import FuelGenerator
 from proxima_model.world_system.world_system_defs import EventType, SectorType
 
@@ -113,7 +113,7 @@ class TransportationSector:
         for fuel_gen_config in fuel_gen_configs:
             fuel_gen_quantity = fuel_gen_config.get("quantity", 1)
             for _ in range(fuel_gen_quantity):
-                self.fuel_generators.append(FuelGenerator(fuel_gen_config))
+                self.fuel_generators.append(FuelGenerator(self.model, fuel_gen_config))
 
         # Subscribe to events
         self.event_bus.subscribe(EventType.TRANSPORT_REQUEST.value, self.handle_transport_request)
@@ -121,6 +121,11 @@ class TransportationSector:
 
         # Initialize launch counter for metrics
         self.launches_this_step = 0
+
+        # Hydrate from latest_state if provided
+        latest_state_transportation = config.get("latest_state") if isinstance(config, dict) else None
+        if latest_state_transportation:
+            self._apply_latest_state(latest_state_transportation)
 
     def handle_transport_request(
         self, requesting_sector: str, payload: Dict[str, float], origin: str, destination: str
@@ -264,6 +269,85 @@ class TransportationSector:
         for rocket in self.rockets:
             rocket.step()
 
+    def _serialize_mission(self, mission: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Convert rocket mission to a JSON-serializable dict."""
+        if not mission:
+            return None
+
+        mission_copy = dict(mission)
+        phase = mission_copy.get("phase")
+        if isinstance(phase, MissionPhase):
+            mission_copy["phase"] = phase.value
+        return mission_copy
+
+    def _apply_latest_state(self, t_state: Dict[str, Any]) -> None:
+        """Hydrate transportation sector from latest_state snapshot."""
+
+        # Stocks
+        self._stocks.rocket_fuel_kg = float(t_state.get("rocket_fuel_kg", self._stocks.rocket_fuel_kg))
+        self._stocks.he3_kg = float(t_state.get("he3_kg", self._stocks.he3_kg))
+        self._fuel_request_pending = bool(t_state.get("fuel_request_pending", self._fuel_request_pending))
+
+        # Transport queue
+        queue_entries = t_state.get("transport_queue", [])
+        if isinstance(queue_entries, list):
+            rebuilt_queue: List[TransportRequest] = []
+            for entry in queue_entries:
+                try:
+                    req = TransportRequest(
+                        requesting_sector=entry.get("requesting_sector", ""),
+                        payload=dict(entry.get("payload", {})),
+                        origin=entry.get("origin", "Earth"),
+                        destination=entry.get("destination", "Moon"),
+                        status=entry.get("status", TransportRequestStatus.QUEUED.value),
+                    )
+                    rebuilt_queue.append(req)
+                except Exception as exc:
+                    logger.warning(f"Skipping malformed transport_queue entry during hydrate: {exc}")
+            if rebuilt_queue:
+                self.transport_queue = rebuilt_queue
+
+        # Top up rockets if latest_state recorded more than config instantiated
+        try:
+            saved_rockets = int(t_state.get("rockets", len(self.rockets)))
+            missing_rockets = saved_rockets - len(self.rockets)
+            if missing_rockets > 0 and self.rocket_configs:
+                base_cfg = self.rocket_configs[0]
+                for _ in range(missing_rockets):
+                    self.rockets.append(Rocket(self.model, base_cfg, self.event_bus))
+        except Exception:
+            pass
+
+        # Top up fuel generators if latest_state recorded more than config instantiated
+        try:
+            saved_fuel_gens = int(t_state.get("fuel_generators", len(self.fuel_generators)))
+            missing_fuel_gens = saved_fuel_gens - len(self.fuel_generators)
+            if missing_fuel_gens > 0 and self.fuel_gen_configs:
+                base_cfg = self.fuel_gen_configs[0]
+                for _ in range(missing_fuel_gens):
+                    self.fuel_generators.append(FuelGenerator(self.model, base_cfg))
+        except Exception:
+            pass
+
+        # Rocket states
+        rocket_states = t_state.get("rockets_state", [])
+        if isinstance(rocket_states, list):
+            for rocket, saved in zip(self.rockets, rocket_states):
+                try:
+                    rocket.is_available = bool(saved.get("is_available", rocket.is_available))
+                    rocket.location = saved.get("location", rocket.location)
+                    mission = saved.get("mission")
+                    if mission:
+                        mission_copy = dict(mission)
+                        phase_val = mission_copy.get("phase")
+                        if isinstance(phase_val, str):
+                            mission_copy["phase"] = MissionPhase(phase_val)
+                        rocket.mission = mission_copy
+                    else:
+                        rocket.mission = None
+                except Exception as exc:
+                    logger.warning(f"Skipping rocket hydrate due to error: {exc}")
+
     def get_power_demand(self) -> float:
         """
         Calculate total power demand from all fuel generators.
@@ -332,5 +416,25 @@ class TransportationSector:
             "queued_requests": len(self.transport_queue),
             "rocket_fuel_kg": self._stocks.rocket_fuel_kg,
             "launches_this_step": self.launches_this_step,
+            "he3_kg": self._stocks.he3_kg,
+            "fuel_request_pending": self._fuel_request_pending,
+            "transport_queue": [
+                {
+                    "requesting_sector": req.requesting_sector,
+                    "payload": req.payload,
+                    "origin": req.origin,
+                    "destination": req.destination,
+                    "status": req.status,
+                }
+                for req in self.transport_queue
+            ],
+            "rockets_state": [
+                {
+                    "is_available": rocket.is_available,
+                    "location": rocket.location,
+                    "mission": self._serialize_mission(rocket.mission),
+                }
+                for rocket in self.rockets
+            ],
             "metric_contributions": self._create_metric_map(),
         }

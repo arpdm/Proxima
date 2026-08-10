@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, Any, List, Optional, Set
 import pandas as pd
+import yaml
+import os
 
 
 class SectorName(Enum):
@@ -94,63 +96,59 @@ class SectorRegistry:
             SectorName.ENERGY.value: SectorConfig(
                 id=SectorName.ENERGY.value,
                 display_name="Energy",
-                icon="⚡",
-                color="#00FF88",
-                badge_format="⚡ PWR: {total_power_supply_kW:.1f}/{total_power_need_kW:.1f} kW",
-                primary_metrics=["total_power_supply_kW", "total_charge_level_kwh"],
+                icon="PWR",
+                color="#4dffa6",
+                badge_format="PWR: {total_power_supply_kW:.1f}/{total_power_need_kW:.1f} kW",
+                # primary_metrics=["total_power_supply_kW", "total_charge_level_kwh"],
             ),
             SectorName.SCIENCE.value: SectorConfig(
                 id=SectorName.SCIENCE.value,
                 display_name="Science",
-                icon="🔬",
-                color="#0dcaf0",
-                badge_format="🔬 SCI: {operational_rovers} rovers | {science_generated:.2f}",
-                primary_metrics=["operational_rovers", "science_generated"],
+                icon="SCI",
+                color="#4fd8ec",
+                badge_format="SCI: {operational_rovers} rovers | {science_generated:.2f}",
             ),
             SectorName.MANUFACTURING.value: SectorConfig(
                 id=SectorName.MANUFACTURING.value,
                 display_name="Manufacturing",
-                icon="⚙️",
-                color="#0dcaf0",
-                badge_format="⚙️ MFG: {active_operations} ops | {sector_state}",
-                primary_metrics=["active_operations", "sector_state"],
+                icon="MFG",
+                color="#5fc2c9",
+                badge_format="MFG: {active_operations} ops | {sector_state}",
             ),
             SectorName.EQUIPMENT_MANUFACTURING.value: SectorConfig(
                 id=SectorName.EQUIPMENT_MANUFACTURING.value,
                 display_name="Equipment Manufacturing",
-                icon="🔧",
-                color="#8b5cf6",
+                icon="EQP",
+                color="#a685ff",
                 enabled=True,  # Set to False to hide from UI
-                primary_metrics=["production_rate", "inventory_level"],
+                badge_format="EQP: {equipment_Science_Rover_EQ} rover eq | {equipment_Assembly_Robot_EQ} assembly eq",
             ),
             SectorName.TRANSPORTATION.value: SectorConfig(
                 id=SectorName.TRANSPORTATION.value,
                 display_name="Transportation",
-                icon="🚀",
-                color="#f59e0b",
+                icon="TRN",
+                color="#ffb454",
                 enabled=True,
-                primary_metrics=["active_missions", "fuel_level"],
+                badge_format="TRN: {rockets} rockets | {queued_requests} queued",
             ),
             SectorName.ENVIRONMENT.value: SectorConfig(
                 id=SectorName.ENVIRONMENT.value,
                 display_name="System",
-                icon="🌍",
-                color="#10b981",
-                primary_metrics=["step", "simulation_time"],
+                icon="ENV",
+                color="#6fd6a8",
             ),
             SectorName.CONSTRUCTION.value: SectorConfig(
                 id=SectorName.CONSTRUCTION.value,
                 display_name="Construction",
-                icon="🏗️",
-                color="#8b5cf6",
-                badge_format="🏗️ CONST: {shells_in_stock} shells",
-                primary_metrics=["shells_in_stock"],
+                icon="CON",
+                color="#c9a4ff",
+                badge_format="CON: {shells_in_stock} shells , Working Assembly: {assembly_robots_working}",
             ),
             SectorName.PERFORMANCE.value: SectorConfig(
                 id=SectorName.PERFORMANCE.value,
                 display_name="Performance",
-                icon="📊",
-                color="#ef4444",
+                icon="PRF",
+                color="#ff5a5f",
                 enabled=False,  # Usually handled separately
             ),
         }
@@ -238,43 +236,43 @@ class MetricFilterConfig:
             "energy": MetricCategory(
                 id="energy",
                 display_name="Energy & Power",
-                icon="⚡",
-                color="#00FF88",
+                icon="PWR",
+                color="#4dffa6",
                 metric_patterns=["energy_", "power_", "battery_", "charge_"],
             ),
             "science": MetricCategory(
                 id="science",
                 display_name="Science & Research",
-                icon="🔬",
-                color="#0dcaf0",
+                icon="SCI",
+                color="#4fd8ec",
                 metric_patterns=["science_", "research_", "experiment_", "rover"],
             ),
             "manufacturing": MetricCategory(
                 id="manufacturing",
                 display_name="Manufacturing",
-                icon="⚙️",
-                color="#8b5cf6",
+                icon="MFG",
+                color="#a685ff",
                 metric_patterns=["manufacturing_", "production_", "equipment_"],
             ),
             "environment": MetricCategory(
                 id="environment",
                 display_name="Environment",
-                icon="🌍",
-                color="#10b981",
+                icon="ENV",
+                color="#6fd6a8",
                 metric_patterns=["environment_", "temperature_", "pressure_", "atmosphere_"],
             ),
             "transportation": MetricCategory(
                 id="transportation",
                 display_name="Transportation",
-                icon="🚀",
-                color="#f59e0b",
+                icon="TRN",
+                color="#ffb454",
                 metric_patterns=["transportation_", "vehicle_", "mission_"],
             ),
             "construction": MetricCategory(
                 id="construction",
                 display_name="Construction",
-                icon="🏗️",
-                color="#8b5cf6",
+                icon="CON",
+                color="#c9a4ff",
                 metric_patterns=["construction_", "module_", "shell_", "robot_"],
             ),
         }
@@ -301,31 +299,51 @@ class MetricFilterConfig:
 
 @dataclass
 class UIColors:
-    """UI color palette."""
+    """UI color palette - Mission Control HUD theme."""
 
-    primary: str = "#0d6efd"
-    success: str = "#198754"
-    warning: str = "#ffc107"
-    danger: str = "#dc3545"
-    info: str = "#0dcaf0"
-    secondary: str = "#6c757d"
+    primary: str = "#4fd8ec"
+    success: str = "#4dffa6"
+    warning: str = "#ffb454"
+    danger: str = "#ff5a5f"
+    info: str = "#4fd8ec"
+    secondary: str = "#6d8991"
 
-    # Extended palette for charts
+    # Extended palette for charts - cyan/amber/violet HUD accents
     chart_colors: List[str] = field(
-        default_factory=lambda: ["#00d4aa", "#8b5cf6", "#06b6d4", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#f97316"]
+        default_factory=lambda: [
+            "#4fd8ec",
+            "#ffb454",
+            "#4dffa6",
+            "#a685ff",
+            "#ff5a5f",
+            "#8ff2ff",
+            "#e8e8e8",
+            "#6d8991",
+        ]
     )
 
 
 @dataclass
 class DarkTheme:
-    """Dark theme configuration."""
+    """Mission-control dark theme configuration."""
 
-    bg_primary: str = "rgb(25,29,33)"
-    bg_secondary: str = "rgb(35,39,43)"
-    bg_tertiary: str = "rgb(45,49,53)"
-    border: str = "#404040"
-    text: str = "#e0e0e0"
-    text_muted: str = "#9ca3af"
+    bg_primary: str = "#05090b"
+    bg_secondary: str = "#0b141a"
+    bg_tertiary: str = "#0a1318"
+    border: str = "rgba(112,213,232,0.22)"
+    text: str = "#d7f2f6"
+    text_muted: str = "#6d8991"
+
+    # HUD accent colors
+    accent: str = "#4fd8ec"
+    accent_bright: str = "#8ff2ff"
+    accent_dim: str = "rgba(79,216,236,0.35)"
+    amber: str = "#ffb454"
+    red: str = "#ff5a5f"
+    green: str = "#4dffa6"
+    font_display: str = "'Orbitron', 'Arial Narrow', sans-serif"
+    font_body: str = "'Rajdhani', 'Segoe UI', sans-serif"
+    font_mono: str = "'Share Tech Mono', 'SFMono-Regular', Consolas, monospace"
 
 
 @dataclass
@@ -459,6 +477,23 @@ class DataFrameProcessor:
     """Processes log documents into DataFrames."""
 
     @staticmethod
+    def load_experiment_metrics_config() -> Dict[str, Any]:
+        """Load experiment-specific metrics config from YAML file."""
+        config_path = os.path.join(
+            os.path.dirname(__file__), "config", "experiment_metrics.yaml"
+        )
+        
+        if not os.path.exists(config_path):
+            return {"default": {"plot_metrics": []}}
+        
+        try:
+            with open(config_path, "r") as f:
+                return yaml.safe_load(f) or {"default": {"plot_metrics": []}}
+        except Exception as e:
+            print(f"⚠️ Failed to load experiment metrics config: {e}")
+            return {"default": {"plot_metrics": []}}
+
+    @staticmethod
     def flatten_logs_to_dataframe(docs: List[Dict[str, Any]]) -> Optional[pd.DataFrame]:
         """Convert log documents to flattened DataFrame."""
         if not docs:
@@ -527,8 +562,20 @@ class DataFrameProcessor:
         ]
 
     @staticmethod
-    def get_default_metrics(available_columns: List[str]) -> List[str]:
-        """Get default metrics for initial selection."""
+    def get_default_metrics(available_columns: List[str], experiment_id: str = "default") -> List[str]:
+        """Get default metrics for initial selection, prioritizing experiment config."""
+        # Load experiment-specific config
+        config = DataFrameProcessor.load_experiment_metrics_config()
+        experiment_config = config.get(experiment_id) or config.get("default")
+        
+        if experiment_config and experiment_config.get("plot_metrics"):
+            # Use experiment-specific metrics, filter to available columns
+            configured_metrics = experiment_config.get("plot_metrics", [])
+            chosen = [m for m in configured_metrics if m in available_columns]
+            if chosen:
+                return chosen[:8]  # Max 8 metrics on plot
+        
+        # Fallback to hardcoded defaults
         preferred = [
             "energy_total_power_supply_kw",
             "energy_total_charge_level_kwh",

@@ -151,6 +151,11 @@ class EquipmentManSector:
         # Subscribe to equipment requests from other sectors
         self.event_bus.subscribe(EventType.EQUIPMENT_REQUEST.value, self.handle_equipment_request)
 
+        # Hydrate from latest_state if provided
+        latest_state_equipment = config.get("latest_state") if isinstance(config, dict) else None
+        if latest_state_equipment:
+            self._apply_latest_state(latest_state_equipment)
+
     @property
     def equipment(self) -> Dict[str, float]:
         """Get physical equipment stock (for backwards compatibility)."""
@@ -217,6 +222,9 @@ class EquipmentManSector:
         quantity = request["quantity"]
         available = self._inventory.get_physical(equipment_type)
 
+        if available <= 0:
+            return quantity
+
         if available >= quantity:
             self.event_bus.publish(
                 EventType.EQUIPMENT_ALLOCATED.value,
@@ -227,8 +235,17 @@ class EquipmentManSector:
             self._inventory.remove(equipment_type, quantity)
             logger.info(f"Allocated {quantity} {equipment_type} to {requesting_sector}")
             return 0
-        else:
-            return quantity - available
+
+        # Partial fulfillment
+        self.event_bus.publish(
+            EventType.EQUIPMENT_ALLOCATED.value,
+            recipient_sector=requesting_sector,
+            equipment_type=equipment_type,
+            quantity=available,
+        )
+        self._inventory.remove(equipment_type, available)
+        logger.info(f"Allocated {available} {equipment_type} to {requesting_sector} (partial)")
+        return quantity - available
 
     def _check_and_request_resupply(self):
         """
@@ -239,12 +256,20 @@ class EquipmentManSector:
         """
         payload_to_request = {}
 
+        backlog_demand = {}
+        for request in self._equipment_backlog:
+            equipment_type = request.get("equipment_type")
+            quantity = request.get("quantity", 0)
+            backlog_demand[equipment_type] = backlog_demand.get(equipment_type, 0) + quantity
+
         for item, min_level in self._minimum_levels.items():
             effective_stock = self._inventory.get_effective(item)
+            backlog_qty = backlog_demand.get(item, 0)
+            target_level = min_level + backlog_qty
 
-            if effective_stock < min_level:
-                # Calculate how many to order to reach the minimum
-                amount_to_order = min_level - effective_stock
+            if effective_stock < target_level:
+                # Calculate how many to order to reach the target
+                amount_to_order = target_level - effective_stock
                 payload_to_request[item] = amount_to_order
 
                 # Update pending orders to reflect the new request
@@ -296,6 +321,41 @@ class EquipmentManSector:
         # This sector does not consume power directly in this version
         return allocated_power
 
+    def _apply_latest_state(self, equipment_state: Dict[str, Any]) -> None:
+        """Restore inventory/backlog from latest_state snapshot."""
+
+        try:
+            state_name = equipment_state.get("sector_state")
+            if state_name and state_name in SectorState.__members__:
+                self.sector_state = SectorState[state_name]
+        except Exception:
+            # Keep default state if parsing fails
+            pass
+
+        # Restore physical stock
+        physical = equipment_state.get("inventory_physical") or equipment_state.get("physical_stock")
+        if isinstance(physical, dict):
+            self._inventory.physical_stock = physical.copy()
+        else:
+            # Fallback: derive from flattened equipment_* keys
+            flattened = {
+                k.replace("equipment_", ""): v
+                for k, v in equipment_state.items()
+                if isinstance(k, str) and k.startswith("equipment_")
+            }
+            if flattened:
+                self._inventory.physical_stock = flattened
+
+        # Restore pending orders if present
+        pending = equipment_state.get("inventory_pending") or equipment_state.get("pending_orders")
+        if isinstance(pending, dict):
+            self._inventory.pending_orders = pending.copy()
+
+        # Restore backlog queue
+        backlog = equipment_state.get("backlog_queue")
+        if isinstance(backlog, list):
+            self._equipment_backlog = deque(backlog)
+
     def get_metrics(self) -> Dict:
         """
         Return comprehensive equipment manufacturing sector metrics.
@@ -305,5 +365,8 @@ class EquipmentManSector:
         """
         return {
             "sector_state": self.sector_state.name,
+            "inventory_physical": self._inventory.physical_stock.copy(),
+            "inventory_pending": self._inventory.pending_orders.copy(),
+            "backlog_queue": list(self._equipment_backlog),
             **{f"equipment_{k}": v for k, v in self._inventory.physical_stock.items()},
         }

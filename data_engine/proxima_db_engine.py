@@ -126,14 +126,14 @@ class ProximaDB:
 
     # Experiments
     def create_experiment(
-        self, experiment_id, world_system_id, sim_time_steps, time_step_duration_hours, experiment_type
+        self, experiment_id, world_system_id, sim_time_steps, experiment_type, hours_per_step
     ):
         doc = {
             "_id": experiment_id,
             "world_system_id": world_system_id,
-            "simulation_time_stapes": sim_time_steps,
-            "time_step_duration_hours": time_step_duration_hours,
+            "simulation_time_steps": sim_time_steps,
             "experiment_type": experiment_type,
+            "hours_per_time_step" : hours_per_step,
         }
         return self.db.experiments.insert_one(doc)
 

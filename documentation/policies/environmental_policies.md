@@ -99,6 +99,7 @@ Logs are generated for transparency, e.g.:
 ```
 
 ### Future Enhancements
+
 - **Multi-Metric Policies**: Extend to monitor additional environmental metrics (e.g., radiation levels).
 - **Adaptive Ratios**: Dynamically adjust $r_{\text{start}}$ based on simulation history.
 - **Sector-Specific Throttling**: Apply different throttle factors per sector based on their environmental impact.

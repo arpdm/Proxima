@@ -33,4 +33,7 @@ app = create_app()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    # Disable debug mode to prevent hot-reload clearing UI state on file saves
+    # Set DEBUG environment variable to "true" to re-enable if needed
+    debug_mode = os.environ.get("DEBUG", "false").lower() == "true"
+    app.run(host="0.0.0.0", port=port, debug=debug_mode, use_reloader=False)

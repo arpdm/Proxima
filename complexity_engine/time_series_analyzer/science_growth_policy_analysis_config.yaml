@@ -1,0 +1,72 @@
+# Time Series Analyzer Configuration for Proxima Simulation Data
+
+# Data loading configuration
+data:
+  input_dir: "log_files"                     # Directory containing CSV files
+  file_pattern: "*.csv"                      # Pattern to match CSV files
+  time_column: "step"                        # Column name for time axis
+  index_col: null                            # Column to use as index (null = auto)
+
+# Analysis configuration
+analysis:
+  features:                                  # List of features to analyze
+    - "science_total_science_cumulative"
+    - "science_operational_rovers"
+    - "science_science_generated"
+    - "energy_total_power_need_kW"
+    - "science_science_growth_rate"
+    - "science_rovers_in_pipeline"
+    - "manufacturing_stock_He3_kg"
+    - "transportation_rocket_fuel_kg"
+    - "energy_power_shortage_kW"
+  
+  rolling_window: 6                          # Window size for rolling statistics (hour)
+  smoothing_method: "savgol"                 # 'savgol', 'ewm', or 'rolling'
+  
+  trend_analysis: true                       # Enable linear trend detection
+  seasonal_decomposition: false              # Enable seasonal decomposition (future)
+  autocorrelation: true                      # Enable autocorrelation analysis
+  autocorr_lags: 24                          # Maximum lags for autocorrelation
+
+# Plotting configuration
+plotting:
+  output_dir: "analysis/sicience_growth_policy/plots"   # Directory to save plots
+  figsize: [12, 8]                                      # Default figure size [width, height]
+  dpi: 150                                              # Resolution for saved plots
+  style: "seaborn-v0_8-darkgrid"                        # Matplotlib style
+  palette: "husl"                                       # Color palette
+  
+  # Grid plot settings
+  grid_plots:
+    enabled: true
+    n_cols: 2                                # Number of columns in grid
+    share_y: false                           # Share Y-axis across subplots
+  
+  # Time series plot settings
+  time_series:
+    line_width: 2
+    marker_size: 4
+    alpha: 0.8
+  
+  # Rolling statistics plot settings
+  rolling_stats:
+    show_mean: true
+    show_std: true
+    show_trend: true
+
+# Export configuration
+export:
+  save_plots: true                           # Save plots to files
+  save_stats: true                           # Save statistics to JSON
+  formats: ["html"]                          # File formats for plots
+  stats_file: "analysis/sicience_growth_policy/stats_summary.json"  # Path for statistics output
+
+# Optional: Custom analysis settings for specific features
+custom_features:
+  total_science_cumulative:
+    smoothing_method: "ewm"                  # Use exponential smoothing for cumulative data
+    rolling_window: 12                       # Larger window for smoother trends
+  
+  science_generated:
+    smoothing_method: "savgol"               # Savitzky-Golay for monthly generation
+    rolling_window: 3                        # Smaller window for responsiveness

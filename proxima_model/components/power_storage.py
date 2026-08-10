@@ -52,14 +52,17 @@ class PowerStorage(Agent):
             self.subtype = StorageType.LI_BATTERY  # Fallback to default
 
         self.config = PowerStorageConfig(
-            max_operational_cap_kwh=config.get("max_operational_cap_kwh", PowerStorageConfig.max_operational_cap_kwh),
-            min_operational_cap_kwh=config.get("min_operational_cap_kwh", PowerStorageConfig.min_operational_cap_kwh),
-            initial_charge_kwh=config.get("initial_charge_kwh", PowerStorageConfig.initial_charge_kwh),
+            max_operational_cap_kwh=config.get("max_operational_cap_kwh", PowerStorageConfig.max_operational_cap_kwh)
+            * model.time_scale,
+            min_operational_cap_kwh=config.get("min_operational_cap_kwh", PowerStorageConfig.min_operational_cap_kwh)
+            * model.time_scale,
+            initial_charge_kwh=config.get("initial_charge_kwh", PowerStorageConfig.initial_charge_kwh)
+            * model.time_scale,
             charge_efficiency=config.get("charge_efficiency", PowerStorageConfig.charge_efficiency),
             discharge_efficiency=config.get("discharge_efficiency", PowerStorageConfig.discharge_efficiency),
         )
 
-        # Initialize charge level from config
+        # Initialize charge level from config (already scaled above)
         self.charge_level = self.config.initial_charge_kwh
 
     @property

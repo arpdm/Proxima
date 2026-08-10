@@ -1,0 +1,25 @@
+# Experiment-specific metric configurations
+# Each experiment can have its own set of metrics to plot
+
+default:
+  description: "Default metrics for all experiments"
+  plot_metrics:
+    - energy_total_power_supply_kW
+    - energy_total_charge_level_kWh
+    - science_science_generated
+    - science_operational_rovers
+    - construction_queued_requests
+    - construction_modules_completed_this_step
+
+exp_001:
+  description: "Time-scale testing experiment"
+  plot_metrics:
+    # - energy_total_power_supply_kW
+    - energy_power_shortage_kW
+    - construction_assembly_robots_working
+    - equipment_manufacturing_equipment_Science_Rover_EQ
+    - science_total_rovers
+    - science_operational_rovers
+    - science_science_growth_rate
+    - transportation_launches_this_step
+    - transportation_queued_requests

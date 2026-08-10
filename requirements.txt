@@ -11,6 +11,7 @@ pandas==2.2.2
 numpy==1.26.4
 pymongo==4.13
 gunicorn==21.2.0
+pyyaml==6.0.2
 
 # Simulation
 mesa==3.0.0

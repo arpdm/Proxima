@@ -1,0 +1,299 @@
+/* ============================================================
+   PROXIMA MISSION CONTROL — UI THEME
+   Inspired by sci-fi spacecraft / mission-control HUD interfaces.
+   Loaded automatically by Dash from the /assets folder.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
+
+:root {
+  --mc-bg-void: #05090b;
+  --mc-bg-deep: #080f13;
+  --mc-bg-panel: #0b141a;
+  --mc-bg-panel-alt: #0e1920;
+  --mc-bg-header: #0a1318;
+  --mc-bg-input: #0c161c;
+
+  --mc-border: rgba(112, 213, 232, 0.22);
+  --mc-border-bright: rgba(126, 235, 255, 0.55);
+  --mc-border-dim: rgba(112, 213, 232, 0.10);
+
+  --mc-cyan: #4fd8ec;
+  --mc-cyan-bright: #8ff2ff;
+  --mc-cyan-dim: rgba(79, 216, 236, 0.35);
+  --mc-amber: #ffb454;
+  --mc-red: #ff5a5f;
+  --mc-green: #4dffa6;
+  --mc-violet: #a685ff;
+
+  --mc-text: #d7f2f6;
+  --mc-text-dim: #6d8991;
+  --mc-text-faint: #45585e;
+
+  --mc-font-display: 'Orbitron', 'Arial Narrow', sans-serif;
+  --mc-font-body: 'Rajdhani', 'Segoe UI', sans-serif;
+  --mc-font-mono: 'Share Tech Mono', 'SFMono-Regular', Consolas, monospace;
+}
+
+/* ---------- Base ---------- */
+html, body {
+  background-color: var(--mc-bg-void) !important;
+  font-family: var(--mc-font-body);
+  color: var(--mc-text);
+}
+
+body {
+  background-image:
+    linear-gradient(rgba(79, 216, 236, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79, 216, 236, 0.035) 1px, transparent 1px);
+  background-size: 26px 26px;
+  background-attachment: fixed;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--mc-bg-deep); }
+::-webkit-scrollbar-thumb { background: rgba(79, 216, 236, 0.25); border-radius: 0; border: 1px solid var(--mc-border); }
+::-webkit-scrollbar-thumb:hover { background: rgba(79, 216, 236, 0.45); }
+
+/* ---------- Panels (mission-control "frames") ---------- */
+.mc-panel {
+  position: relative;
+  background: linear-gradient(180deg, rgba(14, 25, 32, 0.92), rgba(8, 15, 19, 0.96));
+  border: 1px solid var(--mc-border);
+  border-radius: 2px !important;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45) inset, 0 6px 22px rgba(0, 0, 0, 0.35);
+  overflow: visible;
+}
+
+.mc-panel::before {
+  content: "";
+  position: absolute;
+  top: -1px; left: -1px;
+  width: 16px; height: 16px;
+  border-top: 2px solid var(--mc-cyan);
+  border-left: 2px solid var(--mc-cyan);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.mc-panel::after {
+  content: "";
+  position: absolute;
+  bottom: -1px; right: -1px;
+  width: 16px; height: 16px;
+  border-bottom: 2px solid var(--mc-cyan);
+  border-right: 2px solid var(--mc-cyan);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.mc-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--mc-bg-header);
+  border-bottom: 1px solid var(--mc-border);
+  border-left: 3px solid var(--mc-cyan);
+  padding: 10px 16px;
+  font-family: var(--mc-font-body);
+  font-weight: 600;
+  font-size: 12.5px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--mc-cyan-bright);
+}
+
+.mc-panel-header .mc-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mc-panel-body {
+  padding: 20px;
+  background: transparent;
+}
+
+/* ---------- Status LEDs ---------- */
+.mc-led {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mc-text-faint);
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+  flex-shrink: 0;
+}
+.mc-led--green { background: var(--mc-green); box-shadow: 0 0 8px var(--mc-green); animation: mc-pulse 2.2s ease-in-out infinite; }
+.mc-led--amber { background: var(--mc-amber); box-shadow: 0 0 8px var(--mc-amber); animation: mc-pulse 1.4s ease-in-out infinite; }
+.mc-led--red { background: var(--mc-red); box-shadow: 0 0 8px var(--mc-red); animation: mc-pulse 0.9s ease-in-out infinite; }
+.mc-led--cyan { background: var(--mc-cyan); box-shadow: 0 0 8px var(--mc-cyan); }
+
+@keyframes mc-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* ---------- Readout badges / tiles ---------- */
+.mc-readout {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 128px;
+  padding: 8px 16px;
+  background: var(--mc-bg-panel-alt);
+  border: 1px solid var(--mc-border);
+  border-left: 2px solid var(--mc-cyan);
+}
+
+.mc-readout-label {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--mc-text-dim);
+  font-family: var(--mc-font-body);
+  font-weight: 600;
+}
+
+.mc-readout-value {
+  font-family: var(--mc-font-mono);
+  font-size: 15px;
+  color: var(--mc-cyan-bright);
+  letter-spacing: 0.5px;
+}
+
+/* ---------- Buttons ---------- */
+.mc-btn.btn {
+  font-family: var(--mc-font-body) !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  font-size: 12px !important;
+  border-radius: 0 !important;
+  background-color: transparent !important;
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mc-btn.btn:hover:not(:disabled) {
+  background-color: rgba(79, 216, 236, 0.12) !important;
+  box-shadow: 0 0 12px rgba(79, 216, 236, 0.25);
+}
+
+.mc-btn.btn:disabled { opacity: 0.35; }
+
+.mc-chip.btn {
+  font-family: var(--mc-font-body) !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 11.5px !important;
+  border-radius: 14px !important;
+}
+
+/* ---------- Inputs ---------- */
+.mc-input, .mc-input:focus {
+  background-color: var(--mc-bg-input) !important;
+  border: 1px solid var(--mc-border) !important;
+  color: var(--mc-text) !important;
+  border-radius: 0 !important;
+  font-family: var(--mc-font-mono) !important;
+}
+.mc-input:focus {
+  border-color: var(--mc-cyan) !important;
+  box-shadow: 0 0 0 1px var(--mc-cyan-dim) !important;
+}
+
+.mc-label {
+  font-family: var(--mc-font-body);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--mc-text-dim);
+  font-weight: 600;
+}
+
+/* ---------- Tabs ---------- */
+.mc-tabs-wrapper .tab {
+  font-family: var(--mc-font-body) !important;
+}
+
+/* ---------- AG Grid ---------- */
+.ag-theme-alpine-dark {
+  --ag-background-color: var(--mc-bg-panel);
+  --ag-header-background-color: var(--mc-bg-header);
+  --ag-odd-row-background-color: rgba(255, 255, 255, 0.015);
+  --ag-header-foreground-color: var(--mc-cyan-bright);
+  --ag-foreground-color: var(--mc-text);
+  --ag-border-color: var(--mc-border);
+  --ag-row-hover-color: rgba(79, 216, 236, 0.08);
+  --ag-font-family: var(--mc-font-mono);
+  --ag-font-size: 12.5px;
+}
+.ag-theme-alpine-dark .ag-header-cell-label {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+  font-size: 11.5px;
+}
+
+/* ---------- Dash core-components dropdown (Select) ---------- */
+.Select-control,
+.mc-dropdown .Select-control {
+  background-color: var(--mc-bg-input) !important;
+  border: 1px solid var(--mc-border) !important;
+  border-radius: 0 !important;
+  color: var(--mc-text) !important;
+}
+.Select-menu-outer {
+  background-color: var(--mc-bg-panel-alt) !important;
+  border: 1px solid var(--mc-border) !important;
+  z-index: 9999 !important;
+}
+.Select-option {
+  background-color: var(--mc-bg-panel-alt) !important;
+  color: var(--mc-text) !important;
+  padding: 8px 12px !important;
+  font-family: var(--mc-font-body) !important;
+}
+.Select-option:hover,
+.Select-option.is-focused {
+  background-color: rgba(79, 216, 236, 0.12) !important;
+  color: var(--mc-cyan-bright) !important;
+}
+.Select-option.is-selected {
+  background-color: rgba(79, 216, 236, 0.2) !important;
+  color: var(--mc-cyan-bright) !important;
+}
+.Select-value-label { color: var(--mc-text) !important; }
+.Select-placeholder { color: var(--mc-text-dim) !important; }
+.Select-input > input { color: var(--mc-text) !important; }
+.Select-value {
+  background-color: rgba(79, 216, 236, 0.15) !important;
+  border: 1px solid var(--mc-cyan-dim) !important;
+  color: var(--mc-cyan-bright) !important;
+  border-radius: 0 !important;
+  padding: 2px 8px !important;
+}
+.Select-value-icon {
+  border-right: 1px solid rgba(79, 216, 236, 0.3) !important;
+  padding: 0 5px !important;
+}
+.Select-value-icon:hover { background-color: rgba(0, 0, 0, 0.2) !important; color: var(--mc-red) !important; }
+.Select-clear-zone { color: var(--mc-text) !important; }
+.Select-clear-zone:hover { color: var(--mc-red) !important; }
+.Select-arrow-zone { color: var(--mc-text) !important; }
+.Select-arrow { border-color: var(--mc-text) transparent transparent !important; }
+.is-open .Select-arrow { border-color: transparent transparent var(--mc-text) !important; }
+.Select.is-focused:not(.is-open) > .Select-control {
+  border-color: var(--mc-cyan) !important;
+  box-shadow: 0 0 0 1px var(--mc-cyan-dim) !important;
+}
+.Select-menu::-webkit-scrollbar { width: 8px; }
+.Select-menu::-webkit-scrollbar-track { background: var(--mc-bg-deep); }
+.Select-menu::-webkit-scrollbar-thumb { background: rgba(79, 216, 236, 0.3); border-radius: 0; }
+
+/* ---------- Checklist ---------- */
+.mc-checklist label { font-family: var(--mc-font-body); }

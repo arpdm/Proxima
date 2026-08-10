@@ -14,19 +14,18 @@ class GeneratorType(Enum):
 
     SOLAR = auto()
     NUCLEAR = auto()
-    # Add more types here as needed (e.g., WIND = auto())
 
 
 @dataclass
 class PowerGeneratorConfig:
     """Configuration for power generator components."""
 
-    power_capacity_kwh: float = 10.0
+    power_capacity_step: float = 10.0
     efficiency: float = 1.0
     availability: float = 1.0
 
     def __post_init__(self):
-        if self.power_capacity_kwh < 0:
+        if self.power_capacity_step < 0:
             raise ValueError("Power capacity must be non-negative")
         if not (0 < self.efficiency <= 1):
             raise ValueError("Efficiency must be between 0 and 1")
@@ -50,15 +49,16 @@ class PowerGenerator(Agent):
             self.subtype = GeneratorType.SOLAR  # Fallback to default
 
         self.config = PowerGeneratorConfig(
-            power_capacity_kwh=config.get("power_capacity_kwh", PowerGeneratorConfig.power_capacity_kwh),
+            power_capacity_step=config.get("power_capacity_kwh", PowerGeneratorConfig.power_capacity_step)
+            * model.time_scale,  # Apply time scale
             efficiency=config.get("efficiency", PowerGeneratorConfig.efficiency),
             availability=config.get("availability", PowerGeneratorConfig.availability),
         )
 
-        self.current_output_kwh = 0
+        self.current_output_kw_step = 0
 
     def generate(self, max_needed_kw: float) -> float:
         """Generate power based on conditions and actual need."""
-        max_output = self.config.power_capacity_kwh * self.config.efficiency * self.config.availability
-        self.current_output_kwh = min(max_output, max_needed_kw)
-        return self.current_output_kwh
+        max_output = self.config.power_capacity_step * self.config.efficiency * self.config.availability
+        self.current_output_kw_step = min(max_output, max_needed_kw)
+        return self.current_output_kw_step

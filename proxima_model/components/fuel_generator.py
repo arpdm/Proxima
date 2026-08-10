@@ -10,31 +10,34 @@ class FuelGenerator(Agent):
         efficiency (float): Conversion efficiency of the generator (default 0.5).
         thermal_GWh_per_kg (float): Thermal energy available per kg of he3 (default 163.9 GWh/kg).
         kwh_per_kg_prop (float): kWh required to generate one kg of propellant (default 22.8).
-        he3_kg_per_hour (float): Amount of He3 processed per hour (default 5 kg).
+        he3_kg_per_step (float): Amount of He3 processed per step (default 5 kg/hour * time_scale).
         is_operational (bool): Operational status of the generator.
     """
 
-    def __init__(self, agent_config: dict):
+    def __init__(self, model, agent_config: dict):
         """
         Initialize a FuelGenerator agent.
 
         Args:
             agent_config (dict): Agent-specific configuration. Should contain keys:
         """
+
+        super().__init__(model)
+
         config = agent_config.get("config", agent_config)
         self.config = config
         self.efficiency = config.get("efficiency", 0.025)
         self.thermal_GWh_per_kg = config.get("thermal_GWh_per_kg", 163.489)
         self.kwh_per_kg_prop = agent_config.get("kwh_per_kg_prop", 50.0)
-        self.he3_kg_per_hour = agent_config.get("he3_kg_per_hour", 5)
+        self.he3_kg_per_step = agent_config.get("he3_kg_per_hour", 5) * model.time_scale
         self.is_operational = False
 
     def step(self, available_he3_kg: float) -> tuple:
         """
-        Process up to self.he3_kg_per_hour of He-3 and produce propellant.
+        Process up to self.he3_kg_per_step of He-3 and produce propellant.
 
         Args:
-            available_he3_kg (float): He-3 available to consume this hour.
+            available_he3_kg (float): He-3 available to consume this step.
 
         Returns:
             (he3_consumed_kg: float, prop_generated_kg: float)
@@ -44,7 +47,7 @@ class FuelGenerator(Agent):
             return 0.0, 0.0
 
         # Determine how much He-3 can actually be processed this timestep
-        he3_to_process = min(self.he3_kg_per_hour, available_he3_kg)
+        he3_to_process = min(self.he3_kg_per_step, available_he3_kg)
         self.is_operational = he3_to_process > 0.0
 
         # Convert thermal_GWh_per_kg -> kWh/kg (1 GWh = 1e6 kWh)
