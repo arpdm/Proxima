@@ -198,6 +198,14 @@ class DataLogger:
         except Exception as e:
             logger.warning(f"⚠️  Could not clear existing logs: {e}")
 
+    def clear_display_logs(self) -> None:
+        """
+        Clear this experiment's logged time-series rows so a freshly-started run
+        doesn't display stale rows from a previous run. Does not touch
+        world_systems.latest_state, so resumed step/state continuity is unaffected.
+        """
+        self._clear_existing_logs()
+
     def _generate_timestamp(self, step: int) -> datetime:
         """
         Generate timestamp for a given step.

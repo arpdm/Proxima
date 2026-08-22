@@ -502,7 +502,9 @@ class ConstructionSectorBuilder(ComponentBuilder):
         return config
 
 
-def build_world_system_config(world_system_id: str, experiment_id: str, db: ProximaDB) -> dict:
+def build_world_system_config(
+    world_system_id: str, experiment_id: str, db: ProximaDB, resume_state: bool = True
+) -> dict:
     """
     Build a world system configuration from database documents.
 
@@ -510,6 +512,10 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
         world_system_id: World system document ID
         experiment_id: Experiment document ID
         db: ProximaDB database instance
+        resume_state: When True (live runs), attach each sector's persisted
+            `latest_state` so the simulation resumes where it left off. When
+            False (test runs), skip attaching any persisted state so the world
+            system always starts fresh.
 
     Returns:
         Complete world system configuration dictionary
@@ -545,7 +551,7 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
 
     # Attach latest energy state (if available) so the sector can resume metrics/state.
     latest_energy_state = world_system.get("latest_state", {}).get("sectors", {}).get("energy")
-    if latest_energy_state:
+    if resume_state and latest_energy_state:
         config["agents_config"]["energy"]["latest_state"] = latest_energy_state
 
     science_builder = ScienceSectorBuilder(component_templates)
@@ -553,7 +559,7 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
 
     # Attach latest science state (if available) so the sector can resume metrics/state.
     latest_science_state = world_system.get("latest_state", {}).get("sectors", {}).get("science")
-    if latest_science_state:
+    if resume_state and latest_science_state:
         config["agents_config"]["science"]["latest_state"] = latest_science_state
 
     manufacturing_builder = ManufacturingSectorBuilder(component_templates)
@@ -563,7 +569,7 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
 
     # Attach latest manufacturing state (if available) so the sector can resume metrics/state.
     latest_manufacturing_state = world_system.get("latest_state", {}).get("sectors", {}).get("manufacturing")
-    if latest_manufacturing_state:
+    if resume_state and latest_manufacturing_state:
         config["agents_config"]["manufacturing"]["latest_state"] = latest_manufacturing_state
 
     equipment_builder = EquipmentManufacturingSectorBuilder(component_templates)
@@ -573,7 +579,7 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
 
     # Attach latest equipment manufacturing state (if available) so the sector can resume metrics/state.
     latest_equipment_state = world_system.get("latest_state", {}).get("sectors", {}).get("equipment_manufacturing")
-    if latest_equipment_state:
+    if resume_state and latest_equipment_state:
         config["agents_config"]["equipment_manufacturing"]["latest_state"] = latest_equipment_state
 
     transportation_builder = TransportationSectorBuilder(component_templates)
@@ -581,7 +587,7 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
 
     # Attach latest transportation state (if available) so the sector can resume metrics/state.
     latest_transportation_state = world_system.get("latest_state", {}).get("sectors", {}).get("transportation")
-    if latest_transportation_state:
+    if resume_state and latest_transportation_state:
         config["agents_config"]["transportation"]["latest_state"] = latest_transportation_state
 
     construction_builder = ConstructionSectorBuilder(component_templates)
@@ -589,7 +595,7 @@ def build_world_system_config(world_system_id: str, experiment_id: str, db: Prox
 
     # Attach latest construction state (if available) so the sector can resume metrics/state.
     latest_construction_state = world_system.get("latest_state", {}).get("sectors", {}).get("construction")
-    if latest_construction_state:
+    if resume_state and latest_construction_state:
         config["agents_config"]["construction"]["latest_state"] = latest_construction_state
 
     # Build goals configuration
