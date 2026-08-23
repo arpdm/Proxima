@@ -11,7 +11,7 @@
 
 ## High-Level Flow
 
-```mermaid
+```{mermaid}
 flowchart TD
     A[Simulation step begins] --> B[Process buffered events]
 
