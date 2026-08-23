@@ -95,7 +95,7 @@ Each order is placed immediately and added to the logistics pipeline with expect
 
 ---
 
-## ipeline Orders
+## Pipeline Orders
 
 A **pipeline order** represents any rover batch currently under construction, en route, or pending deployment.
 

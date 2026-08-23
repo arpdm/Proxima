@@ -6,6 +6,7 @@
 *   **`PrintingRobot`:** An autonomous agent that consumes raw regolith and power to 3D print structural "shells," the basic building blocks for all modules.
 *   **`AssemblyRobot`:** A more advanced agent that takes a pre-printed shell and combines it with a specific piece of equipment (e.g., a science instrument, a life support unit) to create a final, operational module.
 *   **`ConstructionRequest`:** A data object that represents a single construction project, tracking its requirements (shells, equipment), its status (queued, in-progress), and the robot assigned to it.
+*   **Module-to-equipment mapping:** Shared construction equipment requirements are defined centrally in `world_system_defs.py` through `MODULE_TO_EQUIPMENT_MAP`.
 
 ---
 
@@ -99,14 +100,3 @@ The sector's capabilities are defined in the `world_system` JSON file, specifyin
 }
 ```
 
----
-
-## TODO: Potential Improvements
-
-*   **[ ] Implement Power Throttling:** The sector receives `allocated_power` but does not currently use it to manage robot activity. If power is insufficient, robots should be throttled or enter a low-power state instead of operating at full capacity.
-*   **[ ] Add Metric Contributions:** Construction is a heavy industrial activity. Both printing and assembly should contribute to the `IND-DUST-COV` metric based on the number of active robots.
-*   **[ ] Centralize Equipment Mapping:** The `EQUIPMENT_MAP` is hardcoded within the class. This should be loaded from a central configuration file to make adding new equipment types easier.
-*   **[ ] Implement Dynamic Growth:** The sector should listen for `module_completed` events for `Printing_Robot_EQ` and `Assembly_Robot_EQ` to dynamically add new robots to its fleet.
-*   **[ ] Add Resource Constraints for Printing:** `PrintingRobot`s currently have an infinite supply of regolith. They should request and consume it from the `ManufacturingSector`.
-
-<!-- ... code... -->

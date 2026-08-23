@@ -30,16 +30,16 @@ debug_logger.setLevel(logging.INFO)
 
 logging.getLogger("proxima_model.sphere_engine.transportation_sector").setLevel(logging.ERROR)
 logging.getLogger("proxima_model.sphere_engine.science_sector").setLevel(logging.ERROR)
-logging.getLogger("proxima_model.sphere_engine.manufacturing_sector").setLevel(logging.WARNING)
-logging.getLogger("proxima_model.policy_engine.policy_engine").setLevel(logging.WARNING)
-logging.getLogger("proxima_model.policy_engine.science_policies").setLevel(logging.INFO)
-logging.getLogger("proxima_model.world_system.world_system").setLevel(logging.WARNING)
-logging.getLogger("proxima_model.sphere_engine.construction_sector").setLevel(logging.WARNING)
-logging.getLogger("proxima_model.sphere_engine.equipment_manufacturing_sector").setLevel(logging.WARNING)
-logging.getLogger("proxima_model.world_system.evaluation_engine").setLevel(logging.WARNING)
-logging.getLogger("proxima_model.components.science_rover").setLevel(logging.WARNING)
-logging.getLogger("proxima_model.components.rocket").setLevel(logging.WARNING)
-logging.getLogger("proxima_model.components.assembly_robot").setLevel(logging.WARNING)
+logging.getLogger("proxima_model.sphere_engine.manufacturing_sector").setLevel(logging.ERROR)
+logging.getLogger("proxima_model.policy_engine.policy_engine").setLevel(logging.ERROR)
+logging.getLogger("proxima_model.policy_engine.science_policies").setLevel(logging.ERROR)
+logging.getLogger("proxima_model.world_system.world_system").setLevel(logging.ERROR)
+logging.getLogger("proxima_model.sphere_engine.construction_sector").setLevel(logging.INFO)
+logging.getLogger("proxima_model.sphere_engine.equipment_manufacturing_sector").setLevel(logging.ERROR)
+logging.getLogger("proxima_model.world_system.evaluation_engine").setLevel(logging.ERROR)
+logging.getLogger("proxima_model.components.science_rover").setLevel(logging.ERROR)
+logging.getLogger("proxima_model.components.rocket").setLevel(logging.ERROR)
+logging.getLogger("proxima_model.components.assembly_robot").setLevel(logging.ERROR)
 
 
 def parse_args():
@@ -298,12 +298,42 @@ class ProximaRunner:
             "pause": lambda: setattr(self, "is_paused", True),
             "resume": lambda: setattr(self, "is_paused", False),
             "stop": lambda: setattr(self, "is_running", False),
-            "set_delay": lambda: setattr(self, "step_delay", max(0.01, float(command.get("delay", 0.1)))),
+            "set_delay": lambda: self._set_step_delay(command),
         }
 
         if action in command_map:
             command_map[action]()
             debug_logger.info(f"Applied: {action}")
+
+    def _set_step_delay(self, command, *, warn_missing: bool = True) -> None:
+        """Apply a step-delay command without falling back to an unrelated default."""
+
+        delay = command.get("delay", command.get("step_delay", None))
+        if delay is None:
+            if warn_missing:
+                debug_logger.warning("Ignoring set_delay command with no delay value")
+            return
+
+        try:
+            self.step_delay = max(0.01, float(delay))
+            debug_logger.info(f"Step delay set to {self.step_delay}")
+        except (TypeError, ValueError):
+            debug_logger.warning(f"Ignoring invalid step delay value: {delay!r}")
+
+    def _apply_pending_step_delay_commands(self) -> None:
+        """Apply queued delay edits made before the simulation starts."""
+
+        delay_commands = list(
+            self.local_db.db["runtime_commands"]
+            .find({"experiment_id": self.experiment.exp_id, "action": "set_delay"})
+            .sort("timestamp", 1)
+        )
+        if not delay_commands:
+            return
+
+        self.local_db.db["runtime_commands"].delete_many({"_id": {"$in": [c["_id"] for c in delay_commands]}})
+        for command in delay_commands:
+            self._set_step_delay(command)
 
     def _update_world_system_state(self, update_hosted=False):
         """Update world system state in MongoDB for UI access and logging."""
@@ -355,11 +385,16 @@ class ProximaRunner:
 
             action = command.get("action")
             debug_logger.info(f"Starting: {action}")
+            debug_logger.info(f"Startup command payload: {command}")
 
             if action == "start_continuous":
+                self._apply_pending_step_delay_commands()
+                self._set_step_delay(command, warn_missing=False)
                 self.logger.clear_display_logs()
                 self.run(continuous=True)
             elif action == "start_limited":
+                self._apply_pending_step_delay_commands()
+                self._set_step_delay(command, warn_missing=False)
                 self.logger.clear_display_logs()
                 max_steps = command.get("max_steps", self.experiment.sim_time)
                 original_sim_time = self.experiment.sim_time
@@ -367,6 +402,8 @@ class ProximaRunner:
                 self.run(continuous=False)
                 self.experiment.sim_time = original_sim_time
             elif action == "start_monte_carlo":
+                self._apply_pending_step_delay_commands()
+                self._set_step_delay(command, warn_missing=False)
                 steps_per_run = int(command.get("steps_per_run", self.experiment.sim_time or 1))
                 num_runs = int(command.get("num_runs", 1))
                 self.run_monte_carlo(steps_per_run=steps_per_run, num_runs=num_runs)

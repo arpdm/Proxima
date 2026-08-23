@@ -9,23 +9,15 @@ from enum import Enum, auto
 from typing import List, Dict, Optional, Any
 from proxima_model.components.printing_robot import PrintingRobot, PrintingRobotMode
 from proxima_model.components.assembly_robot import AssemblyRobot, AssemblyRobotMode
-from proxima_model.world_system.world_system_defs import EventType
+from proxima_model.world_system.world_system_defs import (
+    EventType,
+    MODULE_TO_EQUIPMENT_MAP,
+    get_equipment_type_for_module,
+)
 
 import logging
 
 logger = logging.getLogger(__name__)
-
-
-# Equipment mapping: template_id -> equipment_type
-EQUIPMENT_MAP = {
-    "comp_science_rover": "Science_Rover_EQ",
-    "comp_energy_generator": "Energy_Generator_EQ",
-    "comp_habitation_module": "Habitation_Module_EQ",
-    "comp_isru_robot": "ISRU_Robot_EQ",
-    "comp_rocket": "Rocket_EQ",
-    "comp_printing_robot": "Printing_Robot_EQ",
-    "comp_assembly_robot": "Assembly_Robot_EQ",
-}
 
 
 class ConstructionRequestStatus(Enum):
@@ -58,12 +50,14 @@ class ConstructionRequest:
 class ConstructureSectorState:
     """Configuration and Current State for construction sector."""
 
-    sector_name: str
-    max_concurrent_projects: int = 0
-    shell_storage_capacity: int = 0
+    sector_name: str = "construction"
+    max_concurrent_projects: int = 3
+    shell_storage_capacity: int = 10
     shells: int = 0
     regolith_used_kg: float = 0.0
-    equipment_stock: Dict[str, int] = field(default_factory=lambda: {eq_type: 0 for eq_type in EQUIPMENT_MAP.values()})
+    equipment_stock: Dict[str, int] = field(
+        default_factory=lambda: {eq_type: 0 for eq_type in MODULE_TO_EQUIPMENT_MAP.values()}
+    )
     construction_queue: List[ConstructionRequest] = field(default_factory=list)
 
     def __post_init__(self):
@@ -113,6 +107,8 @@ class ConstructionSector:
         # Metrics
         self.modules_completed_this_step = 0
         self.shells_produced_this_step = 0
+        self.power_consumed_step = 0.0
+        self.robots_throttled_this_step = 0
         self._queued_requests_loaded: Optional[int] = None
 
         # Hydrate from latest_state if provided (similar to science sector)
@@ -128,7 +124,7 @@ class ConstructionSector:
         )
 
         # Determine equipment needed based on module_id
-        equipment_type = EQUIPMENT_MAP.get(module_id)
+        equipment_type = get_equipment_type_for_module(module_id)
         equipment_needed = {equipment_type: 1} if equipment_type else {}
 
         try:
@@ -155,19 +151,23 @@ class ConstructionSector:
             else:
                 logger.warning(f"Unknown equipment type {equipment_type} allocated to construction")
 
-    def _process_construction_queue(self) -> None:
+    def _process_construction_queue(self, available_power: float) -> float:
         """Process queued construction requests using all available assembly robots."""
+        power_used = 0.0
 
         # First, advance all in-progress projects
         for request in self._state.construction_queue[:]:
             if request.status == ConstructionRequestStatus.IN_PROGRESS.value:
-                self._advance_construction_project(request)
+                result = self._advance_construction_project(request, max(0.0, available_power - power_used))
+                power_used += result["power_used"]
 
         # Then, assign new projects to any idle assembly robots
         active_projects = sum(
-            1 for request in self._state.construction_queue if request.status == ConstructionRequestStatus.IN_PROGRESS.value
+            1
+            for request in self._state.construction_queue
+            if request.status == ConstructionRequestStatus.IN_PROGRESS.value
         )
-        
+
         for request in self._state.construction_queue[:]:
             if request.status == ConstructionRequestStatus.QUEUED.value:
                 if active_projects >= self._state.max_concurrent_projects:
@@ -186,6 +186,7 @@ class ConstructionSector:
         self._state.construction_queue = [
             r for r in self._state.construction_queue if r.status != ConstructionRequestStatus.COMPLETED.value
         ]
+        return power_used
 
     def _start_construction_project(self, request: ConstructionRequest) -> bool:
         """Start a construction project if resources available."""
@@ -257,10 +258,12 @@ class ConstructionSector:
             )
             return False
 
-    def _advance_construction_project(self, request: ConstructionRequest) -> bool:
+    def _advance_construction_project(self, request: ConstructionRequest, available_power: float) -> Dict[str, float]:
         """Advance an in-progress construction project."""
 
-        request.assigned_assembly_robot.step()
+        result = request.assigned_assembly_robot.step(available_power)
+        if result["throttled"]:
+            self.robots_throttled_this_step += 1
 
         # Check if assembly is complete
         if request.assigned_assembly_robot.mode == AssemblyRobotMode.IDLE:
@@ -284,20 +287,24 @@ class ConstructionSector:
             )
 
             logger.info(f"Completed construction of {request.module_id} for {request.requesting_sphere}")
-            return False
-        return True
+        return result
 
-    def _manage_printing_operations(self) -> None:
+    def _manage_printing_operations(self, available_power: float) -> float:
         """Manage printing robot operations - produce shells into stock."""
+        power_used = 0.0
         for robot in self.printing_robots:
             if robot.mode == PrintingRobotMode.IDLE and self._state.shells < self._state.shell_storage_capacity:
                 robot.start_printing()
-            result = robot.step()
+            result = robot.step(max(0.0, available_power - power_used))
+            power_used += result["power_used"]
+            if result["throttled"]:
+                self.robots_throttled_this_step += 1
 
             if result["shell_produced"]:
                 self._state.shells += 1
                 self._state.regolith_used_kg += result["regolith_consumed"]
                 self.shells_produced_this_step += 1
+        return power_used
 
     def get_power_demand(self) -> float:
         """Calculate total power demand."""
@@ -376,19 +383,24 @@ class ConstructionSector:
         # Per-step counters reset each run
         self.modules_completed_this_step = 0
         self.shells_produced_this_step = 0
+        self.power_consumed_step = 0.0
+        self.robots_throttled_this_step = 0
 
     def step(self, allocated_power: float) -> None:
         """Execute single simulation step."""
         # Reset metrics
         self.modules_completed_this_step = 0
         self.shells_produced_this_step = 0
+        self.power_consumed_step = 0.0
+        self.robots_throttled_this_step = 0
         self.available_power = allocated_power
 
         # Produce shells in advance
-        self._manage_printing_operations()
+        printing_power_used = self._manage_printing_operations(allocated_power)
 
         # Process construction queue
-        self._process_construction_queue()
+        assembly_power_used = self._process_construction_queue(max(0.0, allocated_power - printing_power_used))
+        self.power_consumed_step = printing_power_used + assembly_power_used
 
     def get_metrics(self) -> Dict[str, Any]:
         """Get current metrics."""
@@ -425,6 +437,8 @@ class ConstructionSector:
             "shells_in_stock": self._state.shells,
             "regolith_used_kg": self._state.regolith_used_kg,
             "power_demand_kw_step": self.power_demand_step,
+            "power_consumed_kw_step": self.power_consumed_step,
+            "robots_throttled_this_step": self.robots_throttled_this_step,
             "modules_completed_this_step": self.modules_completed_this_step,
             "shells_produced_this_step": self.shells_produced_this_step,
             **{f"equipment_{k}": v for k, v in self._state.equipment_stock.items()},

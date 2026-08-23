@@ -36,6 +36,7 @@ class PrintingRobot(Agent):
         # State
         self.mode = PrintingRobotMode.IDLE
         self.processing_steps_remaining = 0
+        self.is_throttled = False
 
         # Metrics
         self.shells_produced = 0
@@ -63,16 +64,24 @@ class PrintingRobot(Agent):
         """Get current power demand."""
         return self.max_power_usage_step if self.mode == PrintingRobotMode.PRINTING else 0.0
 
-    def step(self) -> dict:
+    def step(self, available_power: float = None) -> dict:
         """
         Execute one simulation step.
 
         Returns:
             Dict with production results
         """
-        result = {"shell_produced": None, "regolith_consumed": 0.0}
+        result = {"shell_produced": None, "regolith_consumed": 0.0, "power_used": 0.0, "throttled": False}
+        self.is_throttled = False
 
         if self.mode == PrintingRobotMode.PRINTING:
+            power_needed = self.get_power_demand()
+            if available_power is not None and available_power < power_needed:
+                self.is_throttled = True
+                result["throttled"] = True
+                return result
+
+            result["power_used"] = power_needed
             self.processing_steps_remaining -= 1
 
             if self.processing_steps_remaining <= 0:
@@ -97,4 +106,5 @@ class PrintingRobot(Agent):
             "processing_remaining": self.processing_steps_remaining,
             "shells_produced": self.shells_produced,
             "power_demand": self.get_power_demand(),
+            "is_throttled": self.is_throttled,
         }

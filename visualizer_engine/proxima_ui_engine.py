@@ -1268,9 +1268,15 @@ class ProximaUI:
                 if button_id in commands:
                     action = commands[button_id]
                     kwargs = {}
+                    step_delay = args[-4]
                     if action == "set_delay":
-                        kwargs["delay"] = args[-4]
-                    elif action == "start_limited":
+                        if step_delay is None:
+                            return dash.no_update
+                        kwargs["delay"] = step_delay
+                    elif action in ["start_continuous", "start_limited", "start_monte_carlo"] and step_delay is not None:
+                        kwargs["delay"] = step_delay
+
+                    if action == "start_limited":
                         kwargs["max_steps"] = args[-3]
                     elif action == "start_monte_carlo":
                         steps_per_run = args[-2]
@@ -1544,6 +1550,7 @@ class ProximaUI:
         command = {"action": action, "timestamp": time.time(), "experiment_id": self.exp_id, **kwargs}
         try:
             self.db.db[collection].insert_one(command)
+            print(f"✅ Sent {collection} command: {command}")
         except Exception as e:
             print(f"❌ Command error: {e}")
 
@@ -1561,7 +1568,7 @@ def main():
     """Entry Point"""
 
     args = parse_args()
-    exp_id = args.exp_id
+    exp_id = args.exp_id or "exp_001"
     hosted_uri = args.mongo_uri
 
     db = ProximaDB(uri="mongodb://localhost:27017", local=True)

@@ -48,7 +48,7 @@ class ScienceProductionRate(Policy):
         Reads the evaluation for the science growth metric and logs it.
         This policy is passive and doesn't apply throttling or other effects.
         """
-        
+
         effects = {
             "metric_id": self.metric_id,
             "score": 0,

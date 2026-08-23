@@ -49,6 +49,7 @@ class AssemblyRobot(Agent):
         self.mode = AssemblyRobotMode.IDLE
         self.assembly_steps_remaining = 0
         self.current_module = None
+        self.is_throttled = False
 
         # Metrics
         self.modules_assembled = 0
@@ -69,11 +70,19 @@ class AssemblyRobot(Agent):
         """Get current power demand."""
         return self.max_power_usage_kWh if self.mode == AssemblyRobotMode.ASSEMBLING else 0.0
 
-    def step(self) -> dict:
+    def step(self, available_power: float = None) -> dict:
         """Execute one simulation step."""
-        result = {"module_completed": None}
+        result = {"module_completed": None, "power_used": 0.0, "throttled": False}
+        self.is_throttled = False
 
         if self.mode == AssemblyRobotMode.ASSEMBLING:
+            power_needed = self.get_power_demand()
+            if available_power is not None and available_power < power_needed:
+                self.is_throttled = True
+                result["throttled"] = True
+                return result
+
+            result["power_used"] = power_needed
             self.assembly_steps_remaining -= 1
 
             if self.assembly_steps_remaining <= 0:
@@ -98,4 +107,5 @@ class AssemblyRobot(Agent):
             "assembly_remaining": self.assembly_steps_remaining,
             "modules_assembled": self.modules_assembled,
             "power_demand": self.get_power_demand(),
+            "is_throttled": self.is_throttled,
         }
