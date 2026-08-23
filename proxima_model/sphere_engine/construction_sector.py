@@ -58,9 +58,9 @@ class ConstructionRequest:
 class ConstructureSectorState:
     """Configuration and Current State for construction sector."""
 
-    # TODO: These need to be added to policy engine and controlled by growth dynamically
-    max_concurrent_projects: int = 3
-    shell_storage_capacity: int = 10
+    sector_name: str
+    max_concurrent_projects: int = 0
+    shell_storage_capacity: int = 0
     shells: int = 0
     regolith_used_kg: float = 0.0
     equipment_stock: Dict[str, int] = field(default_factory=lambda: {eq_type: 0 for eq_type in EQUIPMENT_MAP.values()})
@@ -69,6 +69,8 @@ class ConstructureSectorState:
     def __post_init__(self):
         if self.max_concurrent_projects < 0:
             raise ValueError("Max concurrent projects must be non-negative")
+        if self.shell_storage_capacity < 0:
+            raise ValueError("Shell storage capacity must be non-negative")
 
 
 class ConstructionSector:
@@ -162,12 +164,20 @@ class ConstructionSector:
                 self._advance_construction_project(request)
 
         # Then, assign new projects to any idle assembly robots
+        active_projects = sum(
+            1 for request in self._state.construction_queue if request.status == ConstructionRequestStatus.IN_PROGRESS.value
+        )
+        
         for request in self._state.construction_queue[:]:
             if request.status == ConstructionRequestStatus.QUEUED.value:
+                if active_projects >= self._state.max_concurrent_projects:
+                    break
+
                 # Check if there's an available assembly robot
                 available_robot = next((r for r in self.assembly_robots if r.mode == AssemblyRobotMode.IDLE), None)
                 if available_robot:
-                    self._start_construction_project(request)
+                    if self._start_construction_project(request):
+                        active_projects += 1
                 else:
                     # No idle robots available, stop trying to start new projects
                     break
@@ -197,11 +207,10 @@ class ConstructionSector:
 
             if not request.equipment_requested:
                 # Request missing equipment from equipment manufacturing
-                # TODO: Make requesting sector dynamic
                 for eq, qty_needed in missing_equipment.items():
                     self.event_bus.publish(
                         EventType.EQUIPMENT_REQUEST.value,
-                        requesting_sector="construction",
+                        requesting_sector=self._state.sector_name,
                         equipment_type=eq,
                         quantity=qty_needed,
                     )

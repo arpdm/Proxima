@@ -47,6 +47,7 @@ pyyaml = "^6.0.2"
 
 # Analysis
 statsmodels = "^0.14.0"
+python-dotenv = "^1.2.3"
 
 [tool.black]
 line-length = 120

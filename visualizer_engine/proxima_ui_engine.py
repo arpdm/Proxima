@@ -20,9 +20,10 @@ import time
 import json
 import math
 import os
+import argparse
 
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from dash import dcc, html
 from dash.dependencies import Input, Output, State
@@ -35,6 +36,12 @@ from visualizer_engine.ui_models import (
     DataFrameProcessor,
 )
 
+def parse_args():
+
+    parser = argparse.ArgumentParser(description="Proxima Dashboard")
+    parser.add_argument("--mongo-uri", type=str, default=None, help="MongoDB URI (overrides db choice)")
+    parser.add_argument("--exp-id", type=str, default=None, help="Experiment ID")
+    return parser.parse_args()
 
 class ProximaUI:
     """ProximaUI: Dashboard for Proxima simulation with configurable sectors."""
@@ -123,7 +130,7 @@ class ProximaUI:
             "experiment_id": self.exp_id,
             "sol": sol,
             "text": text,
-            "timestamp": datetime.utcnow(),
+            "timestamp": datetime.now(timezone.utc),
         }
         try:
             self.db.db["mission_log"].insert_one(entry)
@@ -133,8 +140,11 @@ class ProximaUI:
         if self.hosted_db is not None:
             try:
                 self.hosted_db.db["mission_log"].insert_one(dict(entry))
+                print(f"✅ mission log entry also saved to hosted DB (sol={sol})")
             except Exception as e:
                 print(f"❌ add_mission_log_entry (hosted) error: {e}")
+        else:
+            print("⚠️  mission log entry NOT saved to hosted DB - self.hosted_db is None (no hosted_db configured)")
 
     def fetch_mission_log_entries(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Fetch mission log entries for this experiment, most recent SOL/timestamp first."""
@@ -1547,15 +1557,21 @@ class ProximaUI:
             self.app.run(debug=False, host="0.0.0.0", port=8050)
 
 
-if __name__ == "__main__":
-    exp_id = sys.argv[1] if len(sys.argv) > 1 else "exp_001"
-    db = ProximaDB(uri="mongodb://localhost:27017", local=True)
+def main():
+    """Entry Point"""
 
-    hosted_uri = os.environ.get("MONGODB_URI")
+    args = parse_args()
+    exp_id = args.exp_id
+    hosted_uri = args.mongo_uri
+
+    db = ProximaDB(uri="mongodb://localhost:27017", local=True)
     hosted_db = ProximaDB(uri=hosted_uri, local=False) if hosted_uri else None
-    if hosted_db is None:
-        print("ℹ️  MONGODB_URI not set - mission log entries will only be saved locally.")
+
 
     ProximaUI(
         db, experiment_id=exp_id, update_rate_ms=1000, update_cycles=1, read_only=False, hosted_db=hosted_db
     ).run()
+
+if __name__ == "__main__":
+
+    main()

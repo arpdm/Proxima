@@ -456,7 +456,7 @@ class ConstructionSectorBuilder(ComponentBuilder):
         Returns:
             Dictionary with sector config, printing_robots, and assembly_robots
         """
-        # Inline defaults (avoid importing sector dataclass)
+
         config = {
             "sector_name": "construction",
             "printing_robots": [],
