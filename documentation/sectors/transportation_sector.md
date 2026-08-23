@@ -74,12 +74,12 @@ P_{\text{total}} = P_{\text{outbound}} + P_{\text{return}}
 
 ## Configuration Options
 
-The sector is configured in the `world_system` JSON file, defining its fleet, fuel generators, and operational parameters.
+The sector is configured in the `world_system` JSON file, defining its fleet, fuel generators, and operational parameters. If `flight_distance` is omitted, the sector uses the shared `FLIGHT_DISTANCE_KM` lookup table in `world_system_defs.py`.
 
 ```json
 "transportation": {
   "sector_name": "transportation",
-  "earth_moon_distance_km": 384400,
+  "flight_distance": 384400,
   "loading_time_steps": 24,
   "he3_request_threshold_kg": 1.0,
   "minimum_fuel_k_sp": 5000,

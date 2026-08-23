@@ -48,6 +48,12 @@ class EventType(Enum):
 # =============================================================================
 
 
+FLIGHT_DISTANCE_KM: Dict[tuple[str, str], float] = {
+    ("earth", "moon"): 384400.0,
+    ("moon", "earth"): 384400.0,
+}
+
+
 @dataclass
 class RunnerConfig:
     """Configuration for the ProximaRunner."""
@@ -174,6 +180,14 @@ class MetricCategory(Enum):
 def get_equipment_type_for_module(module_id: str) -> str:
     """Get equipment type string for a module ID."""
     return MODULE_TO_EQUIPMENT_MAP.get(module_id, "")
+
+
+def get_flight_distance_km(origin: str, destination: str) -> float:
+    """Return the configured average flight distance between two celestial bodies."""
+    try:
+        return FLIGHT_DISTANCE_KM[(origin.lower(), destination.lower())]
+    except KeyError as exc:
+        raise ValueError(f"No flight distance configured between {origin} and {destination}") from exc
 
 
 def extract_module_type_from_id(module_id: str) -> str:

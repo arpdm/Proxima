@@ -9,24 +9,11 @@ from enum import Enum, auto
 from typing import List, Dict, Optional, Any
 from proxima_model.components.rocket import Rocket, MissionPhase
 from proxima_model.components.fuel_generator import FuelGenerator
-from proxima_model.world_system.world_system_defs import EventType, SectorType
+from proxima_model.world_system.world_system_defs import EventType, SectorType, get_flight_distance_km
 
 import logging
 
 logger = logging.getLogger(__name__)
-
-PLANET_DISTANCE_KM: Dict[tuple[str, str], float] = {
-    ("earth", "moon"): 384400.0,
-    ("moon", "earth"): 384400.0,
-}
-
-
-def get_planet_distance_km(origin: str, destination: str) -> float:
-    """Return the configured average distance between two celestial bodies."""
-    try:
-        return PLANET_DISTANCE_KM[(origin.lower(), destination.lower())]
-    except KeyError as exc:
-        raise ValueError(f"No distance configured between {origin} and {destination}") from exc
 
 
 class TransportRequestStatus(Enum):
@@ -61,14 +48,14 @@ class TransportationConfig:
     """Configuration for transportation sector."""
 
     sector_name: str = SectorType.TRANSPORTATION.value
-    earth_moon_distance_km: Optional[float] = None
+    flight_distance: Optional[float] = None
     loading_time_steps: int = 24
     he3_request_threshold_kg: float = 1.0
     minimum_fuel_k_sp: int = 5000
 
     def __post_init__(self):
         """Validate configuration."""
-        if self.earth_moon_distance_km is not None and self.earth_moon_distance_km <= 0:
+        if self.flight_distance is not None and self.flight_distance <= 0:
             raise ValueError("Distance must be positive")
         if self.loading_time_steps < 0:
             raise ValueError("Loading time must be non-negative")
@@ -241,9 +228,9 @@ class TransportationSector:
 
         # Calculate fuel requirements
         flight_distance_km = (
-            self._config.earth_moon_distance_km
-            if self._config.earth_moon_distance_km is not None
-            else get_planet_distance_km(request.origin, request.destination)
+            self._config.flight_distance
+            if self._config.flight_distance is not None
+            else get_flight_distance_km(request.origin, request.destination)
         )
         propellant_needed, one_way_steps = rocket.calculate_round_trip_requirements(
             outbound_payload_kg=outbound_payload_kg,

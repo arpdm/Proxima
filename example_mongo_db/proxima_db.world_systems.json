@@ -66,6 +66,11 @@
             "Assembly_Robot_EQ": 0,
             "Printing_Robot_EQ": 0,
             "Science_Rover_EQ": 0
+          },
+          "minimum_levels": {
+            "Assembly_Robot_EQ": 1,
+            "Printing_Robot_EQ": 1,
+            "Science_Rover_EQ": 1
           }
         }
       ],

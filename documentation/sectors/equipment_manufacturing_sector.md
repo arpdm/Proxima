@@ -9,6 +9,43 @@
 *   **`_equipment_backlog`:** A queue (`deque`) that holds unfulfilled equipment requests from other sectors. If a request cannot be met due to insufficient stock, it remains in the backlog to be re-evaluated in the next step.
 *   **`_event_buffer`:** A temporary list that collects all incoming events during a simulation step, ensuring they are processed in a controlled manner at the start of the next step.
 
+## High-Level Flow
+
+```mermaid
+flowchart TD
+    A[Simulation step begins] --> B[Process buffered events]
+
+    B --> C{Event type}
+    C -->|payload_delivered| D[Add delivered equipment to physical stock]
+    D --> E[Reduce matching pending orders]
+    C -->|equipment_request| F[Add request to equipment backlog]
+    C -->|No buffered events| G[Process equipment backlog]
+    E --> G
+    F --> G
+
+    G --> H{Physical stock available?}
+    H -->|Enough stock| I[Publish equipment_allocated event]
+    I --> J[Remove allocated equipment from physical stock]
+    H -->|Partial stock| K[Publish partial equipment_allocated event]
+    K --> L[Keep outstanding quantity in backlog]
+    H -->|No stock| L
+    J --> M[Check resupply needs]
+    L --> M
+
+    M --> N[Calculate backlog demand per equipment type]
+    N --> O[Calculate effective stock: physical + pending]
+    O --> P[Target level: configured minimum + backlog demand]
+    P --> Q{Effective stock below target?}
+    Q -->|Yes| R[Add deficit to transport request payload]
+    R --> S[Increase pending orders immediately]
+    Q -->|No| T[No resupply needed]
+    S --> U{Any payload requested?}
+    T --> U
+    U -->|Yes| V[Publish transport_request event]
+    U -->|No| W[Step ends]
+    V --> W
+```
+
 ## Operational Cycle & Key Algorithms
 
 The sector's logic is event-driven and revolves around maintaining minimum stock levels.
@@ -40,7 +77,7 @@ This is the core algorithm that prevents equipment shortages.
 
 ## Configuration Options
 
-The sector is configured in the `world_system` JSON file. You can set initial inventory levels and define the minimum stock thresholds that trigger the resupply logic.
+The sector is configured in the `world_system` JSON file. You can set initial inventory levels and define the minimum stock thresholds that trigger the resupply logic. Equipment names are centralized in `world_system_defs.py` as `EquipmentType`; minimum levels are loaded from MongoDB configuration.
 
 ```json
 "equipment_manufacturing": {

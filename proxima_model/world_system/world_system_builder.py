@@ -365,12 +365,18 @@ class EquipmentManufacturingSectorBuilder(ComponentBuilder):
         Returns:
             Dictionary with 'initial_stocks'
         """
-        config = {"sector_name": "equipment_manufacturing", "initial_stocks": {}}
+        config = {
+            "sector_name": "equipment_manufacturing",
+            "initial_stocks": {},
+            "minimum_levels": {},
+        }
 
         for comp in components:
             # Check for special "equipment_stock" key
             if "equipment_stock" in comp:
                 config["initial_stocks"].update(comp["equipment_stock"])
+            if "minimum_levels" in comp:
+                config["minimum_levels"].update(comp["minimum_levels"])
 
         logger.info(f"✅ Configured equipment manufacturing sector: {len(config['initial_stocks'])} equipment types")
         return config
@@ -532,6 +538,7 @@ def build_world_system_config(
         "hours_per_step": experiment.get("hours_per_time_step"),
         "p_need": 2.0,
         "agents_config": {},
+        "environment_name": environment.get("name", "Moon"),
         "metrics": environment.get("metrics", []),
         "resources": environment.get("resources", []),
         "dust_decay_per_step": environment.get("dust_decay_per_step", 0.0),

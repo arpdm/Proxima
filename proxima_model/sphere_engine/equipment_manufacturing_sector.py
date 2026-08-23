@@ -35,19 +35,6 @@ class SectorState(Enum):
     INACTIVE = auto()
 
 
-# TODO: Move to the definitions
-class EquipmentType(Enum):
-    """Available equipment types for expansion."""
-
-    ASSEMBLY_ROBOT = "Assembly_Robot_EQ"
-    PRINTING_ROBOT = "Printing_Robot_EQ"
-    SCIENCE_ROVER = "Science_Rover_EQ"
-    ENERGY_GENERATOR = "Energy_Generator_EQ"
-    ISRU_ROBOT = "ISRU_Robot_EQ"
-    ROCKET = "Rocket_EQ"
-
-
-# TODO: Not using equipment config - Need to use this
 @dataclass
 class EquipmentConfig:
     """Configuration for equipment minimum levels."""
@@ -112,14 +99,6 @@ class EquipmentInventory:
 class EquipmentManSector:
     """Manages equipment manufacturing, storage, and resupply processes."""
 
-    # Default minimum levels for equipment
-    # TODO: Need to do something about this
-    DEFAULT_MINIMUMS = {
-        EquipmentType.ASSEMBLY_ROBOT.value: 1,
-        EquipmentType.PRINTING_ROBOT.value: 1,
-        EquipmentType.SCIENCE_ROVER.value: 1,
-    }
-
     def __init__(self, model, config: Dict[str, Any], event_bus):
         """
         Initialize equipment manufacturing sector with agents and resource stocks.
@@ -133,6 +112,10 @@ class EquipmentManSector:
         self.config = config
         self.event_bus = event_bus
         self.sector_state = SectorState.ACTIVE
+        model_config = getattr(self.model, "config", {}) or {}
+        self._environment_name = model_config.get("environment_name", "Moon")
+        self._resupply_origin = config.get("resupply_origin", self._environment_name)
+        self._resupply_destination = config.get("resupply_destination", "Earth")
 
         # Buffer for incoming events (process next step)
         self._event_buffer = []
@@ -142,8 +125,11 @@ class EquipmentManSector:
         initial_stocks = config.get("initial_stocks", {})
         self._inventory = EquipmentInventory(physical_stock=initial_stocks.copy(), pending_orders={})
 
-        # Load minimum levels (allow config overrides)
-        self._minimum_levels = {**self.DEFAULT_MINIMUMS, **config.get("minimum_levels", {})}
+        # Load minimum levels from world-system configuration.
+        self._equipment_configs = {
+            item: EquipmentConfig(minimum_level=minimum_level)
+            for item, minimum_level in config.get("minimum_levels", {}).items()
+        }
 
         # Subscribe to events
         self.event_bus.subscribe(EventType.PAYLOAD_DELIVERY.value, self.handle_payload_delivery)
@@ -262,10 +248,10 @@ class EquipmentManSector:
             quantity = request.get("quantity", 0)
             backlog_demand[equipment_type] = backlog_demand.get(equipment_type, 0) + quantity
 
-        for item, min_level in self._minimum_levels.items():
+        for item, equipment_config in self._equipment_configs.items():
             effective_stock = self._inventory.get_effective(item)
             backlog_qty = backlog_demand.get(item, 0)
-            target_level = min_level + backlog_qty
+            target_level = equipment_config.minimum_level + backlog_qty
 
             if effective_stock < target_level:
                 # Calculate how many to order to reach the target
@@ -281,8 +267,8 @@ class EquipmentManSector:
                 EventType.TRANSPORT_REQUEST.value,
                 requesting_sector="equipment_manufacturing",
                 payload=payload_to_request,
-                origin="Moon",  # TODO: Get from Environment Configuration
-                destination="Earth",  # TODO: Get from Environment Configuration
+                origin=self._resupply_origin,
+                destination=self._resupply_destination,
             )
 
     def get_power_demand(self) -> float:
