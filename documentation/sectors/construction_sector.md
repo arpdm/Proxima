@@ -13,6 +13,32 @@
 
 The sector operates a two-stage production line: first producing shells into a local inventory, then using those shells to fulfill construction orders.
 
+```{mermaid}
+flowchart TD
+    RequestingSector["Requesting Sector"] -->|construction_request| Intake["Construction Intake"]
+    Intake --> Queue["Construction Queue"]
+
+    Regolith["Regolith Supply"] --> Printing["Shell Production<br/>Printing Robots"]
+    Printing --> ShellStock["Shell Stock<br/>limited by shell_storage_capacity"]
+
+    Queue --> Planning["Project Planning<br/>limited by max_concurrent_projects"]
+    Planning --> ResourceGate{"Shells and equipment<br/>available?"}
+
+    ResourceGate -->|Missing equipment| EquipmentRequest["Equipment Request"]
+    EquipmentRequest -->|equipment_request| EquipmentManufacturing["Equipment Manufacturing Sector"]
+    EquipmentManufacturing -->|equipment_allocated| EquipmentStock["Construction Equipment Stock"]
+
+    ShellStock --> ResourceGate
+    EquipmentStock --> ResourceGate
+
+    ResourceGate -->|Ready| Assembly["Module Assembly<br/>Assembly Robots"]
+    Assembly --> CompletedModule["Completed Module"]
+    CompletedModule -->|module_completed| RequestingSector
+
+    Assembly --> Metrics["Construction Metrics<br/>queue, shells, robots, completions"]
+    Printing --> Metrics
+```
+
 **1. Shell Production (`_manage_printing_operations`)**
 The sector employs a "make-to-stock" strategy for shells.
 *   **Proactive Printing:** `PrintingRobot`s will automatically start printing new shells whenever they are idle, as long as the number of shells in local storage (`_stocks.shells`) is below the configured `shell_storage_capacity`.

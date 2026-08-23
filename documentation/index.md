@@ -3,14 +3,14 @@
 Technical documentation for the Proxima World System Beta simulation.
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 4
 :caption: Architecture
 
 world_system_beta_architecture
 ```
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 4
 :caption: Sectors
 
 sectors/world_system
@@ -25,7 +25,7 @@ sectors/environmental_policies
 ```
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 4
 :caption: Policies
 
 policies/science_policies
@@ -33,7 +33,7 @@ policies/environmental_policies
 ```
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 4
 :caption: Experimentation
 
 experimentation_analysis/growth_policies_analysis

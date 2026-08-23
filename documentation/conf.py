@@ -10,6 +10,7 @@ copyright = "2026, Proxima contributors"
 
 extensions = [
     "myst_parser",
+    "sphinxcontrib.mermaid",
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
@@ -26,5 +27,10 @@ master_doc = "index"
 
 html_theme = "sphinx_rtd_theme"
 html_title = "Proxima Documentation"
+html_theme_options = {
+    "collapse_navigation": False,
+    "navigation_depth": 4,
+    "titles_only": False,
+}
 
 myst_heading_anchors = 3
