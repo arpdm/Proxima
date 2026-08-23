@@ -9,7 +9,7 @@
 
 ---
 
-### Operational Cycle & Key Algorithms
+## Operational Cycle & Key Algorithms
 
 The sector's operation is a continuous loop of fuel production, request processing, and mission management.
 
@@ -36,7 +36,7 @@ In every simulation step, the sector calls the `step()` method on every rocket i
 
 ---
 
-### Equations
+## Equations
 
 **Fuel Generation:**
 The amount of propellant generated $P_{\text{gen}}$ from a given amount of Helium-3 $He3_{\text{proc}}$ is calculated as:
@@ -72,7 +72,7 @@ P_{\text{total}} = P_{\text{outbound}} + P_{\text{return}}
 
 ---
 
-### Configuration Options
+## Configuration Options
 
 The sector is configured in the `world_system` JSON file, defining its fleet, fuel generators, and operational parameters.
 
@@ -107,7 +107,7 @@ The sector is configured in the `world_system` JSON file, defining its fleet, fu
 
 ---
 
-### TODO: Potential Improvements
+## TODO: Potential Improvements
 
 *   **[ ] Implement Realistic Power Demand:** The `get_power_demand()` method is a placeholder. The `FuelGenerator`s should consume significant power from the grid when operating.
 *   **[ ] Refine Payload Weight Calculation:** The weight for return payloads is currently a placeholder (`sum(values) * 20`). This should be replaced with a data-driven model that maps equipment types to their actual mass.

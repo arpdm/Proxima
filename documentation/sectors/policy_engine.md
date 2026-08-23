@@ -2,9 +2,7 @@
 
 **Purpose:** The `PolicyEngine` is the adaptive "brain" of the simulation. It centralizes the logic for enforcing operational rules and adaptive behaviors. It continuously monitors the simulation's performance via the `EvaluationEngine` and applies corrective actions—or "policies"—to steer the system towards its defined goals.
 
----
-
-### Architecture
+## Architecture
 
 The engine is designed to be modular and extensible, revolving around three key concepts:
 
@@ -22,9 +20,7 @@ The engine is designed to be modular and extensible, revolving around three key 
 
 3.  **`EvaluationResult`:** This is the sole input for the policy engine's decision-making process. It is a comprehensive data object provided by the `EvaluationEngine` that contains the final scores and metric values for the current simulation step. The `PolicyEngine` does not perform calculations; it **reacts** to the data in this object.
 
----
-
-### Operational Flow
+## Operational Flow
 
 The policy application process is a clear, sequential part of the main simulation loop.
 
@@ -35,13 +31,11 @@ The policy application process is a clear, sequential part of the main simulatio
 5.  **Action:** If a condition is met, the policy takes action by calling a method on one of the sectors. It can access any sector via the `engine.world` object passed into the `apply` method (e.g., `engine.world.sectors['science'].set_throttle_factor(0.5)`).
 6.  **Output:** The `apply()` method returns a dictionary summarizing the actions it took (its "effects"). The `PolicyEngine` collects these effects from all active policies and returns them to the `WorldSystem` for logging.
 
----
-
-### How to Create a New Policy
+## How to Create a New Policy
 
 Adding a new policy is a straightforward process designed to be self-contained.
 
-#### Step 1: Define the Policy Class
+### Step 1: Define the Policy Class
 
 Create a new class that implements the `Policy` protocol. For this example, we'll create a policy that throttles science activity if there is a power shortage.
 
@@ -90,7 +84,7 @@ class PowerShortageContingencyPolicy:
         return effects
 ```
 
-#### Step 2: Register the New Policy
+### Step 2: Register the New Policy
 
 In `policy_engine.py`, import your new policy class and add an instance of it to the `_policies` list in the `__init__` method.
 

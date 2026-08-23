@@ -1,4 +1,4 @@
-### Equipment Manufacturing Sector
+# Equipment Manufacturing Sector
 
 **Purpose:** The `EquipmentManSector` acts as the central logistics hub for heavy equipment on the Moon. Despite its name, its primary role in the current implementation is not manufacturing, but rather managing the inventory of critical assets like rovers and robots. It ensures that other sectors have the equipment they need to operate and expand by managing stock levels and orchestrating resupply missions from Earth.
 
@@ -9,9 +9,7 @@
 *   **`_equipment_backlog`:** A queue (`deque`) that holds unfulfilled equipment requests from other sectors. If a request cannot be met due to insufficient stock, it remains in the backlog to be re-evaluated in the next step.
 *   **`_event_buffer`:** A temporary list that collects all incoming events during a simulation step, ensuring they are processed in a controlled manner at the start of the next step.
 
----
-
-### Operational Cycle & Key Algorithms
+## Operational Cycle & Key Algorithms
 
 The sector's logic is event-driven and revolves around maintaining minimum stock levels.
 
@@ -40,7 +38,7 @@ This is the core algorithm that prevents equipment shortages.
 
 ---
 
-### Configuration Options
+## Configuration Options
 
 The sector is configured in the `world_system` JSON file. You can set initial inventory levels and define the minimum stock thresholds that trigger the resupply logic.
 

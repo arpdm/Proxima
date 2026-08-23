@@ -1,4 +1,4 @@
-### Construction Sector
+# Construction Sector
 
 **Purpose:** The `ConstructionSector` is the primary engine of growth for the lunar base. It manages the entire construction pipeline, from producing basic structural components to assembling complex, functional modules. It acts as a "make-to-order" factory, responding to `construction_request` events from other sectors to expand their capabilities.
 
@@ -9,7 +9,7 @@
 
 ---
 
-### Operational Cycle & Key Algorithms
+# Operational Cycle & Key Algorithms
 
 The sector operates a two-stage production line: first producing shells into a local inventory, then using those shells to fulfill construction orders.
 
@@ -72,7 +72,7 @@ The core of the sector is a state machine that processes items in the `construct
 
 ---
 
-### Configuration Options
+## Configuration Options
 
 The sector's capabilities are defined in the `world_system` JSON file, specifying the number of robots and operational parameters.
 
@@ -101,7 +101,7 @@ The sector's capabilities are defined in the `world_system` JSON file, specifyin
 
 ---
 
-### TODO: Potential Improvements
+## TODO: Potential Improvements
 
 *   **[ ] Implement Power Throttling:** The sector receives `allocated_power` but does not currently use it to manage robot activity. If power is insufficient, robots should be throttled or enter a low-power state instead of operating at full capacity.
 *   **[ ] Add Metric Contributions:** Construction is a heavy industrial activity. Both printing and assembly should contribute to the `IND-DUST-COV` metric based on the number of active robots.

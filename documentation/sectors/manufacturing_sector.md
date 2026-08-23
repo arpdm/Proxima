@@ -9,9 +9,7 @@
 *   **`StockFlow`:** A transaction object that represents any change in resources. It ensures that all resource generation, consumption, and allocation within a single step are processed atomically, preventing race conditions and ensuring data integrity.
 *   **`ResourceRequest`:** A data object representing a request for a specific amount of a resource from another sector.
 
----
-
-### Operational Cycle & Key Algorithms
+## Operational Cycle & Key Algorithms
 
 The sector's logic is a sophisticated loop of assessing needs, assigning tasks, and processing results.
 
@@ -47,9 +45,7 @@ When executing the step, the sector can be throttled by the `PolicyEngine`.
 
 At the end of the step, all `StockFlow` objects generated during the step (from robot operations and resource allocations) are processed in a single, atomic block. This guarantees that all additions and subtractions to the resource stocks are finalized before the next simulation step begins.
 
----
-
-### Equations
+## Equations
 
 **He-3 Generation:**
 The amount of Helium-3 generated $He3_{\text{output}}$ is calculated using a probabilistic concentration and the robot's throughput.
@@ -66,9 +62,7 @@ Where:
 *   $C_{\text{He3}}$ is the randomly determined concentration in parts-per-billion for that step.
 *   $\text{Throughput}_{\text{tons}}$ is the mass of regolith the robot can process per step.
 
----
-
-### Configuration Options
+## Configuration Options
 
 The sector is configured in the `world_system` JSON file, defining its robot fleet, initial stocks, and resource targets.
 
@@ -104,9 +98,7 @@ The sector is configured in the `world_system` JSON file, defining its robot fle
 }
 ```
 
----
-
-### TODO: Potential Improvements
+## TODO: Potential Improvements
 
 *   **[ ] Implement Electrolysis:** The `TaskType.ELECTROLYSIS` exists but is not implemented. This would be a crucial task, consuming `H2O_kg` and power to produce `H2_kg` and `O2_kg`.
 *   **[ ] Add Resource Consumption for Extraction:** The `ICE_EXTRACTION` and `REGOLITH_EXTRACTION` modes currently create resources from nothing. They should consume a base resource (e.g., "Raw_Regolith") to be more realistic.

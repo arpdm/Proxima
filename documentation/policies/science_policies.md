@@ -1,6 +1,6 @@
-# 📜 Proxima Policy Specification: Science Growth Doubling Policy
+# Science Growth Doubling Policy
 
-## 1. Overview
+## Overview
 
 **Policy Goal:**  
 Double the total **science production rate** every 6 months, accounting for logistical lead time in rover manufacturing and deployment.
@@ -9,7 +9,7 @@ This policy defines the algorithmic mechanism by which the system requests addit
 
 ---
 
-## 2. Core Formulation
+## Core Formulation
 
 Let:
 
@@ -23,7 +23,7 @@ Let:
 
 ---
 
-### 2.1 Exponential Growth Target
+### Exponential Growth Target
 
 The policy enforces a **doubling every 6 months**:
 
@@ -39,7 +39,7 @@ S_{\text{target}}(t+H) = S_0 \cdot 2^{\,(t + H)/6}
 
 ---
 
-### 2.2 Required Rover Count
+### Required Rover Count
 
 To meet the target rate, compute the required number of rovers at the horizon:
 
@@ -63,7 +63,7 @@ with:
 
 ---
 
-### 2.3 Forecasted Active Rovers
+### Forecasted Active Rovers
 
 Estimate how many rovers will be operational when the new batch arrives:
 
@@ -78,7 +78,7 @@ where each $(m_i, q_i)$ is a **pipeline order**—a batch of $q_i$ rovers schedu
 
 ---
 
-### 2.4 Ordering Rule
+### Ordering Rule
 
 The number of rovers to order at month $t$ is:
 
@@ -95,7 +95,7 @@ Each order is placed immediately and added to the logistics pipeline with expect
 
 ---
 
-## 3. Pipeline Orders
+## ipeline Orders
 
 A **pipeline order** represents any rover batch currently under construction, en route, or pending deployment.
 
@@ -116,7 +116,7 @@ and the entry is removed from the pipeline list.
 
 ---
 
-## 4. Receding-Horizon Control
+## Receding-Horizon Control
 
 At every time step:
 
@@ -129,7 +129,7 @@ At every time step:
 
 This creates a self-correcting loop (similar to Model Predictive Control) that adapts to failures, delays, or productivity changes.
 
-### 4.1 System Model
+### System Model
 
 Let the system evolve as:
 
@@ -142,7 +142,7 @@ where:
 - $u_t$: control action (e.g., new rover orders)
 - $f(\cdot)$: transition function (simulated system or empirical model)
 
-### 4.2 Optimization at Each Time Step
+### Optimization at Each Time Step
 
 At time $t$, solve:
 
@@ -160,7 +160,7 @@ Where:
 - $Q, R$: weighting matrices penalizing deviation and control effort
 - $\mathcal{X}, \mathcal{U}$: constraints (resource, logistics, production capacity)
 
-### 4.3 Control Application
+### Control Application
 
 After solving:
 
@@ -171,7 +171,7 @@ This receding-horizon approach provides robust adaptive control that continuousl
 
 ---
 
-## 5. Example Scenario
+## Example Scenario
 
 | Parameter | Value |
 |------------|-------|
@@ -196,7 +196,7 @@ q(5) &= (1.1 \times 20) - 14 = 8
 
 ---
 
-## 6. Pseudocode Implementation
+## Pseudocode Implementation
 
 ```python
 def order_rovers(t, S0, peff, L=1, beta=0.1,
@@ -214,9 +214,9 @@ def order_rovers(t, S0, peff, L=1, beta=0.1,
 
 ---
 
-## 7. Refinement: Utilization-Aware Rover Ordering
+## Refinement: Utilization-Aware Rover Ordering
 
-### 7.1 Problem Identified
+### Problem Identified
 
 The baseline policy (Sections 1-6) orders rovers based purely on a mathematical growth curve. However, it does **not** account for actual fleet utilization:
 
@@ -226,7 +226,7 @@ The baseline policy (Sections 1-6) orders rovers based purely on a mathematical 
 
 **Key Insight:** If current rovers are not being fully utilized, ordering new rovers without understanding *why* the current ones are idle is inefficient.
 
-### 7.2 Refinement Mechanism
+### Refinement Mechanism
 
 Add a **utilization gate** to the rover ordering decision:
 
@@ -243,7 +243,7 @@ else:
 
 **Result:** The growth algorithm still calculates `rovers_needed_for_growth`, but the policy layer (via `ScienceGrowthUtilizationPolicy`) decides whether to actually order them.
 
-### 7.3 Configuration
+### Configuration
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
@@ -251,7 +251,7 @@ else:
 | `reduced_growth_rate` | 0.5 | Growth rate when utilization is low |
 | `normal_growth_rate` | 2.0 | Growth rate when utilization is healthy |
 
-### 7.4 Metrics Exposed
+### Metrics Exposed
 
 Track the gap between theory and practice:
 
@@ -262,7 +262,7 @@ Track the gap between theory and practice:
 
 When utilization is low, gap > 0, signaling that growth is deferred pending fleet recovery.
 
-### 7.5 Architecture
+### Architecture
 
 **Sector** (`science_sector.py`):
 - Pure algorithm: calculates rovers needed
@@ -275,18 +275,14 @@ When utilization is low, gap > 0, signaling that growth is deferred pending flee
 
 This separation keeps policy logic (decision-making) distinct from execution (sector operations).
 
-### 7.6 Future Refinements
+### Future Refinements
 
 - **Predictive utilization:** Forecast future utilization trends; adjust growth rate preemptively
 - **Differentiated thresholds:** Different sectors have different "healthy" utilization targets
 - **Root cause investigation:** Log why rovers are idle (power deficit? resource bottleneck? failures?)
 - **Cost of idle capacity:** Factor maintenance cost of inactive rovers into growth rate decisions
 
----
-
----
-
-## 8. Future Enhancements (ML/DL)
+## Future Enhancements (ML/DL)
 
 - **Dynamic Productivity Adjustment**: Update $p_{\text{eff}}$ based on real-time rover performance.
 - **Multi-Resource Constraints**: Factor in power, crew, and material availability.
@@ -294,7 +290,7 @@ This separation keeps policy logic (decision-making) distinct from execution (se
 - **Variable Lead Times**: Account for different manufacturing speeds or supply chain disruptions.
 - **Full MPC Implementation**: Implement the complete optimization formulation with $Q$ and $R$ matrices for more sophisticated control.
 
-### 8.1 Reinforcement Learning Approaches
+### Reinforcement Learning Approaches
 
 1. **RL for Adaptive Control**: Replace the simple receding-horizon controller with an RL agent that learns optimal rover ordering policies.
 

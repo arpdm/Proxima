@@ -12,6 +12,7 @@ extensions = [
     "myst_parser",
     "sphinxcontrib.mermaid",
     "sphinx.ext.autodoc",
+    "sphinx.ext.mathjax",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
 ]
@@ -25,12 +26,30 @@ source_suffix = {
 
 master_doc = "index"
 
-html_theme = "sphinx_rtd_theme"
+html_theme = "furo"
 html_title = "Proxima Documentation"
 html_theme_options = {
-    "collapse_navigation": False,
-    "navigation_depth": 4,
-    "titles_only": False,
+    "navigation_with_keys": True,
+    "top_of_page_button": "edit",
+    "light_css_variables": {
+        "color-brand-primary": "#15879a",
+        "color-brand-content": "#15879a",
+    },
+    "dark_css_variables": {
+        "color-brand-primary": "#4fd8ec",
+        "color-brand-content": "#8ff2ff",
+        "color-background-primary": "#05090b",
+        "color-background-secondary": "#0a1318",
+        "color-sidebar-background": "#071015",
+        "color-sidebar-background-border": "#1c3a42",
+    },
 }
 
 myst_heading_anchors = 3
+myst_enable_extensions = [
+    "amsmath",
+    "dollarmath",
+]
+myst_fence_as_directive = [
+    "math",
+]

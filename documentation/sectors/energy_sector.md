@@ -1,7 +1,4 @@
-<!-- ...existing code... -->
-*   **Dynamic Growth:** The sector listens for `module_completed` events on the event bus, allowing it to dynamically add new rovers to its fleet as they are constructed by other sectors.
-
-### Energy Sector
+# Energy Sector
 
 **Purpose:** The `EnergySector` serves as the central power authority for the entire simulation. Its sole responsibility is to manage the generation, storage, and distribution of electrical power to meet the aggregate demand from all other sectors. It abstracts the complexity of the power grid through a single `MicrogridManager`.
 
@@ -10,9 +7,7 @@
 *   **`PowerGenerator`:** Represents a single power generation unit. Each generator has a maximum power capacity, an efficiency rating, and an availability factor (e.g., a solar panel's availability might be affected by the lunar day/night cycle).
 *   **`PowerStorage`:** Represents a battery or other storage unit. It has a maximum capacity, a current charge level, and separate efficiencies for charging and discharging, simulating real-world energy losses.
 
----
-
-### Operational Cycle & Equations
+## Operational Cycle & Equations
 
 The `EnergySector`'s `step` method is a sophisticated orchestration of power flow. The key calculations are defined below.
 
@@ -75,9 +70,7 @@ P_{\text{excess}} = \max(0, P_{\text{gen}} - P_{\text{demand}})
 \text{Microgrid uses } P_{\text{excess}} \text{ to charge batteries, accounting for } \eta_{\text{charge}}.
 ```
 
----
-
-### Configuration Options
+## Configuration Options
 
 The `EnergySector` is configured in the `world_system` JSON file by defining its `generators` and `storage_units`.
 
