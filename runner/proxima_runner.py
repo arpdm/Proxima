@@ -48,6 +48,17 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Proxima Simulation Runner")
     parser.add_argument("--headless", action="store_true", help="Run in headless mode (no UI commands)")
     parser.add_argument("--mongo-uri", type=str, default=None, help="MongoDB URI (overrides db choice)")
+    parser.add_argument(
+        "--mode",
+        type=str,
+        choices=["live", "test"],
+        default="live",
+        help=(
+            "Run mode. 'live' (default) resumes prior world system state and sol/step count, "
+            "and periodically saves data to hosted_uri. 'test' never saves to hosted_uri and "
+            "always starts from a reset sol/step count and a reset world system state."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -72,9 +83,37 @@ class ProximaRunner:
         if mongo_uri:
             self.config.hosted_uri = mongo_uri
 
-        # Setup database connections
+        self.run_mode = (self.config.run_mode or "live").lower()
+        if self.run_mode not in ("live", "test"):
+            raise ValueError(f"Invalid run_mode: {self.run_mode!r}. Must be 'live' or 'test'.")
+        self.is_test_mode = self.run_mode == "test"
+
+        # Setup database connections. In test mode we never talk to the hosted DB:
+        # nothing gets saved to hosted_uri regardless of what was configured.
         self.local_db = ProximaDB(uri=self.config.local_uri)
-        self.hosted_db = ProximaDB(uri=self.config.hosted_uri) if self.config.hosted_uri else None
+        self.hosted_db = (
+            ProximaDB(uri=self.config.hosted_uri, local=False)
+            if (self.config.hosted_uri and not self.is_test_mode)
+            else None
+        )
+
+        # Fail loudly and immediately at startup rather than silently swallowing every
+        # subsequent write - otherwise a bad/missing hosted_uri or unreachable Atlas
+        # cluster looks identical to "everything's fine, just not saving."
+        if not self.is_test_mode:
+            if not self.config.hosted_uri:
+                debug_logger.warning(
+                    "⚠️ No hosted_uri configured - nothing will be saved to the hosted DB. "
+                    "Pass --mongo-uri <atlas-connection-string> to enable it."
+                )
+            elif self.hosted_db is not None:
+                try:
+                    self.hosted_db.client.admin.command("ping")
+                    debug_logger.info(f"✅ Connected to hosted MongoDB at {self.config.hosted_uri}")
+                except Exception as e:
+                    debug_logger.error(f"❌ Could not connect to hosted MongoDB ({self.config.hosted_uri}): {e}")
+                    self.hosted_db = None
+
         self.local_db.db["logs_simulation"].delete_many({})  # Clear old logs
 
         # Load experiment configuration from DB
@@ -85,6 +124,11 @@ class ProximaRunner:
         # simulation starts, immediately halting it again.
         self.local_db.db["startup_commands"].delete_many({"experiment_id": self.experiment.exp_id})
         self.local_db.db["runtime_commands"].delete_many({"experiment_id": self.experiment.exp_id})
+
+        # In test mode, reset the world system's persisted state so the run always
+        # starts fresh (no resumed sector state, no resumed sol/step count).
+        if self.is_test_mode:
+            self._reset_world_system_state()
 
         # Setup logging and simulation state
         self.logger = DataLogger(experiment_id=self.experiment.exp_id, db=self.local_db, ws_id=self.experiment.ws_id)
@@ -114,10 +158,33 @@ class ProximaRunner:
             exp_id=exp_config["_id"],
         )
 
+    def _reset_world_system_state(self) -> None:
+        """Clear the world system's persisted latest_state (test mode only)."""
+
+        self.local_db.db["world_systems"].update_one(
+            {"_id": self.experiment.ws_id},
+            {"$unset": {"latest_state": ""}},
+        )
+
     def _build_world_system(self) -> WorldSystem:
         """Create a world system instance for the current experiment."""
-        config = build_world_system_config(self.experiment.ws_id, self.experiment.exp_id, self.local_db)
-        return WorldSystem(config, 100)
+
+        # Live runs resume prior sector state and continue the sol/step count;
+        # test runs always start clean with a reset sol/step count of 0.
+        resume_state = not self.is_test_mode
+        config = build_world_system_config(
+            self.experiment.ws_id, self.experiment.exp_id, self.local_db, resume_state=resume_state
+        )
+        
+        ws = WorldSystem(config, 100)
+
+        if resume_state:
+            world_system = self.local_db.find_by_id("world_systems", self.experiment.ws_id)
+            resumed_step = (world_system or {}).get("latest_state", {}).get("step")
+            if isinstance(resumed_step, int) and resumed_step > 0:
+                ws.steps = resumed_step
+
+        return ws
 
     def run(self, continuous=None):
         """Main simulation runner loop."""
@@ -127,6 +194,11 @@ class ProximaRunner:
         self.is_running = True
         self.is_paused = False
         update_counter = 0
+
+        # "Limited" runs (Start Limited / Monte Carlo) mean "run N more steps from here",
+        # not "run until absolute step N" - otherwise resuming a live run whose step count
+        # already exceeds a previously-used Max Steps value would execute zero steps.
+        self._step_limit = None if self.continuous else self.ws.steps + self.experiment.sim_time
 
         try:
             while self._should_continue():
@@ -153,7 +225,7 @@ class ProximaRunner:
 
     def _should_continue(self):
         """Check if the simulation should continue."""
-        return self.is_running and (self.continuous or self.ws.steps < self.experiment.sim_time)
+        return self.is_running and (self.continuous or self.ws.steps < self._step_limit)
 
     def _perform_simulation_step(self):
         """Perform a single simulation step."""
@@ -189,24 +261,32 @@ class ProximaRunner:
 
         self.is_running = False
         self.is_paused = False
-        self._update_world_system_state()
+        # Force a hosted push on finalize - otherwise a run that stops/restarts before
+        # update_counter reaches host_update_frequency never writes to the hosted DB at all.
+        self._update_world_system_state(update_hosted=bool(self.hosted_db))
 
     def _process_commands(self):
-        """Process runtime commands from the database (pause, resume, stop, set_delay)."""
+        """Process all pending runtime commands from the database (pause, resume, stop, set_delay).
+
+        Drains every queued command in timestamp order rather than just the latest one -
+        otherwise commands issued between two polls (e.g. rapid step-delay edits) get
+        silently deleted without ever being applied.
+        """
 
         try:
-            command = self._fetch_latest_command("runtime_commands")
-            if command:
+            commands = list(
+                self.local_db.db["runtime_commands"]
+                .find({"experiment_id": self.experiment.exp_id})
+                .sort("timestamp", 1)
+            )
+            if not commands:
+                return
+
+            self.local_db.db["runtime_commands"].delete_many({"_id": {"$in": [c["_id"] for c in commands]}})
+            for command in commands:
                 self._execute_command(command)
         except Exception as e:
             debug_logger.error(f"Command processing error: {e}")
-
-    def _fetch_latest_command(self, collection: str) -> dict | None:
-        """Fetch and delete the latest command for this experiment."""
-
-        return self.local_db.db[collection].find_one_and_delete(
-            {"experiment_id": self.experiment.exp_id}, sort=[("timestamp", -1)]
-        )
 
     def _execute_command(self, command):
         """Execute a single runtime command that directly changes simulation state."""
@@ -277,8 +357,10 @@ class ProximaRunner:
             debug_logger.info(f"Starting: {action}")
 
             if action == "start_continuous":
+                self.logger.clear_display_logs()
                 self.run(continuous=True)
             elif action == "start_limited":
+                self.logger.clear_display_logs()
                 max_steps = command.get("max_steps", self.experiment.sim_time)
                 original_sim_time = self.experiment.sim_time
                 self.experiment.sim_time = max_steps
@@ -333,7 +415,7 @@ class ProximaRunner:
 def main():
     """Entry point for Proxima simulation runner."""
     args = parse_args()
-    config = RunnerConfig(hosted_uri=args.mongo_uri)
+    config = RunnerConfig(hosted_uri=args.mongo_uri, run_mode=args.mode)
     runner = ProximaRunner(config=config)
 
     try:

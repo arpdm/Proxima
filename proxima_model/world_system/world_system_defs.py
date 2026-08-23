@@ -54,10 +54,13 @@ class RunnerConfig:
 
     local_uri: str = "mongodb://localhost:27017"
     hosted_uri: str = None
-    host_update_frequency: int = 600
+    host_update_frequency: int = 100
     default_step_delay: float = 0.01
     log_flush_interval: int = 1000  # Flush logs every N steps to manage memory
     experiment = "exp_001"
+    # "live": persists to hosted_uri, resumes prior world system state and sol/step count.
+    # "test": never persists to hosted_uri, always starts from a fresh world system state and sol/step count of 0.
+    run_mode: str = "live"
 
 
 # ===========================
@@ -65,7 +68,7 @@ class SimulationConstants:
     """Global simulation constants."""
 
     # Time and steps
-    DEFAULT_STEP_DELAY_MS = 100
+    DEFAULT_STEP_DELAY_MS = 1000
     DEFAULT_MAX_STEPS = 1000
 
     # Power

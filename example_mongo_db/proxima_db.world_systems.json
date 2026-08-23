@@ -94,6 +94,10 @@
       ],
       "construction": [
         {
+          "max_concurrent_projects": 3,
+          "shell_storage_capacity": 10
+        },
+        {
           "template_id": "printing_robot",
           "quantity": 3
         },

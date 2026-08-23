@@ -11,6 +11,7 @@ Provides real-time visualization, metrics tracking, and simulation control.
 
 import dash
 import sys
+import orjson  # noqa: F401 - force full import before threaded dev server can race on it (plotly.io lazily imports it)
 import plotly.graph_objs as go
 import pandas as pd
 import dash_bootstrap_components as dbc
@@ -19,9 +20,10 @@ import time
 import json
 import math
 import os
+import argparse
 
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from dash import dcc, html
 from dash.dependencies import Input, Output, State
@@ -34,6 +36,12 @@ from visualizer_engine.ui_models import (
     DataFrameProcessor,
 )
 
+def parse_args():
+
+    parser = argparse.ArgumentParser(description="Proxima Dashboard")
+    parser.add_argument("--mongo-uri", type=str, default=None, help="MongoDB URI (overrides db choice)")
+    parser.add_argument("--exp-id", type=str, default=None, help="Experiment ID")
+    return parser.parse_args()
 
 class ProximaUI:
     """ProximaUI: Dashboard for Proxima simulation with configurable sectors."""
@@ -47,8 +55,10 @@ class ProximaUI:
         read_only=True,
         ts_data_count=200,
         custom_config: Optional[UIConfig] = None,
+        hosted_db=None,
     ):
         self.db = db
+        self.hosted_db = hosted_db
         self.exp_id = experiment_id
 
         # Initialize Dash app with external stylesheets AND suppress callback exceptions
@@ -106,6 +116,49 @@ class ProximaUI:
             return max(all_ws, key=lambda w: (w.get("latest_state") or {}).get("step", -1), default=all_ws[0])
         except Exception:
             return None
+
+    def add_mission_log_entry(self, text: str) -> None:
+        """Add a mission log comment, tagged with the current SOL (simulation step) and a timestamp."""
+        text = (text or "").strip()
+        if not text:
+            return
+
+        ws = self.get_world_system_data()
+        sol = (ws.get("latest_state", {}) or {}).get("step", 0) if ws else 0
+
+        entry = {
+            "experiment_id": self.exp_id,
+            "sol": sol,
+            "text": text,
+            "timestamp": datetime.now(timezone.utc),
+        }
+        try:
+            self.db.db["mission_log"].insert_one(entry)
+        except Exception as e:
+            print(f"❌ add_mission_log_entry error: {e}")
+
+        if self.hosted_db is not None:
+            try:
+                self.hosted_db.db["mission_log"].insert_one(dict(entry))
+                print(f"✅ mission log entry also saved to hosted DB (sol={sol})")
+            except Exception as e:
+                print(f"❌ add_mission_log_entry (hosted) error: {e}")
+        else:
+            print("⚠️  mission log entry NOT saved to hosted DB - self.hosted_db is None (no hosted_db configured)")
+
+    def fetch_mission_log_entries(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Fetch mission log entries for this experiment, most recent SOL/timestamp first."""
+        try:
+            cursor = (
+                self.db.db["mission_log"]
+                .find({"experiment_id": self.exp_id})
+                .sort([("sol", -1), ("timestamp", -1)])
+                .limit(limit)
+            )
+            return list(cursor)
+        except Exception as e:
+            print(f"❌ fetch_mission_log_entries error: {e}")
+            return []
 
     def fetch_latest_logs(self, limit: int = 200) -> Optional[pd.DataFrame]:
         """Fetch latest logs with sliding window"""
@@ -376,127 +429,295 @@ class ProximaUI:
         """Metric status and control panel"""
         return self._create_card("Metric Status & Scores", html.Div(id="metric-tracker"), "mb-5")
 
-    def _build_metric_options(self, metrics: List[str]) -> List[Dict[str, str]]:
-        """Build dropdown options with category-prefixed labels for a list of metric columns."""
-        options = []
-        for col in metrics:
-            category_name = "OTH"
-            for cat_id, category in self.config.metric_filter_config.categories.items():
-                if any(col.startswith(pattern) for pattern in category.metric_patterns):
-                    category_name = category.icon
-                    break
+    def _categorize_metrics(self, numeric_cols: List[str]) -> Dict[str, List[str]]:
+        """Group metric columns into their sector/category buckets, with an 'other' catch-all."""
+        categories = self.config.metric_filter_config.categories
+        grouped: Dict[str, List[str]] = {cat_id: [] for cat_id in categories}
+        grouped["other"] = []
 
-            label = f"[{category_name}] {col.replace('_', ' ').title()}"
-            options.append({"label": label, "value": col})
-        return options
+        for col in numeric_cols:
+            assigned = False
+            for cat_id, category in categories.items():
+                if any(col.startswith(pattern) for pattern in category.metric_patterns):
+                    grouped[cat_id].append(col)
+                    assigned = True
+                    break
+            if not assigned:
+                grouped["other"].append(col)
+
+        return grouped
+
+    def _build_sector_metric_sections(self, numeric_cols: List[str], selected_metrics: List[str]) -> List[html.Div]:
+        """Build one scrollable, sector-grouped checklist section per category for the metric side panel."""
+        categories = self.config.metric_filter_config.categories
+        grouped = self._categorize_metrics(numeric_cols)
+        selected_set = set(selected_metrics or [])
+
+        sections = []
+        for cat_id, metrics in grouped.items():
+            if not metrics:
+                continue
+
+            if cat_id == "other":
+                display_name, icon, color = "Other", "OTH", "var(--mc-text-dim)"
+            else:
+                category = categories[cat_id]
+                display_name, icon, color = category.display_name, category.icon, category.color
+
+            options = [{"label": m.replace("_", " ").title(), "value": m} for m in metrics]
+            value = [m for m in metrics if m in selected_set]
+
+            sections.append(
+                html.Div(
+                    [
+                        html.Div(
+                            f"[{icon}] {display_name}",
+                            style={
+                                "color": color,
+                                "fontFamily": "var(--mc-font-body)",
+                                "fontWeight": "700",
+                                "fontSize": "13px",
+                                "letterSpacing": "1.5px",
+                                "textTransform": "uppercase",
+                                "marginTop": "18px",
+                                "marginBottom": "8px",
+                                "borderBottom": f"1px solid {color}",
+                                "paddingBottom": "6px",
+                            },
+                        ),
+                        dbc.Checklist(
+                            id={"type": "sector-metric-check", "category": cat_id},
+                            options=options,
+                            value=value,
+                            switch=True,
+                            inputStyle={"marginRight": "8px"},
+                            labelStyle={
+                                "display": "block",
+                                "color": "var(--mc-text)",
+                                "fontFamily": "var(--mc-font-mono)",
+                                "fontSize": "13px",
+                                "padding": "4px 0",
+                            },
+                        ),
+                    ]
+                )
+            )
+
+        return sections
 
     def _metric_plots(self):
-        """Metric plots panel with advanced filtering"""
+        """Metric plots panel with a sector-grouped side panel selector (select/deselect per parameter)."""
         # Pre-populate options/defaults so plots render immediately on first load,
         # instead of waiting for a button click or a page refresh.
         df = self.fetch_latest_logs(limit=self.ts_data_count)
         numeric_cols = DataFrameProcessor.get_numeric_columns(df) if df is not None else []
-        initial_options = self._build_metric_options(numeric_cols)
         initial_value = DataFrameProcessor.get_default_metrics(numeric_cols, self.config.experiment_id) if numeric_cols else []
+
+        panel_sections = self._build_sector_metric_sections(numeric_cols, initial_value)
+
+        quick_actions = dbc.ButtonGroup(
+            [
+                dbc.Button(
+                    "Select All",
+                    id="btn-select-all-metrics",
+                    size="sm",
+                    color="primary",
+                    outline=True,
+                    className="mc-btn me-2",
+                    style={"borderColor": "var(--mc-cyan)", "color": "var(--mc-cyan)"},
+                ),
+                dbc.Button(
+                    "Clear Selection",
+                    id="btn-clear-metrics",
+                    size="sm",
+                    color="secondary",
+                    outline=True,
+                    className="mc-btn me-2",
+                    style={"borderColor": "var(--mc-text-dim)", "color": "var(--mc-text-dim)"},
+                ),
+                dbc.Button(
+                    "Restore Defaults",
+                    id="btn-default-metrics",
+                    size="sm",
+                    color="info",
+                    outline=True,
+                    className="mc-btn",
+                    style={"borderColor": "var(--mc-amber)", "color": "var(--mc-amber)"},
+                ),
+            ],
+            className="mb-3 d-flex flex-wrap",
+        )
+
+        metric_panel = dbc.Offcanvas(
+            [quick_actions, html.Div(panel_sections, id="sector-metric-sections")],
+            id="metric-panel-offcanvas",
+            title="Configure Plot Parameters",
+            placement="end",
+            is_open=False,
+            scrollable=True,
+            style={
+                "width": "420px",
+                "backgroundColor": "var(--mc-bg-panel)",
+                "color": "var(--mc-text)",
+            },
+        )
+
+        open_button = dbc.Button(
+            "⚙ Configure Metrics",
+            id="btn-open-metric-panel",
+            color="primary",
+            outline=True,
+            className="mc-btn mb-4",
+            style={"borderColor": "var(--mc-cyan)", "color": "var(--mc-cyan)"},
+        )
 
         selector = html.Div(
             [
-                # Category Filter - Multiple Selection
-                dbc.Row(
-                    [
-                        dbc.Col(
-                            [
-                                dbc.Label(
-                                    "Filter by Categories (select multiple):",
-                                    className="mc-label d-block mb-3",
-                                ),
-                                html.Div(id="metric-category-buttons", className="mb-3"),
-                            ],
-                            width=12,
-                        )
-                    ]
-                ),
-                # Metric Selector with dark theme styling
-                dbc.Row(
-                    [
-                        dbc.Col(
-                            [
-                                dbc.Label(
-                                    "Select Metrics (from all selected categories):",
-                                    className="mc-label d-block mb-3",
-                                ),
-                                dcc.Dropdown(
-                                    id="metric-selector",
-                                    options=initial_options,
-                                    value=initial_value,
-                                    multi=True,
-                                    searchable=True,
-                                    placeholder="Search and select metrics from any category...",
-                                    style={
-                                        "marginBottom": "15px",
-                                    },
-                                    className="custom-dropdown mc-dropdown",
-                                ),
-                            ],
-                            width=12,
-                        )
-                    ]
-                ),
-                # Quick Actions
-                dbc.Row(
-                    [
-                        dbc.Col(
-                            [
-                                dbc.ButtonGroup(
-                                    [
-                                        dbc.Button(
-                                            "Select All Visible",
-                                            id="btn-select-all-metrics",
-                                            size="sm",
-                                            color="primary",
-                                            outline=True,
-                                            className="mc-btn me-2",
-                                            style={"borderColor": "var(--mc-cyan)", "color": "var(--mc-cyan)"},
-                                        ),
-                                        dbc.Button(
-                                            "Clear Selection",
-                                            id="btn-clear-metrics",
-                                            size="sm",
-                                            color="secondary",
-                                            outline=True,
-                                            className="mc-btn me-2",
-                                            style={"borderColor": "var(--mc-text-dim)", "color": "var(--mc-text-dim)"},
-                                        ),
-                                        dbc.Button(
-                                            "Restore Defaults",
-                                            id="btn-default-metrics",
-                                            size="sm",
-                                            color="info",
-                                            outline=True,
-                                            className="mc-btn",
-                                            style={"borderColor": "var(--mc-amber)", "color": "var(--mc-amber)"},
-                                        ),
-                                    ],
-                                    className="mb-4",
-                                )
-                            ],
-                            width=12,
-                        )
-                    ]
-                ),
-                # Graph area with minimum height to prevent dropdown overflow
+                open_button,
+                metric_panel,
+                dcc.Store(id="metric-selector", data=initial_value),
                 html.Div(
                     id="graph-grid",
                     style={
-                        "minHeight": "400px",  # Ensure enough space for dropdown
+                        "minHeight": "400px",
                         "marginTop": "20px",
                         "padding": "20px 0",
-                    }
-                )
+                    },
+                ),
             ]
         )
 
         return self._create_card("Metrics Plots", selector)
+
+    def _mission_log(self):
+        """Mission log: a slide-in scrolling pane to view entries, plus (non-read-only) a slide-in entry form."""
+        log_offcanvas = dbc.Offcanvas(
+            html.Div(id="mission-log-display", style={"overflowY": "auto"}),
+            id="log-panel-offcanvas",
+            title="Mission Log",
+            placement="end",
+            is_open=False,
+            scrollable=True,
+            style={
+                "width": "420px",
+                "backgroundColor": "var(--mc-bg-panel)",
+                "color": "var(--mc-text)",
+            },
+        )
+
+        view_button = dbc.Button(
+            "📖 Mission Log",
+            id="btn-open-log-panel",
+            color="primary",
+            outline=True,
+            className="mc-btn me-3",
+            style={"borderColor": "var(--mc-cyan)", "color": "var(--mc-cyan)"},
+        )
+
+        children = [view_button, log_offcanvas]
+
+        if not self.read_only:
+            entry_offcanvas = dbc.Offcanvas(
+                [
+                    dbc.Textarea(
+                        id="mission-log-input",
+                        placeholder="Add a mission log entry...",
+                        className="mc-input mb-3",
+                        style={"padding": "10px", "minHeight": "120px", "resize": "vertical"},
+                    ),
+                    dbc.Button(
+                        "Add Entry",
+                        id="btn-add-log-entry",
+                        color="primary",
+                        outline=True,
+                        className="mc-btn w-100",
+                        style={"borderColor": "var(--mc-cyan)", "color": "var(--mc-cyan)"},
+                    ),
+                ],
+                id="log-entry-offcanvas",
+                title="Add Log Entry",
+                placement="end",
+                is_open=False,
+                scrollable=True,
+                style={
+                    "width": "420px",
+                    "backgroundColor": "var(--mc-bg-panel)",
+                    "color": "var(--mc-text)",
+                },
+            )
+
+            entry_button = dbc.Button(
+                "✎ Add Log Entry",
+                id="btn-open-log-entry-panel",
+                color="primary",
+                outline=True,
+                className="mc-btn",
+                style={"borderColor": "var(--mc-amber)", "color": "var(--mc-amber)"},
+            )
+
+            children.extend([entry_button, entry_offcanvas])
+
+        return self._create_card("Mission Log", html.Div(children, className="d-flex flex-wrap"), "mb-5")
+
+    def _build_mission_log_display(self) -> html.Div:
+        """Render mission log entries as a rolling list, most recent SOL/timestamp first."""
+        entries = self.fetch_mission_log_entries(limit=100)
+        if not entries:
+            return html.Div("No log entries yet.", className="text-secondary text-center")
+
+        rows = []
+        for entry in entries:
+            sol = entry.get("sol", 0)
+            ts = entry.get("timestamp")
+            ts_text = ts.strftime("%Y-%m-%d %H:%M:%S UTC") if isinstance(ts, datetime) else str(ts or "")
+
+            rows.append(
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                html.Span(
+                                    f"SOL {sol}",
+                                    style={
+                                        "color": "var(--mc-cyan-bright)",
+                                        "fontFamily": "var(--mc-font-mono)",
+                                        "fontWeight": "700",
+                                        "fontSize": "12px",
+                                        "letterSpacing": "1px",
+                                    },
+                                ),
+                                html.Span(
+                                    ts_text,
+                                    style={
+                                        "color": "var(--mc-text-dim)",
+                                        "fontFamily": "var(--mc-font-mono)",
+                                        "fontSize": "11px",
+                                        "marginLeft": "12px",
+                                    },
+                                ),
+                            ],
+                            style={"marginBottom": "4px"},
+                        ),
+                        html.Div(
+                            entry.get("text", ""),
+                            style={
+                                "color": "var(--mc-text)",
+                                "fontFamily": "var(--mc-font-body)",
+                                "fontSize": "13px",
+                                "whiteSpace": "pre-wrap",
+                            },
+                        ),
+                    ],
+                    style={
+                        "padding": "10px 12px",
+                        "marginBottom": "8px",
+                        "backgroundColor": "var(--mc-bg-panel-alt)",
+                        "borderLeft": "2px solid var(--mc-cyan)",
+                    },
+                )
+            )
+
+        return html.Div(rows)
 
     def _sector_filter_buttons(self):
         """Create sector filter button group"""
@@ -644,7 +865,6 @@ class ProximaUI:
                 html.Div(
                     [
                         dcc.Store(id="selected-sector", data="all"),
-                        dcc.Store(id="selected-category", data="all"),
                     ],
                     style={"display": "none"},
                 ),
@@ -763,6 +983,7 @@ class ProximaUI:
                                 html.Div(
                                     [
                                         *([self._simulation_control()] if not self.read_only else []),
+                                        self._mission_log(),
                                         self._metric_status_and_control(),
                                         self._metric_plots(),
                                     ]
@@ -837,6 +1058,69 @@ class ProximaUI:
         def update_metric_tracker(n):
             return self.build_metric_tracker_table()
 
+        # Rebuild sector metric sections once real data shows up (they may be empty at first
+        # page load if no logs exist yet). Stops rebuilding once populated so it doesn't wipe
+        # out the user's live checkbox selections.
+        @self.app.callback(
+            Output("sector-metric-sections", "children"),
+            Input("interval-component", "n_intervals"),
+            State("sector-metric-sections", "children"),
+            State("metric-selector", "data"),
+        )
+        def populate_sector_metric_sections(n, current_children, current_selection):
+            if current_children:
+                return dash.no_update
+
+            df = self.fetch_latest_logs(limit=self.ts_data_count)
+            numeric_cols = DataFrameProcessor.get_numeric_columns(df) if df is not None else []
+            if not numeric_cols:
+                return dash.no_update
+
+            selected = current_selection or DataFrameProcessor.get_default_metrics(numeric_cols, self.config.experiment_id)
+            return self._build_sector_metric_sections(numeric_cols, selected)
+
+        # Slide-in mission log viewer toggle (always available, including read-only)
+        @self.app.callback(
+            Output("log-panel-offcanvas", "is_open"),
+            Input("btn-open-log-panel", "n_clicks"),
+            State("log-panel-offcanvas", "is_open"),
+            prevent_initial_call=True,
+        )
+        def toggle_log_panel(n_clicks, is_open):
+            return not is_open
+
+        # Rolling mission log display (always available, including read-only)
+        @self.app.callback(
+            Output("mission-log-display", "children"),
+            Input("interval-component", "n_intervals"),
+        )
+        def update_mission_log_display(n):
+            return self._build_mission_log_display()
+
+        if not self.read_only:
+
+            # Slide-in entry-form toggle
+            @self.app.callback(
+                Output("log-entry-offcanvas", "is_open"),
+                Input("btn-open-log-entry-panel", "n_clicks"),
+                State("log-entry-offcanvas", "is_open"),
+                prevent_initial_call=True,
+            )
+            def toggle_log_entry_panel(n_clicks, is_open):
+                return not is_open
+
+            # Add a mission log entry, clear the input, and close the entry panel
+            @self.app.callback(
+                Output("mission-log-input", "value"),
+                Output("log-entry-offcanvas", "is_open", allow_duplicate=True),
+                Input("btn-add-log-entry", "n_clicks"),
+                State("mission-log-input", "value"),
+                prevent_initial_call=True,
+            )
+            def submit_mission_log_entry(n_clicks, text):
+                self.add_mission_log_entry(text)
+                return "", False
+
         # Dynamic badge callback based on configuration
         badge_sectors = self.config.sector_registry.get_badge_sectors()
         all_badge_ids = [s.id for s in badge_sectors]
@@ -850,154 +1134,39 @@ class ProximaUI:
         def update_dashboard(n):
             return self._get_dashboard_status()
 
-        # Add store for selected categories (multiple selection)
-        # Update the layout setup to include this store
-
-        # Category button builder
-        @self.app.callback(Output("metric-category-buttons", "children"), [Input("interval-component", "n_intervals")])
-        def build_category_buttons(n):
-            if n > 3:
-                return dash.no_update
-
-            categories = self.config.metric_filter_config.categories
-
-            buttons = [
-                dbc.Button(
-                    "All Categories",
-                    id={"type": "metric-category", "category": "all"},
-                    color="primary",
-                    outline=False,
-                    size="sm",
-                    className="me-2 mb-2",
-                    style={"borderRadius": "20px", "padding": "6px 16px", "fontSize": "13px", "fontWeight": "500"},
-                )
-            ]
-
-            for cat_id, category in categories.items():
-                buttons.append(
-                    dbc.Button(
-                        f"[{category.icon}] {category.display_name}",
-                        id={"type": "metric-category", "category": cat_id},
-                        color="secondary",
-                        outline=True,
-                        size="sm",
-                        className="me-2 mb-2",
-                        style={
-                            "borderRadius": "20px",
-                            "padding": "6px 16px",
-                            "fontSize": "13px",
-                            "borderColor": category.color,
-                            "color": category.color,
-                        },
-                    )
-                )
-
-            return html.Div(buttons, className="d-flex flex-wrap")
-
-        # Multi-category filter handler
+        # Side-panel toggle
         @self.app.callback(
-            [
-                Output("selected-category", "data"),
-                Output("metric-selector", "options"),
-                Output({"type": "metric-category", "category": dash.dependencies.ALL}, "outline"),
-                Output({"type": "metric-category", "category": dash.dependencies.ALL}, "color"),
-            ],
-            [Input({"type": "metric-category", "category": dash.dependencies.ALL}, "n_clicks")],
-            [
-                State({"type": "metric-category", "category": dash.dependencies.ALL}, "id"),
-                State("selected-category", "data"),
-            ],
+            Output("metric-panel-offcanvas", "is_open"),
+            Input("btn-open-metric-panel", "n_clicks"),
+            State("metric-panel-offcanvas", "is_open"),
+            prevent_initial_call=True,
         )
-        def filter_metrics_by_categories(n_clicks, button_ids, current_categories):
-            ctx = dash.callback_context
-            df = self.fetch_latest_logs(limit=self.ts_data_count)
-            if df is None or df.empty:
-                return ["all"], [], [True] * len(button_ids), ["secondary"] * len(button_ids)
+        def toggle_metric_panel(n_clicks, is_open):
+            return not is_open
 
-            numeric_cols = DataFrameProcessor.get_numeric_columns(df)
-            
-            # Initialize selected categories
-            if isinstance(current_categories, str):
-                selected_categories = [current_categories] if current_categories else ["all"]
-            else:
-                selected_categories = current_categories or ["all"]
-
-            # Handle button clicks - toggle selection
-            if ctx.triggered and ctx.triggered[0]["value"]:
-                prop_id = ctx.triggered[0]["prop_id"]
-                if "metric-category" in prop_id:
-                    try:
-                        clicked_category = json.loads(prop_id.split(".")[0])["category"]
-
-                        if clicked_category == "all":
-                            # If "All" is clicked, select only "all"
-                            selected_categories = ["all"]
-                        else:
-                            # Remove "all" if it's there
-                            if "all" in selected_categories:
-                                selected_categories = []
-
-                            # Toggle the clicked category
-                            if clicked_category in selected_categories:
-                                selected_categories.remove(clicked_category)
-                            else:
-                                selected_categories.append(clicked_category)
-
-                            # If no categories selected, fall back to "all"
-                            if not selected_categories:
-                                selected_categories = ["all"]
-
-                    except (json.JSONDecodeError, KeyError):
-                        pass
-
-            # Filter metrics based on selected categories
-            if "all" in selected_categories:
-                filtered_metrics = numeric_cols
-            else:
-                filtered_metrics = []
-                for category_id in selected_categories:
-                    category = self.config.metric_filter_config.categories.get(category_id)
-                    if category:
-                        category_metrics = [
-                            m
-                            for m in numeric_cols
-                            if any(m.startswith(pattern) for pattern in category.metric_patterns)
-                        ]
-                        filtered_metrics.extend(category_metrics)
-
-                # Remove duplicates while preserving order
-                filtered_metrics = list(dict.fromkeys(filtered_metrics))
-
-            # Create options with category prefixes for clarity
-            options = self._build_metric_options(filtered_metrics)
-
-            # Update button states - show which categories are selected
-            outlines = []
-            colors = []
-
-            for btn_id in button_ids:
-                cat_id = btn_id["category"]
-                if cat_id in selected_categories:
-                    outlines.append(False)  # Solid button
-                    colors.append("primary" if cat_id == "all" else "info")
-                else:
-                    outlines.append(True)  # Outline button
-                    colors.append("secondary")
-
-            return selected_categories, options, outlines, colors
-
-        # Metric selector value handler (for quick actions)
+        # Combine every sector checklist's selections into the single metric-selector store
         @self.app.callback(
-            Output("metric-selector", "value"),
+            Output("metric-selector", "data"),
+            Input({"type": "sector-metric-check", "category": dash.dependencies.ALL}, "value"),
+        )
+        def combine_selected_metrics(values_by_category):
+            combined = []
+            for values in values_by_category or []:
+                combined.extend(values or [])
+            return combined
+
+        # Quick actions handler (select all / clear / restore defaults) applied across all sector checklists
+        @self.app.callback(
+            Output({"type": "sector-metric-check", "category": dash.dependencies.ALL}, "value"),
             [
                 Input("btn-select-all-metrics", "n_clicks"),
                 Input("btn-clear-metrics", "n_clicks"),
                 Input("btn-default-metrics", "n_clicks"),
             ],
-            [State("metric-selector", "options"), State("metric-selector", "value")],
+            State({"type": "sector-metric-check", "category": dash.dependencies.ALL}, "options"),
             prevent_initial_call=True,
         )
-        def handle_metric_actions(select_all, clear, defaults, options, current_value):
+        def handle_metric_actions(select_all, clear, defaults, options_by_category):
             ctx = dash.callback_context
             if not ctx.triggered:
                 return dash.no_update
@@ -1005,20 +1174,20 @@ class ProximaUI:
             prop_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
             if prop_id == "btn-select-all-metrics":
-                return [opt["value"] for opt in (options or [])]
+                return [[opt["value"] for opt in opts] for opts in options_by_category]
             elif prop_id == "btn-clear-metrics":
-                return []
+                return [[] for _ in options_by_category]
             elif prop_id == "btn-default-metrics":
-                # Get a sensible default from each selected category
-                all_metrics = [opt["value"] for opt in (options or [])]
-                return DataFrameProcessor.get_default_metrics(all_metrics, self.config.experiment_id)
+                all_metrics = [opt["value"] for opts in options_by_category for opt in opts]
+                default_metrics = set(DataFrameProcessor.get_default_metrics(all_metrics, self.config.experiment_id))
+                return [[opt["value"] for opt in opts if opt["value"] in default_metrics] for opts in options_by_category]
 
             return dash.no_update
 
         @self.app.callback(
             Output("graph-grid", "children"),
             [
-                Input("metric-selector", "value"),
+                Input("metric-selector", "data"),
                 Input("interval-component", "n_intervals")  # Add this as Input, not State
             ],
         )
@@ -1388,7 +1557,21 @@ class ProximaUI:
             self.app.run(debug=False, host="0.0.0.0", port=8050)
 
 
-if __name__ == "__main__":
-    exp_id = sys.argv[1] if len(sys.argv) > 1 else "exp_001"
+def main():
+    """Entry Point"""
+
+    args = parse_args()
+    exp_id = args.exp_id
+    hosted_uri = args.mongo_uri
+
     db = ProximaDB(uri="mongodb://localhost:27017", local=True)
-    ProximaUI(db, experiment_id=exp_id, update_rate_ms=1000, update_cycles=1, read_only=False).run()
+    hosted_db = ProximaDB(uri=hosted_uri, local=False) if hosted_uri else None
+
+
+    ProximaUI(
+        db, experiment_id=exp_id, update_rate_ms=1000, update_cycles=1, read_only=False, hosted_db=hosted_db
+    ).run()
+
+if __name__ == "__main__":
+
+    main()
