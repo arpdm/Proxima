@@ -2,76 +2,84 @@ from mesa import Agent
 
 
 class FuelGenerator(Agent):
-    """
-    FuelGenerator agent for simulating lunar fuel production.
-
-    Attributes:
-        config (dict): Configuration dictionary for the agent.
-        efficiency (float): Conversion efficiency of the generator (default 0.5).
-        thermal_GWh_per_kg (float): Thermal energy available per kg of he3 (default 163.9 GWh/kg).
-        kwh_per_kg_prop (float): kWh required to generate one kg of propellant (default 22.8).
-        he3_kg_per_step (float): Amount of He3 processed per step (default 5 kg/hour * time_scale).
-        is_operational (bool): Operational status of the generator.
-    """
+    """Converts He-3 into rocket propellant, gated by allocated grid power."""
 
     def __init__(self, model, agent_config: dict):
-        """
-        Initialize a FuelGenerator agent.
-
-        Args:
-            agent_config (dict): Agent-specific configuration. Should contain keys:
-        """
-
         super().__init__(model)
 
-        config = agent_config.get("config", agent_config)
+        config = agent_config.get("config", agent_config) or {}
         self.config = config
-        self.efficiency = config.get("efficiency", 0.025)
-        self.thermal_GWh_per_kg = config.get("thermal_GWh_per_kg", 163.489)
-        self.kwh_per_kg_prop = agent_config.get("kwh_per_kg_prop", 50.0)
-        self.he3_kg_per_step = agent_config.get("he3_kg_per_hour", 5) * model.time_scale
+        self.efficiency = float(config.get("efficiency", 0.025))
+        self.thermal_GWh_per_kg = float(config.get("thermal_GWh_per_kg", 163.489))
+        self.kwh_per_kg_prop = float(config.get("kwh_per_kg_prop", 50.0))
+        self.he3_kg_per_step = float(config.get("he3_kg_per_hour", 5)) * model.time_scale
+        self.power_demand_kWh_per_step = float(config.get("power_demand_kWh_per_step", 65.0))
+
         self.is_operational = False
+        self.is_throttled = False
+        self.prop_generated_kg = 0.0
+        self.power_consumed_step = 0.0
 
-    def step(self, available_he3_kg: float) -> tuple:
-        """
-        Process up to self.he3_kg_per_step of He-3 and produce propellant.
+    def _he3_process_capacity(self, available_he3_kg: float) -> float:
+        """He-3 this generator can process this step, capped by available supply."""
+        return min(max(0.0, available_he3_kg), self.he3_kg_per_step)
 
-        Args:
-            available_he3_kg (float): He-3 available to consume this step.
-
-        Returns:
-            (he3_consumed_kg: float, prop_generated_kg: float)
-        """
-        if available_he3_kg <= 0:
-            self.is_operational = False
-            return 0.0, 0.0
-
-        # Determine how much He-3 can actually be processed this timestep
-        he3_to_process = min(self.he3_kg_per_step, available_he3_kg)
-        self.is_operational = he3_to_process > 0.0
-
-        # Convert thermal_GWh_per_kg -> kWh/kg (1 GWh = 1e6 kWh)
-        kwh_per_kg_he3 = self.thermal_GWh_per_kg * 1e6
-
-        # kWh actually available after efficiency losses for the processed He-3
-        kwh_available = kwh_per_kg_he3 * he3_to_process * self.efficiency
-
-        # Propellant produced (kg) = available kWh / kWh per kg propellant
-        # Guard against division by zero
+    def _propellant_from_he3(self, he3_processed_kg: float) -> float:
+        """Propellant (kg) produced from processed He-3, per the documented equation."""
         if self.kwh_per_kg_prop <= 0:
             raise ValueError("kwh_per_kg_prop must be > 0")
 
-        self.prop_generated_kg = kwh_available / self.kwh_per_kg_prop
+        kwh_per_kg_he3 = self.thermal_GWh_per_kg * 1e6
+        kwh_available = he3_processed_kg * kwh_per_kg_he3 * self.efficiency
+        return float(kwh_available / self.kwh_per_kg_prop)
 
-        # Return amount consumed and prop produced
-        return float(he3_to_process), float(self.prop_generated_kg)
+    def get_power_demand(self, available_he3_kg: float = None) -> float:
+        """Grid energy needed this step, scaled by how much He-3 can actually be processed."""
+        if self.he3_kg_per_step <= 0:
+            return 0.0
 
-    def report(self) -> dict:
-        """
-        Return a dictionary of the current state for logging or visualization.
+        he3_available = self.he3_kg_per_step if available_he3_kg is None else available_he3_kg
+        processing_fraction = self._he3_process_capacity(he3_available) / self.he3_kg_per_step
+        return float(self.power_demand_kWh_per_step * processing_fraction)
+
+    def step(self, available_he3_kg: float, allocated_power: float = None) -> tuple:
+        """Process available He-3 into propellant, throttled by allocated_power if given.
 
         Returns:
-            dict: Status snapshot with operational status
+            (he3_consumed_kg, prop_generated_kg)
         """
+        self.prop_generated_kg = 0.0
+        self.power_consumed_step = 0.0
+        self.is_throttled = False
 
-        return {"is_operational": self.is_operational, "type": "fuel_gen", "generated_prop_kg": self.prop_generated_kg}
+        he3_capacity = self._he3_process_capacity(available_he3_kg)
+        power_demand = self.get_power_demand(available_he3_kg)
+        if he3_capacity <= 0 or power_demand <= 0:
+            self.is_operational = False
+            return 0.0, 0.0
+
+        usable_power = power_demand if allocated_power is None else max(0.0, min(allocated_power, power_demand))
+        if usable_power <= 0:
+            self.is_operational = False
+            self.is_throttled = True
+            return 0.0, 0.0
+
+        power_fraction = usable_power / power_demand
+        he3_consumed = he3_capacity * power_fraction
+        self.prop_generated_kg = self._propellant_from_he3(he3_consumed)
+        self.power_consumed_step = usable_power
+        self.is_operational = True
+        self.is_throttled = power_fraction < 1.0
+
+        return float(he3_consumed), float(self.prop_generated_kg)
+
+    def report(self) -> dict:
+        """Current state snapshot for logging or visualization."""
+        return {
+            "is_operational": self.is_operational,
+            "is_throttled": self.is_throttled,
+            "type": "fuel_gen",
+            "generated_prop_kg": self.prop_generated_kg,
+            "power_consumed": self.power_consumed_step,
+            "power_demand": self.get_power_demand(),
+        }

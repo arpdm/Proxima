@@ -45,6 +45,10 @@ html_theme_options = {
     },
 }
 
+html_static_path = ["_static"]
+html_css_files = ["mermaid-zoom.css"]
+html_js_files = ["mermaid-zoom.js"]
+
 myst_heading_anchors = 3
 myst_enable_extensions = [
     "amsmath",

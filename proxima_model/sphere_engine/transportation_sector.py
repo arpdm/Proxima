@@ -9,7 +9,12 @@ from enum import Enum, auto
 from typing import List, Dict, Optional, Any
 from proxima_model.components.rocket import Rocket, MissionPhase
 from proxima_model.components.fuel_generator import FuelGenerator
-from proxima_model.world_system.world_system_defs import EventType, SectorType, get_flight_distance_km
+from proxima_model.world_system.world_system_defs import (
+    EventType,
+    SectorType,
+    calculate_payload_mass_kg,
+    get_flight_distance_km,
+)
 
 import logging
 
@@ -119,6 +124,9 @@ class TransportationSector:
 
         # Initialize launch counter for metrics
         self.launches_this_step = 0
+        self.power_demand_step = 0.0
+        self.power_consumed_step = 0.0
+        self.fuel_generators_throttled_this_step = 0
 
         # Hydrate from latest_state if provided
         latest_state_transportation = config.get("latest_state") if isinstance(config, dict) else None
@@ -180,14 +188,20 @@ class TransportationSector:
             )
             self._fuel_request_pending = True
 
-    def _generate_fuel(self) -> None:
-        """Generate rocket fuel from He3 using fuel generators."""
+    def _generate_fuel(self, allocated_power: float) -> None:
+        """Generate rocket fuel from He3 using allocated power."""
+        remaining_power = max(0.0, allocated_power)
         for generator in self.fuel_generators:
-            if self._stocks.he3_kg > 0:
-                he3_consumed, prop_generated = generator.step(self._stocks.he3_kg)
-                if prop_generated > 0:
-                    self._stocks.rocket_fuel_kg += prop_generated
-                    self._stocks.he3_kg -= he3_consumed
+            he3_consumed, prop_generated = generator.step(self._stocks.he3_kg, remaining_power)
+            self.power_consumed_step += generator.power_consumed_step
+            remaining_power = max(0.0, remaining_power - generator.power_consumed_step)
+
+            if generator.is_throttled:
+                self.fuel_generators_throttled_this_step += 1
+
+            if prop_generated > 0:
+                self._stocks.rocket_fuel_kg += prop_generated
+                self._stocks.he3_kg -= he3_consumed
 
     def _process_transport_queue(self) -> None:
         """Process queued transport requests and launch rockets if fuel permits."""
@@ -220,9 +234,7 @@ class TransportationSector:
         """
         # Calculate payload weights
         return_payload = request.payload
-        return_payload_kg = (
-            sum(return_payload.values()) * 20
-        )  # TODO: Placeholder weight. This needs to change and be configurable
+        return_payload_kg = calculate_payload_mass_kg(return_payload)
         outbound_payload = {}
         outbound_payload_kg = 0.0
 
@@ -232,6 +244,7 @@ class TransportationSector:
             if self._config.flight_distance is not None
             else get_flight_distance_km(request.origin, request.destination)
         )
+
         propellant_needed, one_way_steps = rocket.calculate_round_trip_requirements(
             outbound_payload_kg=outbound_payload_kg,
             return_payload_kg=return_payload_kg,
@@ -353,13 +366,22 @@ class TransportationSector:
 
     def get_power_demand(self) -> float:
         """
-        Calculate total power demand from all fuel generators.
+        Calculate total step energy demand from all fuel generators.
 
         Returns:
-            Total power demand in kW
+            Total demand for the current step
         """
-        # TODO: Implement proper power demand calculation
-        return 1.0
+        remaining_he3 = self._stocks.he3_kg
+        self.power_demand_step = 0.0
+
+        for generator in self.fuel_generators:
+            if remaining_he3 <= 0:
+                break
+
+            self.power_demand_step += generator.get_power_demand(remaining_he3)
+            remaining_he3 -= min(generator.he3_kg_per_step, remaining_he3)
+
+        return self.power_demand_step
 
     def step(self, allocated_power: float) -> None:
         """
@@ -371,14 +393,16 @@ class TransportationSector:
         3. Advance all rocket mission states
 
         Args:
-            allocated_power: Power allocated to sector (currently unused)
+            allocated_power: Power allocated to sector for this step
         """
         # Reset launch counter
         self.launches_this_step = 0
+        self.power_consumed_step = 0.0
+        self.fuel_generators_throttled_this_step = 0
 
         # 1. Generate Fuel
         self._request_resources_for_fuel()
-        self._generate_fuel()
+        self._generate_fuel(allocated_power)
 
         # 2. Process Transport Queue and Launch Rockets
         self._process_transport_queue()
@@ -392,17 +416,19 @@ class TransportationSector:
         """
         metric_map = {}
 
-        # Get rocket configs to find metric contribution
         if self.rocket_configs and self.launches_this_step > 0:
-            # Get metric_contribution from first rocket config (same for all)
-            contribution_cfg = self.rocket_configs[0].get("metric_contribution", {})
-            metric_id = contribution_cfg.get("metric_id")
-            value_per_launch = float(contribution_cfg.get("value", 0.0))
-            if metric_id:
-                metric_map[metric_id] = self.launches_this_step * value_per_launch
-                logger.info(
-                    f"🚀 Rocket launches: {self.launches_this_step} × {value_per_launch} = {metric_map[metric_id]} dust impact"
-                )
+            contributions_cfg = self.rocket_configs[0].get("metric_contributions", [])
+
+            for contrib in contributions_cfg:
+                metric_id = contrib.get("metric_id")
+                value_per_launch = float(contrib.get("contribution_value", 0.0))
+                contribution_type = contrib.get("contribution_type")
+
+                if metric_id and contribution_type == "predefined":
+                    metric_map[metric_id] = self.launches_this_step * value_per_launch
+                    logger.info(
+                        f"🚀 Rocket launches: {self.launches_this_step} × {value_per_launch} = {metric_map[metric_id]} dust impact"
+                    )
 
         return metric_map
 
@@ -421,6 +447,9 @@ class TransportationSector:
             "launches_this_step": self.launches_this_step,
             "he3_kg": self._stocks.he3_kg,
             "fuel_request_pending": self._fuel_request_pending,
+            "power_demand_kw_step": self.power_demand_step,
+            "power_consumed_kw_step": self.power_consumed_step,
+            "fuel_generators_throttled_this_step": self.fuel_generators_throttled_this_step,
             "transport_queue": [
                 {
                     "requesting_sector": req.requesting_sector,

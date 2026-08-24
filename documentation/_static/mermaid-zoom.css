@@ -1,0 +1,53 @@
+.mermaid-zoom {
+    border: 1px solid var(--color-background-border);
+    border-radius: 0.35rem;
+    margin: 1rem 0;
+    overflow: hidden;
+    background: var(--color-background-primary);
+}
+
+.mermaid-zoom__toolbar {
+    display: flex;
+    gap: 0.25rem;
+    justify-content: flex-end;
+    padding: 0.35rem;
+    border-bottom: 1px solid var(--color-background-border);
+    background: var(--color-background-secondary);
+}
+
+.mermaid-zoom__button {
+    min-width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--color-background-border);
+    border-radius: 0.25rem;
+    color: var(--color-foreground-primary);
+    background: var(--color-background-primary);
+    cursor: pointer;
+    font: inherit;
+    line-height: 1;
+}
+
+.mermaid-zoom__button:hover {
+    color: var(--color-brand-content);
+    border-color: var(--color-brand-content);
+}
+
+.mermaid-zoom__viewport {
+    position: relative;
+    min-height: 24rem;
+    max-height: 72vh;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+}
+
+.mermaid-zoom__viewport:active {
+    cursor: grabbing;
+}
+
+.mermaid-zoom__viewport svg {
+    display: block;
+    max-width: none;
+    transform-origin: 0 0;
+    user-select: none;
+}

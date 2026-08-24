@@ -1,1 +1,2 @@
 *   **[ ] Implement Dynamic Growth:** The sector should listen for `module_completed` events for `Printing_Robot_EQ` and `Assembly_Robot_EQ` to dynamically add new robots to its fleet.
+* [ ] Add Dynamic Fleet Expansion: The sector should listen for module_completed events to dynamically add new rockets and fuel generators to its fleet as they are constructed.

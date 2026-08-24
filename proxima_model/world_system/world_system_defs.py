@@ -154,6 +154,16 @@ MODULE_TO_EQUIPMENT_MAP: Dict[str, str] = {
     "comp_assembly_robot": EquipmentType.ASSEMBLY_ROBOT_EQ.value,
 }
 
+EQUIPMENT_PAYLOAD_MASS_KG: Dict[str, float] = {
+    EquipmentType.SCIENCE_ROVER_EQ.value: 20.0,
+    EquipmentType.ENERGY_GENERATOR_EQ.value: 20.0,
+    EquipmentType.HABITATION_MODULE_EQ.value: 20.0,
+    EquipmentType.ISRU_ROBOT_EQ.value: 20.0,
+    EquipmentType.ROCKET_EQ.value: 20.0,
+    EquipmentType.PRINTING_ROBOT_EQ.value: 20.0,
+    EquipmentType.ASSEMBLY_ROBOT_EQ.value: 20.0,
+}
+
 # =============================================================================
 # METRIC DEFINITIONS
 # =============================================================================
@@ -188,6 +198,22 @@ def get_flight_distance_km(origin: str, destination: str) -> float:
         return FLIGHT_DISTANCE_KM[(origin.lower(), destination.lower())]
     except KeyError as exc:
         raise ValueError(f"No flight distance configured between {origin} and {destination}") from exc
+
+
+def get_payload_unit_mass_kg(payload_type: str) -> float:
+    """Return the configured unit mass for an equipment payload item."""
+    try:
+        return EQUIPMENT_PAYLOAD_MASS_KG[payload_type]
+    except KeyError as exc:
+        raise ValueError(f"No payload mass configured for {payload_type}") from exc
+
+
+def calculate_payload_mass_kg(payload: Dict[str, float]) -> float:
+    """Calculate total payload mass from kg resources and equipment unit masses."""
+    total_mass_kg = 0.0
+    for payload_type, quantity in payload.items():
+        total_mass_kg += quantity * get_payload_unit_mass_kg(payload_type)
+    return total_mass_kg
 
 
 def extract_module_type_from_id(module_id: str) -> str:

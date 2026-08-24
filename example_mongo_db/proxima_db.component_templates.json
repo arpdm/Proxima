@@ -40,6 +40,7 @@
     "efficiency": 0.5,
     "thermal_GWh_per_kg": 163.9,
     "kwh_per_kg_prop": 22.8,
+    "power_demand_kWh_per_step": 65,
     "he3_kg_per_hour": 5
   }
 },
